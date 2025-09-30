@@ -1,0 +1,76 @@
+import { BABYLON, randomFloat2 } from "../../index.js";
+
+/**
+ * Creates a fire/flame particle system at a given position.
+ * @param scene - The BabylonJS scene
+ * @param position - Vector3 or {x, y, z} for emitter position
+ * @param size - Base size for the flame
+ * @param textureUrl - Flame texture URL (default: "textures/flame.png")
+ * @returns {BABYLON.ParticleSystem}
+ */
+export function createFlame(
+    scene: BABYLON.Scene,
+    position: BABYLON.Vector3 | { x: number; y: number; z: number },
+    size: number = 1,
+    textureUrl: string = "textures/flame.png"
+): BABYLON.ParticleSystem {
+    // Generate a unique offset for each flame instance
+    const offset = Math.random() * 1000;
+    const particleSystem = new BABYLON.ParticleSystem("flame", Math.round(500 * size), scene);
+
+    const emitterPos =
+        position instanceof BABYLON.Vector3
+            ? position
+            : new BABYLON.Vector3(position.x, position.y, position.z);
+
+    particleSystem.particleTexture = new BABYLON.Texture(textureUrl, scene);
+
+    particleSystem.emitter = emitterPos;
+    particleSystem.minEmitBox = new BABYLON.Vector3(-0.6 * size, 0, -0.6 * size);
+    particleSystem.maxEmitBox = new BABYLON.Vector3(0.6 * size, 0, 0.6 * size);
+
+    particleSystem.color1 = new BABYLON.Color4(1, 0.6, 0, 1.0);
+    particleSystem.color2 = new BABYLON.Color4(1, 1, 0, 1.0);
+    particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
+
+    particleSystem.minSize = 0.6 * size;
+    particleSystem.maxSize = 1.25 * size;
+
+    particleSystem.minLifeTime = 0.1 * size;
+    particleSystem.maxLifeTime = 0.2 * size;
+
+    particleSystem.emitRate = 100 * size;
+
+    // Initial random direction
+    particleSystem.direction1 = new BABYLON.Vector3(
+        randomFloat2(-0.1, 0.1),
+        randomFloat2(0.2, 1.5),
+        randomFloat2(-0.1, 0.1)
+    );
+    particleSystem.direction2 = new BABYLON.Vector3(
+        randomFloat2(-0.1, 0.1),
+        randomFloat2(0.2, 1.5),
+        randomFloat2(-0.1, 0.1)
+    );
+
+    particleSystem.minEmitPower = 0.7 * size;
+    particleSystem.maxEmitPower = 1.6 * size;
+    particleSystem.updateSpeed = 0.012;
+    particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+
+    // Animate direction, size, etc. for flame "jitter" effect
+    scene.onBeforeRenderObservable.add(() => {
+        const time = performance.now() * 0.001 + offset;
+        const jitterX = Math.sin(time * 2.4) * 0.15 + Math.cos(time * 1.3) * 0.07;
+        const jitterZ = Math.sin(time * 1.2) * 0.13 + Math.cos(time * 1.7) * 0.09;
+        particleSystem.direction1 = new BABYLON.Vector3(-0.12 + jitterX, 1, -0.12 + jitterZ);
+        particleSystem.direction2 = new BABYLON.Vector3(0.12 + jitterX, 1, 0.12 + jitterZ);
+
+        // Optionally, smoothly vary flame size over time
+        particleSystem.minSize = (0.6 + 0.08 * Math.sin(time * 2.1)) * size;
+        particleSystem.maxSize = (1.25 + 0.1 * Math.cos(time * 2.4)) * size;
+    });
+
+    particleSystem.stop();
+    return particleSystem;
+}
