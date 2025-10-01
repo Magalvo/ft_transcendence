@@ -66,6 +66,6 @@ function updateGameObjects(
   handleKeyboardEvents(data);
   updateCamera(data, parts3D);
   updateScoreLabels(obj2D, data);
-  updateTimer(obj2D, data);
+  updateTimer(obj2D, data, parts3D);
   updateEnvironment(parts3D, data);
 }

@@ -1,4 +1,4 @@
-import { side, type Objects2D, type SceneData } from "../../index.js";
+import { side, type Objects2D, type Objects3D, type Parts3D, type SceneData } from "../../index.js";
 
 const devil_actuation_time = 10;
 const good_actuation_time = 20;
@@ -10,12 +10,13 @@ let good_time: number = 0;
  * @param obj2D - 2D UI objects
  * @param data - Scene/game state
  */
-export function updateTimer(obj2D: Objects2D, data: SceneData) {
+export function updateTimer(obj2D: Objects2D, data: SceneData, parts3D: Parts3D) {
     // advance timer
     data.time += data.step;
     changeGoodSide(data);
     updateTimerLabel(obj2D, data);
     updateDevilTimerLabel(obj2D);
+    updateMusic(data, parts3D);
 }
 
 function updateTimerLabel(obj2D: Objects2D, data: SceneData) {
@@ -45,6 +46,17 @@ function updateDevilTimerLabel(obj2D: Objects2D) {
         (devil_time != 0)
             ? "red"
             : "blue"
+}
+
+function updateMusic(data: SceneData, parts3D: Parts3D) {
+    if (data.good_side == side.right) {
+        parts3D.hellMusic.pause();
+        parts3D.heavenMusic.play();
+    }
+    else {
+        parts3D.heavenMusic.pause();
+        parts3D.hellMusic.play();
+    }
 }
 
 /**

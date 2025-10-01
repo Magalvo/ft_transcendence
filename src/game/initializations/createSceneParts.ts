@@ -10,7 +10,8 @@ import type { Objects3D } from "../../index.js";
  */
 export type Parts3D = {
   scene: BABYLON.Scene,
-  sound: BABYLON.Sound,
+  hellMusic: HTMLAudioElement,
+  heavenMusic: HTMLAudioElement,
   camera: BABYLON.ArcRotateCamera,
   environment: BABYLON.EnvironmentHelper,
   light: BABYLON.Light,
@@ -42,27 +43,25 @@ export function createSceneParts(
     flame_L1: createFlame(scene, { x: obj3D.table.left_line * 1.1, y: 0, z: obj3D.table.far_line }, 10),
     flame_L2: createFlame(scene, { x: obj3D.table.left_line * 1.1, y: 0, z: obj3D.table.near_line }, 10),
     sky_box: createSkybox(scene),
-    sound: createSound(scene),
+    hellMusic: createAudio(1),
+    heavenMusic: createAudio(2),
     scene: scene,
   };
 }
 
 /**
  * Adds background music to the scene.
- * @param scene - The BabylonJS scene
  */
-function createSound(scene: BABYLON.Scene): BABYLON.Sound {
-  return new BABYLON.Sound(
-    "background_music",
-    "sounds/hell.mp3",
-    scene,
-    null,
-    {
-      loop: true,
-      autoplay: false,
-      volume: 0.7,
-    }
-  );
+function createAudio(nb: number): HTMLAudioElement {
+  let audio_name: string = "";
+  switch (nb) {
+    case 1: audio_name = "audio/hell.mp3"; break;
+    case 2: audio_name = "audio/heaven.mp3"; break;
+  }
+  const audio = new Audio(audio_name);
+  audio.loop = true;
+  audio.volume = 0.3;
+  return audio;
 }
 
 /**

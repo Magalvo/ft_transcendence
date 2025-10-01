@@ -25,6 +25,39 @@ export function pauseScreen(data: SceneData, parts3D: Parts3D, parts2D: Objects2
 }
 
 /**
+ * Resumes the game: removes the pause overlay and returns control to the player.
+ * @param data - The global game state
+ * @param parts3D - 3D elements of the scene
+ * @param guiTexture - The GUI instance to remove
+ */
+function resumeGame(data: SceneData, parts3D: Parts3D, guiTexture: AdvancedDynamicTexture) {
+  // Remove overlay
+  guiTexture.dispose();
+  // Detach extra camera control
+  parts3D.camera.detachControl();
+  // Resume game
+  data.game_running = true;
+  data.pause_screen = false;
+  // resume music
+  parts3D.hellMusic.play();
+  parts3D.heavenMusic.play();
+}
+/**
+ * Resumes the game: removes the pause overlay and returns control to the player.
+ * @param data - The global game state
+ * @param parts3D - 3D elements of the scene
+ * @param guiTexture - The GUI instance to remove
+ */
+function pauseGame(data: SceneData, parts3D: Parts3D) {
+  // pause game
+  data.game_running = false;
+  data.pause_screen = true;
+  // pause music
+  parts3D.hellMusic.pause();
+  parts3D.heavenMusic.pause();
+}
+
+/**
  * Creates the pause overlay (pause menu) and locks the game.
  * @param data - The global game state
  * @param parts3D - 3D elements of the scene
@@ -36,8 +69,7 @@ function createPauseScreen(data: SceneData, parts3D: Parts3D): GUI.AdvancedDynam
   guiTexture.idealHeight = 1080;
 
   // Pause the game
-  data.game_running = false;
-  data.pause_screen = true;
+  pauseGame(data, parts3D);
 
   // Reposition the camera for the pause view
   positionCamera(parts3D);
@@ -73,22 +105,6 @@ function createButtons(data: SceneData, parts3D: Parts3D, guiTexture: AdvancedDy
     resumeGame(data, parts3D, guiTexture);
   });
   guiTexture.addControl(playBtn);
-}
-
-/**
- * Resumes the game: removes the pause overlay and returns control to the player.
- * @param data - The global game state
- * @param parts3D - 3D elements of the scene
- * @param guiTexture - The GUI instance to remove
- */
-function resumeGame(data: SceneData, parts3D: Parts3D, guiTexture: AdvancedDynamicTexture) {
-  // Remove overlay
-  guiTexture.dispose();
-  // Detach extra camera control
-  parts3D.camera.detachControl();
-  // Resume game
-  data.game_running = true;
-  data.pause_screen = false;
 }
 
 /**
