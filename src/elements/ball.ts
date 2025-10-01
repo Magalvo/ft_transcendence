@@ -8,6 +8,7 @@ import {
   normalizeAngle180,
   flashZone,
   spawnHitParticles,
+  createFlame,
 } from "../index.js";
 import type { Mov, Objects3D, SceneData } from "../index.js";
 
@@ -45,6 +46,8 @@ export class Ball {
   public lower_line!: number;
   public near_line!: number;
   public far_line!: number;
+  // animations
+  public flame_animation: BABYLON.ParticleSystem
 
   constructor(options: BallOptions) {
     this.pos = options.pos;
@@ -52,6 +55,7 @@ export class Ball {
     this.speed = options.speed;
     this.initial_speed = options.speed;
     this.max_speed = options.max_speed;
+    this.flame_animation = createFlame(options.scene, this.pos, 4);
     this.obj = this.initializeBall(options.scene);
     this.positionUpdate();
     this.throwBall();
@@ -287,6 +291,8 @@ export class Ball {
     // Z bounds
     this.near_line = this.pos.z - this.radius;
     this.far_line = this.pos.z + this.radius;
+    // move flame
+    this.flame_animation.emitter = this.pos;
   }
 
   /**

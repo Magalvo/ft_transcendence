@@ -87,7 +87,7 @@ function createEnvironment(scene: BABYLON.Scene): BABYLON.EnvironmentHelper {
   glow.intensity = 0.2;
   let environment = scene.createDefaultEnvironment({
     createSkybox: false,
-    createGround: true,
+    createGround: false,
     groundSize: 30,
     enableGroundShadow: true,
     groundYBias: 1,

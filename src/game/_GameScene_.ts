@@ -111,6 +111,7 @@ export class GameScene {
       table,
       balls: [
         createBall(table.pos.x, scene),
+        createBall(table.pos.x, scene),
         // Add more balls here if needed
       ],
       paddles: [
