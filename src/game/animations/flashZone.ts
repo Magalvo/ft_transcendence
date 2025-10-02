@@ -28,7 +28,7 @@ function createFlashPlane(
 
   const mat = new BABYLON.StandardMaterial("flashMat", data.scene);
   mat.emissiveColor =
-    data.good_side === side.right
+    !data.hell_side
       ? new BABYLON.Color3(0.7, 0.7, 1)
       : new BABYLON.Color3(1, 0.2, 0.2);
   mat.alpha = 0.0;

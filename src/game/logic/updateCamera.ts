@@ -8,7 +8,7 @@ import type { Parts3D, SceneData } from "../../index.js";
  */
 export function updateCamera(data: SceneData, parts3D: Parts3D) {
     // Extra rotation if viewing from the left side
-    const extraRotation = data.good_side === side.right ? 0 : 4 * Math.PI;
+    const extraRotation = !data.hell_side ? 0 : 4 * Math.PI;
     let cameraAlpha = 0;
     let cameraBeta = 0;
 

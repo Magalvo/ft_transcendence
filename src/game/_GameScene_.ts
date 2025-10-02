@@ -13,9 +13,11 @@ import {
   startMenu,
   createMenu,
   defineEvents as defineKeyEvents,
+  hellMode as hellMode,
+  mov,
 } from "../index.js";
 
-import type { Parts3D, Objects2D, Side } from "../index.js";
+import type { Parts3D, Objects2D, Side, HellMode as HellMode, Mov } from "../index.js";
 
 /**
  * 3D game objects container type
@@ -27,20 +29,31 @@ export type Objects3D = {
 };
 
 /**
- * Global scene/game state type
+ * Type representing the global state of the game or scene.
  */
 export type SceneData = {
+  // --- Engine & Rendering ---
   scene: BABYLON.Scene,
+  // --- Score & Game Progress ---
   score: { left: number, right: number },
+  time: number,
+  step: number,
+  // --- Game State Flags ---
   game_running: boolean,
   pause_screen: boolean,
-  camera_pos: number,
-  keysPressed: boolean[],
-  step: number,
-  good_side: Side,
+  // --- Player Settings ---
   left_player_human: boolean,
   right_player_human: boolean,
-  time: number,
+  // --- Controls ---
+  keysPressed: boolean[],
+  // --- Camera & View ---
+  camera_pos: number,
+  // --- Gameplay Modifiers ---
+  hell_side: boolean,
+  hell_mode: HellMode,
+  // --- Players Controls ---
+  left_paddle_mov: Mov,
+  right_paddle_mov: Mov,
 };
 
 /**
@@ -94,10 +107,13 @@ export class GameScene {
       camera_pos: 1,
       keysPressed: [],
       step: 0,
-      good_side: side.right,
+      hell_side: false,
+      hell_mode: hellMode.null,
       left_player_human: true,
       right_player_human: false,
       time: 0,
+      left_paddle_mov: mov.null,
+      right_paddle_mov: mov.null,
     };
   }
 

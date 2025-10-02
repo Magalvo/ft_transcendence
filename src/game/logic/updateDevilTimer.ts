@@ -1,8 +1,8 @@
-import { side, type Objects2D, type SceneData } from "../../index.js";
+import { hellMode, updateHell, type Objects2D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const DEVIL_DURATION = 10;
-const GOOD_DURATION = 10;
+const DEVIL_DURATION = 5;
+const GOOD_DURATION = 5;
 
 // Internal timers for each side (in seconds)
 let devilElapsed = 0;
@@ -44,18 +44,20 @@ function updateTimerLabel(obj2D: Objects2D) {
  */
 function advanceAndSwitchSides(data: SceneData) {
     // Advance the right timer depending on which side is good
-    if (data.good_side === side.right) {
+    if (!data.hell_side) {
         goodElapsed += data.step;
-    } else if (data.good_side === side.left) {
+    } else if (data.hell_side) {
         devilElapsed += data.step;
     }
     // Switch sides when the timer is up
     if (goodElapsed >= GOOD_DURATION) {
         goodElapsed = 0;
-        data.good_side = side.left;
+        data.hell_side = true;
+        updateHell(data);
     }
     if (devilElapsed >= DEVIL_DURATION) {
         devilElapsed = 0;
-        data.good_side = side.right;
+        data.hell_side = false;
+        data.hell_mode = hellMode.null;
     }
 }

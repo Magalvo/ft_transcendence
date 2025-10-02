@@ -1,5 +1,5 @@
-import { BABYLON, side } from "../index.js";
-import type { SceneData, Vec3 } from "../index.js";
+import { BABYLON } from "../index.js";
+import type { SceneData } from "../index.js";
 
 /**
  * Options for Table construction.
@@ -152,9 +152,9 @@ export class Table {
    * Updates the table color theme based on camp side.
    */
   public update(data: SceneData) {
-    if (data.good_side == side.right)
+    if (!data.hell_side)
       this.changeTableColors(this.good_color);
-    if (data.good_side == side.left)
+    if (data.hell_side)
       this.changeTableColors(this.bad_color);
   }
 

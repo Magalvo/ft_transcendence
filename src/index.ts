@@ -8,6 +8,7 @@ export * from "./game/logic/updateDevilTimer.js";
 export * from "./game/logic/updateEnvironment.js";
 export * from "./game/logic/updateCamera.js";
 export * from "./game/logic/updateMusic.js";
+export * from "./game/logic/updateHell.js";
 export * from "./game/logic/handleKeyboard.js";
 export * from "./game/initializations/createSceneParts.js";
 export * from "./game/initializations/create2DParts.js";

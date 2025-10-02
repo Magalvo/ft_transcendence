@@ -1,5 +1,6 @@
 /* possible movements list */
 export const mov = {
+  null: "null",
   far: "far",
   near: "away",
   up: "up",
@@ -19,6 +20,23 @@ export const side = {
 } as const;
 
 export type Side = typeof side[keyof typeof side];
+
+/* hell mods */
+export const hellMode = {
+  null: 0,
+  inverted_keys: 1,
+  smaller_paddles: 2,
+  slow_paddles: 3,
+  really_fast_balls: 4,
+
+  // multiple_balls: 0,
+  // infinity_balls: 0,
+  // blinking_screen: 0,
+
+  end_list: 3
+} as const;
+
+export type HellMode = typeof hellMode[keyof typeof hellMode];
 
 /* keyboard keys code */
 export const keyCode = {

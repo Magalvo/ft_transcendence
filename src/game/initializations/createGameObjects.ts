@@ -2,7 +2,6 @@ import {
   Ball,
   Paddle,
   Table,
-  vec3,
   BABYLON,
 } from "../../index.js";
 import type { Side } from "../../index.js";
@@ -38,7 +37,7 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
     speed: 50,
     side: side,
     pos: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
-    dimensions: vec3(1, paddleHeight, 30),
+    dimensions: new BABYLON.Vector3(1, paddleHeight, 30),
     scene: scene,
   });
 }

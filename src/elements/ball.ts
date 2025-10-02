@@ -215,7 +215,7 @@ export class Ball {
   private move(data: SceneData, x?: number, z?: number) {
     // Speed modifier for "heaven/hell" mode
     let speed_modifier = 1;
-    if (data !== null && data.good_side == side.left) speed_modifier = 2;
+    if (data !== null && data.hell_side) speed_modifier = 2;
     // Convert angle to radians
     const angle_rad = this.angle * Math.PI / 180;
     // Calculate velocity components

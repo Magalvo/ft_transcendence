@@ -5,26 +5,6 @@
 /***********************************/
 
 /**
- * Represents a 3D vector with x, y, and z components.
- */
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/**
- * Creates and returns a 3D vector.
- * @param x - X coordinate
- * @param y - Y coordinate
- * @param z - Z coordinate
- * @returns {Vec3}
- */
-export function vec3(x: number, y: number, z: number): Vec3 {
-  return { x, y, z };
-}
-
-/**
  * Returns a random integer between min and max (inclusive).
  * @param min - Minimum value
  * @param max - Maximum value

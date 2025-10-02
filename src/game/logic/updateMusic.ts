@@ -2,7 +2,7 @@ import { side } from "../../index.js";
 import type { Parts3D, SceneData } from "../../index.js";
 
 export function updateMusic(data: SceneData, parts3D: Parts3D) {
-    if (data.good_side == side.right) {
+    if (!data.hell_side) {
         parts3D.hellMusic.pause();
         parts3D.heavenMusic.play();
     }
