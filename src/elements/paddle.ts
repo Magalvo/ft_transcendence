@@ -244,7 +244,7 @@ export class Paddle {
     this.obj.edgesColor = edges_color;
 
     // --- Size Update (hell mode) ---
-    if (data.hell_mode == hellMode.smaller_paddles)
+    if (data.hell_mode == hellMode.small_paddles)
       this.changeSize({ z: this.original_dimensions.z * 0.4 });
     else
       this.changeSize();

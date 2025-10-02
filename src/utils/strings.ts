@@ -25,15 +25,11 @@ export type Side = typeof side[keyof typeof side];
 export const hellMode = {
   null: 0,
   inverted_keys: 1,
-  smaller_paddles: 2,
+  small_paddles: 2,
   slow_paddles: 3,
-  really_fast_balls: 4,
+  fast_balls: 4,
 
-  // multiple_balls: 0,
-  // infinity_balls: 0,
-  // blinking_screen: 0,
-
-  end_list: 3
+  end_list: 4
 } as const;
 
 export type HellMode = typeof hellMode[keyof typeof hellMode];

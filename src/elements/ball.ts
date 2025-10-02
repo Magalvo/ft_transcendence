@@ -9,6 +9,7 @@ import {
   flashZone,
   spawnHitParticles,
   createFlame,
+  hellMode,
 } from "../index.js";
 import type { Mov, Objects3D, SceneData } from "../index.js";
 
@@ -33,7 +34,8 @@ export class Ball {
   // Ball parameters
   public radius: number;
   private speed: number;
-  private initial_speed: number;
+  private original_speed: number;
+  private speed_modifier: number;
   private angle: number = 0;
   private max_speed: number;
   public velocity: number = 0;
@@ -53,7 +55,8 @@ export class Ball {
     this.pos = options.pos;
     this.radius = options.radius;
     this.speed = options.speed;
-    this.initial_speed = options.speed;
+    this.original_speed = options.speed;
+    this.speed_modifier = 1;
     this.max_speed = options.max_speed;
     this.flame_animation = createFlame(options.scene, this.pos, 4);
     this.obj = this.initializeBall(options.scene);
@@ -110,6 +113,8 @@ export class Ball {
     for (let paddle of obj.paddles) this.paddleCollisions(paddle, data);
     // Wall collisions / scoring
     this.wallCollisions(obj.table, data);
+    // hell update
+    this.hellUpdate(data);
   }
 
   /* ******************* *
@@ -195,7 +200,7 @@ export class Ball {
 
     // Reset properties
     this.velocity = this.speed;
-    this.speed = this.initial_speed;
+    this.speed = this.original_speed;
     this.angle = 0;
 
     // Start moving
@@ -213,9 +218,6 @@ export class Ball {
    * @param z - Optional Z override
    */
   private move(data: SceneData, x?: number, z?: number) {
-    // Speed modifier for "heaven/hell" mode
-    let speed_modifier = 1;
-    if (data !== null && data.hell_side) speed_modifier = 2;
     // Convert angle to radians
     const angle_rad = this.angle * Math.PI / 180;
     // Calculate velocity components
@@ -223,10 +225,10 @@ export class Ball {
     const vz = this.velocity * Math.sin(angle_rad);
     // Update X
     if (x !== undefined) this.pos.x = x;
-    else this.pos.x += vx * data.step * speed_modifier;
+    else this.pos.x += vx * data.step * this.speed_modifier;
     // Update Z
     if (z !== undefined) this.pos.z = z;
-    else this.pos.z += vz * data.step * speed_modifier;
+    else this.pos.z += vz * data.step * this.speed_modifier;
     // Apply updated position to mesh and recalculate bounds
     this.obj.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.positionUpdate();
@@ -262,7 +264,7 @@ export class Ball {
     }
 
     // Increase speed up to max_speed
-    if (increase_speed && this.speed < this.max_speed) this.speed += 1;
+    if (increase_speed && this.speed < this.max_speed) this.speed += 2;
 
     // Randomize the angle if requested
     if (angle_distortion === true) {
@@ -315,5 +317,18 @@ export class Ball {
       }
     }
     return false;
+  }
+
+  /**
+   * Updates paddle appearance and attributes based on "hell" mode and side.
+   */
+  private hellUpdate(data: SceneData) {
+    // --- Speed Update (hell side & mode) ---
+    if (data.hell_mode == hellMode.fast_balls)
+      this.speed_modifier = 4;
+    else if (data.hell_side)
+      this.speed_modifier = 2;
+    else
+      this.speed_modifier = 1;
   }
 }
