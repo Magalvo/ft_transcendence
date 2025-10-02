@@ -30,6 +30,7 @@ export class Paddle {
   // --- Paddle dimensions & position ---
   public original_dimensions: BABYLON.Vector3;  // Unmodified paddle size
   public dimensions: BABYLON.Vector3;           // Current paddle size (may change due to powerups/mods)
+  private original_pos: BABYLON.Vector3;
   public pos: BABYLON.Vector3;                  // Paddle position
 
   // --- Side & movement ---
@@ -58,6 +59,7 @@ export class Paddle {
   constructor(options: PaddleOptions) {
     // Set position & dimensions (clone to avoid shared references)
     this.pos = options.pos.clone();
+    this.original_pos = options.pos.clone();
     this.original_dimensions = options.dimensions.clone();
     this.dimensions = options.dimensions.clone();
 
@@ -256,6 +258,10 @@ export class Paddle {
       this.speed = this.original_speed * 2;
     else
       this.speed = this.original_speed;
+
+    // --- change position (hell mode) ---
+    if (data.hell_mode != hellMode.big_balls)
+      this.pos.x = this.original_pos.x;
   }
 
   /**

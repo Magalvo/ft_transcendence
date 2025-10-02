@@ -48,13 +48,13 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
  * @param scene - The BabylonJS scene where the ball will be added
  * @returns {Ball} The created Ball instance
  */
-export function createBall(pos: number, scene: BABYLON.Scene): Ball {
-  const ballRadius = 2;
+export function createBall(scene: BABYLON.Scene, x: number, z: number): Ball {
+  const ball_radius = 2;
   return new Ball({
     speed: 50,
     max_speed: 100,
-    pos: new BABYLON.Vector3(pos, ballRadius / 2, 0),
-    radius: ballRadius,
+    pos: new BABYLON.Vector3(x, ball_radius / 2, z),
+    radius: ball_radius,
     scene: scene,
   });
 }

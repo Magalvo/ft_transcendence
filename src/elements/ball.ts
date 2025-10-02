@@ -10,28 +10,30 @@ import {
   spawnHitParticles,
   createFlame,
   hellMode,
+  infiniteBallsAdd,
 } from "../index.js";
 import type { Mov, Objects3D, SceneData } from "../index.js";
 
 /**
- * Options for creating a Ball instance
+ * Options for creating a Ball instance.
  */
 type BallOptions = {
-  speed: number;
-  max_speed: number;
-  pos: BABYLON.Vector3;
-  radius: number;
-  scene: BABYLON.Scene;
+  speed: number;               // Initial ball speed
+  max_speed: number;           // Maximum speed
+  pos: BABYLON.Vector3;        // Start position
+  radius: number;              // Ball radius (not diameter)
+  scene: BABYLON.Scene;        // BabylonJS scene
 };
 
 /**
- * Represents the ball in the game, including logic for movement,
- * drawing, collisions, and respawn.
+ * Represents the ball in the game: movement, drawing, collisions, respawn.
  */
 export class Ball {
-  // Mesh used to render the ball in BabylonJS
+  // Rendering & animation
   private obj: BABYLON.Mesh;
-  // Ball parameters
+  public flame_animation: BABYLON.ParticleSystem;
+
+  // Ball physics state
   public original_radius: number;
   public radius: number;
   private speed: number;
@@ -41,6 +43,7 @@ export class Ball {
   private max_speed: number;
   public velocity: number = 0;
   public respawn_timer: number = 0;
+
   // Position and collision bounds
   public pos: BABYLON.Vector3;
   public left_line!: number;
@@ -49,8 +52,6 @@ export class Ball {
   public lower_line!: number;
   public near_line!: number;
   public far_line!: number;
-  // animations
-  public flame_animation: BABYLON.ParticleSystem
 
   constructor(options: BallOptions) {
     this.pos = options.pos;
@@ -61,95 +62,84 @@ export class Ball {
     this.speed_modifier = 1;
     this.max_speed = options.max_speed;
     this.flame_animation = createFlame(options.scene, this.pos, 4);
-    this.obj = this.initializeBall(options.scene);
+    this.obj = this.createMesh(options.scene);
     this.positionUpdate();
-    this.throwBall();
+    this.throwBall(false);
   }
 
-  /* ***************** *
-   *  DRAWING METHODS  *
-   * ***************** */
-
   /**
-   * Initializes and returns the BabylonJS Mesh for the ball.
-   * @param scene - The BabylonJS scene
-   * @returns {BABYLON.Mesh}
+   * Creates and initializes the BabylonJS Mesh for the ball.
    */
-  private initializeBall(scene: BABYLON.Scene): BABYLON.Mesh {
-    const new_ball = BABYLON.MeshBuilder.CreateSphere(
+  private createMesh(scene: BABYLON.Scene): BABYLON.Mesh {
+    const mesh = BABYLON.MeshBuilder.CreateSphere(
       "ball",
       { diameter: this.radius * 2, segments: 32 },
       scene
     );
-    new_ball.position.x = this.pos.x;
-    new_ball.position.y = this.pos.y;
-    new_ball.position.z = this.pos.z;
+    mesh.position.copyFrom(this.pos);
 
-    const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
-    ballMat.diffuseColor = new BABYLON.Color3(0.8, 0.95, 1.0);
-    ballMat.alpha = 0.8;
-    ballMat.specularColor = new BABYLON.Color3(0, 0, 0);
-    ballMat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
-    ballMat.needDepthPrePass = true;
+    const mat = new BABYLON.StandardMaterial("ballMat", scene);
+    mat.diffuseColor = new BABYLON.Color3(0.8, 0.95, 1.0);
+    mat.alpha = 0.8;
+    mat.specularColor = new BABYLON.Color3(0, 0, 0);
+    mat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
+    mat.needDepthPrePass = true;
+    mesh.material = mat;
 
-    new_ball.material = ballMat;
-
-    return new_ball;
+    return mesh;
   }
 
-  /* **************** *
-   *  PUBLIC METHODS  *
-   * **************** */
-
   /**
-   * Main update function for the ball: handles respawn, movement, and collisions.
-   * @param obj - All 3D objects in the game (including paddles and table)
-   * @param data - Scene/game state
+   * Main update: handles respawn, movement, collisions, and hell mode.
    */
-  public update(obj: Objects3D, data: SceneData) {
-    // Handle respawn timer: skip update if respawning
-    if (this.updateRespawnTimer(data.step) === true) return;
-    // Move ball
+  public update(obj3D: Objects3D, data: SceneData) {
+    if (this.updateRespawnTimer(data.step)) return;
     this.move(data);
-    // Paddle collisions
-    for (let paddle of obj.paddles) this.paddleCollisions(paddle, data);
-    // Wall collisions / scoring
-    this.wallCollisions(obj.table, data);
-    // hell update
+    for (let paddle of obj3D.paddles) this.paddleCollisions(paddle, data, obj3D);
+    this.wallCollisions(obj3D.table, data);
     this.hellUpdate(data);
   }
 
+  /**
+   * Dispose of the mesh and particle system (remove from scene).
+   */
   public dispose() {
     this.obj?.dispose();
     this.flame_animation?.dispose();
   }
 
-  /* ******************* *
-   *  COLLISION METHODS  *
-   * ******************* */
-
   /**
-   * Checks and handles collision with a paddle.
-   * @param paddle - Paddle instance
+   * Handles collision with a paddle.
    */
-  private paddleCollisions(paddle: Paddle, data: SceneData) {
-    // Ball and paddle overlap check (AABB)
+  private paddleCollisions(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
+    // Axis-aligned bounding box overlap (AABB)
     if (
       Math.abs(this.pos.x - paddle.pos.x) - paddle.dimensions.x / 2 - this.radius <= 0 &&
       Math.abs(this.pos.y - paddle.pos.y) - paddle.dimensions.y / 2 - this.radius <= 0 &&
       Math.abs(this.pos.z - paddle.pos.z) - paddle.dimensions.z / 2 - this.radius <= 0
     ) {
-      // X collision (lateral)
+      // Side collision (X axis)
       if (this.pos.z > paddle.near_line && this.pos.z < paddle.far_line) {
-        // Collision from left on right paddle
-        if (this.pos.x < paddle.left_line && paddle.side == side.right)
+        let inverting = false;
+        if (this.pos.x < paddle.left_line && paddle.side == side.right) {
+          if (this.velocity > 0) inverting = true;
           this.updateMovement(mov.left, true, true);
-        // Collision from right on left paddle
-        if (this.pos.x > paddle.right_line && paddle.side == side.left)
+        }
+        if (this.pos.x > paddle.right_line && paddle.side == side.left) {
+          if (this.velocity < 0) inverting = true;
           this.updateMovement(mov.right, true, true);
+        }
         spawnHitParticles(data.scene, this.pos);
+        // hell mode
+        if (inverting) {
+          if (data.hell_mode == hellMode.infinite_balls)
+            infiniteBallsAdd(data, obj3D, this.pos.x, this.pos.z);
+          if (data.hell_mode == hellMode.big_balls)
+            paddle.pos.x -= this.velocity / Math.abs(this.velocity) * 3;
+        }
+
       }
-      // Z collision (top/bottom)
+      // Top/bottom collision (Z axis)
       if (this.pos.x > paddle.left_line && this.pos.x < paddle.right_line) {
         if (this.pos.z > paddle.far_line)
           this.updateMovement(mov.near, false, false);
@@ -161,209 +151,142 @@ export class Ball {
   }
 
   /**
-   * Checks and handles collision with table walls and scoring.
-   * @param table - Table instance
-   * @param data - Scene/game state
+   * Handles collision with table walls and scoring.
    */
   private wallCollisions(table: Table, data: SceneData) {
-    // Far wall (Z+)
+    // Z+ wall (far)
     if (this.far_line >= table.far_line) {
       this.pos.z = table.far_line - this.radius;
       this.updateMovement(mov.invert_z, false, false);
       spawnHitParticles(data.scene, this.pos);
     }
-    // Near wall (Z-)
+    // Z- wall (near)
     if (this.near_line <= table.near_line) {
       this.pos.z = table.near_line + this.radius;
       this.updateMovement(mov.invert_z, false, false);
       spawnHitParticles(data.scene, this.pos);
     }
 
-    // Ball out of bounds: scoring
-    // Left wall (X-)
+    // X- wall (left): score for right
     if (this.left_line <= table.left_line) {
       data.score.right++;
       flashZone(data, side.left, table);
-      this.throwBall();
+      this.throwBall(true);
     }
-    // Right wall (X+)
+    // X+ wall (right): score for left
     if (this.right_line - this.radius >= table.right_line) {
       data.score.left++;
       flashZone(data, side.right, table);
-      this.throwBall();
+      this.throwBall(true);
     }
   }
-
-  /* ****************** *
-   *  MOVEMENT METHODS  *
-   * ****************** */
 
   /**
    * Respawns the ball at initial position with randomized direction.
    */
-  private throwBall() {
-    // Randomize initial direction
+  private throwBall(reset_pos: boolean) {
     const direction: Mov = randomInt(0, 1) ? mov.left : mov.right;
-
-    // Reset properties
     this.velocity = this.speed;
     this.speed = this.original_speed;
     this.angle = 0;
-
-    // Start moving
-    this.move(null!, 0, 0);
     this.updateMovement(direction, true, false);
-
-    // Set respawn timer (e.g., 0.5 seconds)
-    this.updateRespawnTimer(0, 0.5);
+    if (reset_pos) {
+      this.move(null!, 0, 0);
+      this.updateRespawnTimer(0, 0.5); // 0.5s respawn timer
+    }
   }
 
   /**
-   * Updates the position of the ball based on its velocity and angle.
-   * @param data - Scene/game state (if null, movement is skipped)
-   * @param x - Optional X override
-   * @param z - Optional Z override
+   * Updates the position of the ball based on velocity and angle.
    */
-  private move(data: SceneData, x?: number, z?: number) {
-    // Convert angle to radians
+  private move(data: SceneData | null, x?: number, z?: number) {
     const angle_rad = this.angle * Math.PI / 180;
-    // Calculate velocity components
     const vx = this.velocity * Math.cos(angle_rad);
     const vz = this.velocity * Math.sin(angle_rad);
-    // Update X
     if (x !== undefined) this.pos.x = x;
-    else this.pos.x += vx * data.step * this.speed_modifier;
-    // Update Z
+    else if (data) this.pos.x += vx * data.step * this.speed_modifier;
     if (z !== undefined) this.pos.z = z;
-    else this.pos.z += vz * data.step * this.speed_modifier;
-    // Apply updated position to mesh and recalculate bounds
-    this.obj.position.set(this.pos.x, this.pos.y, this.pos.z);
+    else if (data) this.pos.z += vz * data.step * this.speed_modifier;
+    this.obj.position.copyFrom(this.pos);
     this.positionUpdate();
   }
 
   /**
-   * Updates the ball's velocity and angle for a new movement direction.
-   * @param move - Movement type (enum)
-   * @param angle_distortion - Whether to randomize angle
-   * @param increase_speed - Whether to increment speed
+   * Updates the ball's direction, angle, and speed based on collision or movement type.
    */
   private updateMovement(move: Mov, angle_distortion: boolean, increase_speed: boolean) {
-    // Manage movement direction
     switch (move) {
-      case mov.far:
-        this.angle = Math.abs(this.angle);
-        break;
-      case mov.near:
-        this.angle = -Math.abs(this.angle);
-        break;
-      case mov.left:
-        this.velocity = this.speed * -1;
-        break;
-      case mov.right:
-        this.velocity = this.speed * 1;
-        break;
-      case mov.invert_x:
-        this.velocity *= -1;
-        break;
-      case mov.invert_z:
-        this.angle *= -1;
-        break;
+      case mov.far: this.angle = Math.abs(this.angle); break;
+      case mov.near: this.angle = -Math.abs(this.angle); break;
+      case mov.left: this.velocity = -this.speed; break;
+      case mov.right: this.velocity = this.speed; break;
+      case mov.invert_x: this.velocity *= -1; break;
+      case mov.invert_z: this.angle *= -1; break;
     }
-
-    // Increase speed up to max_speed
     if (increase_speed && this.speed < this.max_speed) this.speed += 2;
-
-    // Randomize the angle if requested
-    if (angle_distortion === true) {
-      this.angle = 0;
-      this.angle += randomInt(-70, 70);
-    }
-
-    // Normalize angle to [-180, 180)
+    if (angle_distortion) this.angle = randomInt(-70, 70);
     this.angle = normalizeAngle180(this.angle);
   }
 
-  /* ***************** *
-   *  PRIVATE METHODS  *
-   * ***************** */
-
   /**
-   * Updates the bounding lines for collision detection.
+   * Updates the bounding lines for collision and animates the flame.
    */
   private positionUpdate() {
-    // X bounds
     this.left_line = this.pos.x - this.radius;
     this.right_line = this.pos.x + this.radius;
-    // Y bounds
     this.upper_line = this.pos.y + this.radius;
     this.lower_line = this.pos.y - this.radius;
-    // Z bounds
     this.near_line = this.pos.z - this.radius;
     this.far_line = this.pos.z + this.radius;
-    // move flame
     this.flame_animation.emitter = this.pos;
   }
 
   /**
    * Handles the respawn timer for the ball. Hides the ball while timer > 0.
-   * @param step - Time step to decrement
-   * @param time - Optional time to start/resume the respawn timer
-   * @returns {boolean} True if timer is active, false if ball should be visible
+   * @returns True if timer is active, false if ball should be visible
    */
   private updateRespawnTimer(step: number, time?: number): boolean {
     if (time !== undefined) {
       this.respawn_timer = time;
       this.obj.isVisible = false;
+    } else if (this.respawn_timer > 0) {
+      this.respawn_timer -= step;
+      return true;
     } else {
-      if (this.respawn_timer > 0) {
-        this.respawn_timer -= step;
-        return true;
-      } else {
-        this.obj.isVisible = true;
-        return false;
-      }
+      this.obj.isVisible = true;
     }
     return false;
   }
 
   /**
-   * Updates ball appearance and attributes based on "hell" mode and side.
+   * Updates ball appearance and speed based on hell mode.
    */
   private hellUpdate(data: SceneData) {
-    // --- Speed Update (hell side & mode) ---
+    // speed
     if (data.hell_mode == hellMode.fast_balls)
       this.speed_modifier = 4;
-    else if (data.hell_mode == hellMode.small_balls)
-      this.speed_modifier = 3;
+    else if (data.hell_mode == hellMode.infinite_balls)
+      this.speed_modifier = 1.5;
     else if (data.hell_side)
       this.speed_modifier = 2;
     else
       this.speed_modifier = 1;
 
-    // --- Size Update (hell mode) ---
-    if (data.hell_mode == hellMode.small_balls)
-      this.changeSize(this.original_radius * 0.5);
+    // size
+    if (data.hell_mode == hellMode.big_balls)
+      this.changeSize(this.original_radius * 2);
     else
       this.changeSize();
   }
 
   /**
-   * Changes the ball's size in world units by setting a new radius.
-   * If not specified, restores the original radius.
-   * @param radius - The new radius for the ball (optional)
+   * Sets the ball's radius and scales the mesh accordingly.
    */
   private changeSize(radius: number = this.original_radius) {
-    const mesh = this.obj;
-    const boundingInfo = mesh.getBoundingInfo();
-    // bounding box gives diameter, so divide by 2 for radius
+    const boundingInfo = this.obj.getBoundingInfo();
     const currentRadius = (boundingInfo.maximum.x - boundingInfo.minimum.x) / 2;
-
     const scale = radius / currentRadius;
-
-    mesh.scaling.x = scale;
-    mesh.scaling.y = scale;
-    mesh.scaling.z = scale;
-
+    this.obj.scaling.set(scale, scale, scale);
     this.radius = radius;
   }
 }

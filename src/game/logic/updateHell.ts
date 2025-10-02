@@ -1,5 +1,7 @@
 import { hellMode, randomInt, type HellMode, type SceneData } from "../../index.js";
 
+let used_modes_list: HellMode[] = [];
+
 /**
  * Returns a random valid HellMode value.
  * Assumes that HellMode is a numeric enum ranging from 1 to hellMode.end_list (inclusive).
@@ -7,10 +9,33 @@ import { hellMode, randomInt, type HellMode, type SceneData } from "../../index.
  */
 function getRandomHellMod(): HellMode {
     // Generate a random integer between 1 and hellMode.end_list (inclusive)
-    const nb = randomInt(1, hellMode.end_list);
+    let nb: number = 1;
+    while (1) {
+        nb = randomInt(1, hellMode.end_list);
+        if (!wasAlreadyUsed(nb as HellMode)) break;
+    }
     // Type assertion: assumes nb is always a valid HellMode value
     return nb as HellMode;
     return hellMode.end_list as HellMode; // temp
+}
+
+function wasAlreadyUsed(random_mode: HellMode): boolean {
+
+    // if list is full, reset it
+    if (used_modes_list.length == hellMode.end_list)
+        used_modes_list = [];
+
+    // if list is not empty, read it
+    if (used_modes_list.length) {
+        for (let list_mode of used_modes_list) {
+            if (random_mode == list_mode)
+                return true;
+        }
+    }
+
+    // if mode is not on list, use it
+    used_modes_list.push(random_mode);
+    return false;
 }
 
 /**

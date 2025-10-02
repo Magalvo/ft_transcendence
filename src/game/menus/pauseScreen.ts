@@ -55,6 +55,10 @@ function pauseGame(data: SceneData, parts3D: Parts3D) {
   // pause music
   parts3D.hellMusic.pause();
   parts3D.heavenMusic.pause();
+  // reset canvas effects
+  const canvas = document.getElementById("renderCanvas");
+  if (canvas)
+    canvas.style.transform = "scaleX(1)";
 }
 
 /**

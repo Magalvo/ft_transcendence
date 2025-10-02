@@ -1,4 +1,4 @@
-import { side } from "../../index.js";
+import { hellMode, side } from "../../index.js";
 import type { Objects3D, Parts3D, SceneData } from "../../index.js";
 
 /**
@@ -24,5 +24,16 @@ export function updateEnvironment(parts3D: Parts3D, data: SceneData, obj3D: Obje
         for (let ball of obj3D.balls)
             ball.flame_animation.start();
         parts3D.sky_box.rotation.y += 0.05;
+    }
+
+    const canvas = document.getElementById("renderCanvas");
+    if (canvas)
+    {
+        // rotate all canvas (hell mode)
+        if (data.hell_mode == hellMode.twisted_view) 
+            canvas.style.transform = "scaleX(-1)";
+        else 
+            canvas.style.transform = "scaleX(1)";
+
     }
 }
