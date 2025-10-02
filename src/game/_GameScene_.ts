@@ -17,7 +17,7 @@ import {
   mov,
 } from "../index.js";
 
-import type { Parts3D, Objects2D, Side, HellMode as HellMode, Mov } from "../index.js";
+import type { Parts3D, Objects2D, HellMode as HellMode, Mov } from "../index.js";
 
 /**
  * 3D game objects container type
@@ -127,8 +127,6 @@ export class GameScene {
       table,
       balls: [
         createBall(table.pos.x, scene),
-        createBall(table.pos.x, scene),
-        // Add more balls here if needed
       ],
       paddles: [
         createPaddle(table.left_line * 0.9, side.left, scene),

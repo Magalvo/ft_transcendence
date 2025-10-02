@@ -28,8 +28,10 @@ export const hellMode = {
   small_paddles: 2,
   slow_paddles: 3,
   fast_balls: 4,
+  small_balls: 5,
+  multipleBalls: 6,
 
-  end_list: 4
+  end_list: 6
 } as const;
 
 export type HellMode = typeof hellMode[keyof typeof hellMode];

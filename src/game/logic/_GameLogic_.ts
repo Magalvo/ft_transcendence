@@ -1,4 +1,4 @@
-import { pauseScreen, handleKeyboardEvents, updateCamera, updateScoreLabels, updateEnvironment, rotateCamera, updateTimer, updateMusic, updateDevilTimer } from "../../index.js";
+import { pauseScreen, handleKeyboardEvents, updateCamera, updateScoreLabels, updateEnvironment, rotateCamera, updateTimer, updateMusic, updateDevilTimer, handleHellModes } from "../../index.js";
 import type { Objects2D, Objects3D, Parts3D, SceneData } from "../../index.js";
 
 /**
@@ -29,6 +29,9 @@ export function gameUpdate(
   } else {
     obj2D.guiGame.rootContainer.isVisible = true;
   }
+
+  // Handle hell modes
+  handleHellModes(data, obj3D);
 
   // To avoid physics bugs, split large dt into small steps
   const MAX_DT = 0.05;

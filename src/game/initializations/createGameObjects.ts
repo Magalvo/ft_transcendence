@@ -49,7 +49,7 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
  * @returns {Ball} The created Ball instance
  */
 export function createBall(pos: number, scene: BABYLON.Scene): Ball {
-  const ballRadius = 4;
+  const ballRadius = 2;
   return new Ball({
     speed: 50,
     max_speed: 100,

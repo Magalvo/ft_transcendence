@@ -32,6 +32,7 @@ export class Ball {
   // Mesh used to render the ball in BabylonJS
   private obj: BABYLON.Mesh;
   // Ball parameters
+  public original_radius: number;
   public radius: number;
   private speed: number;
   private original_speed: number;
@@ -54,6 +55,7 @@ export class Ball {
   constructor(options: BallOptions) {
     this.pos = options.pos;
     this.radius = options.radius;
+    this.original_radius = options.radius;
     this.speed = options.speed;
     this.original_speed = options.speed;
     this.speed_modifier = 1;
@@ -76,7 +78,7 @@ export class Ball {
   private initializeBall(scene: BABYLON.Scene): BABYLON.Mesh {
     const new_ball = BABYLON.MeshBuilder.CreateSphere(
       "ball",
-      { diameter: this.radius, segments: 32 },
+      { diameter: this.radius * 2, segments: 32 },
       scene
     );
     new_ball.position.x = this.pos.x;
@@ -115,6 +117,11 @@ export class Ball {
     this.wallCollisions(obj.table, data);
     // hell update
     this.hellUpdate(data);
+  }
+
+  public dispose() {
+    this.obj?.dispose();
+    this.flame_animation?.dispose();
   }
 
   /* ******************* *
@@ -320,15 +327,43 @@ export class Ball {
   }
 
   /**
-   * Updates paddle appearance and attributes based on "hell" mode and side.
+   * Updates ball appearance and attributes based on "hell" mode and side.
    */
   private hellUpdate(data: SceneData) {
     // --- Speed Update (hell side & mode) ---
     if (data.hell_mode == hellMode.fast_balls)
       this.speed_modifier = 4;
+    else if (data.hell_mode == hellMode.small_balls)
+      this.speed_modifier = 3;
     else if (data.hell_side)
       this.speed_modifier = 2;
     else
       this.speed_modifier = 1;
+
+    // --- Size Update (hell mode) ---
+    if (data.hell_mode == hellMode.small_balls)
+      this.changeSize(this.original_radius * 0.5);
+    else
+      this.changeSize();
+  }
+
+  /**
+   * Changes the ball's size in world units by setting a new radius.
+   * If not specified, restores the original radius.
+   * @param radius - The new radius for the ball (optional)
+   */
+  private changeSize(radius: number = this.original_radius) {
+    const mesh = this.obj;
+    const boundingInfo = mesh.getBoundingInfo();
+    // bounding box gives diameter, so divide by 2 for radius
+    const currentRadius = (boundingInfo.maximum.x - boundingInfo.minimum.x) / 2;
+
+    const scale = radius / currentRadius;
+
+    mesh.scaling.x = scale;
+    mesh.scaling.y = scale;
+    mesh.scaling.z = scale;
+
+    this.radius = radius;
   }
 }
