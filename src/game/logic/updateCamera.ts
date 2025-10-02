@@ -1,4 +1,4 @@
-import { BABYLON, side } from "../../index.js";
+import { BABYLON, hellMode } from "../../index.js";
 import type { Parts3D, SceneData } from "../../index.js";
 
 /**
@@ -11,6 +11,10 @@ export function updateCamera(data: SceneData, parts3D: Parts3D) {
     const extraRotation = !data.hell_side ? 0 : 4 * Math.PI;
     let cameraAlpha = 0;
     let cameraBeta = 0;
+
+    // change camera_pos (hell mode)
+    if (data.hell_mode == hellMode.twisted_view)
+        data.camera_pos = 1;
 
     // Camera preset positions
     if (data.camera_pos === 1) {

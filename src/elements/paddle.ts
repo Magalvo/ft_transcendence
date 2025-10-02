@@ -259,7 +259,7 @@ export class Paddle {
     else
       this.speed = this.original_speed;
 
-    // --- change position (hell mode) ---
+    // --- Change position (hell mode) ---
     if (data.hell_mode != hellMode.big_balls)
       this.pos.x = this.original_pos.x;
   }
