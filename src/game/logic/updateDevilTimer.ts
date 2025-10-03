@@ -1,7 +1,7 @@
 import { hellMode, updateHell, type Objects2D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const DEVIL_DURATION = 5;
+const DEVIL_DURATION = 20;
 const GOOD_DURATION = 5;
 
 // Internal timers for each side (in seconds)

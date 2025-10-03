@@ -18,9 +18,15 @@ import type { Side } from "../../index.js";
 export function createTable(scene: BABYLON.Scene): Table {
   const tableHeight = 0.5;
   return new Table({
-    pos: new BABYLON.Vector3(0, -tableHeight / 2, 0),
-    size: new BABYLON.Vector3(170, tableHeight, 90),
     scene: scene,
+    pos: {
+      value: new BABYLON.Vector3(0, -tableHeight / 2, 0),
+      original: new BABYLON.Vector3(0, -tableHeight / 2, 0)
+    },
+    dimensions: {
+      value: new BABYLON.Vector3(170, tableHeight, 90),
+      original: new BABYLON.Vector3(170, tableHeight, 90),
+    },
   });
 }
 
@@ -34,11 +40,20 @@ export function createTable(scene: BABYLON.Scene): Table {
 export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Paddle {
   const paddleHeight = 6;
   return new Paddle({
-    speed: 50,
-    side: side,
-    pos: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
-    dimensions: new BABYLON.Vector3(1, paddleHeight, 30),
     scene: scene,
+    pos: {
+      value: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
+      original: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
+    },
+    dimensions: {
+      value: new BABYLON.Vector3(1, paddleHeight, 30),
+      original: new BABYLON.Vector3(1, paddleHeight, 30),
+    },
+    side: side,
+    speed: {
+      value: 50,
+      original: 50
+    },
   });
 }
 
@@ -50,11 +65,22 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
  */
 export function createBall(scene: BABYLON.Scene, x: number, z: number): Ball {
   const ball_radius = 2;
+  const ball_diameter = ball_radius * 2;
   return new Ball({
-    speed: 50,
-    max_speed: 100,
-    pos: new BABYLON.Vector3(x, ball_radius / 2, z),
-    radius: ball_radius,
     scene: scene,
+    pos: {
+      value: new BABYLON.Vector3(x, ball_radius / 2, z),
+      original: new BABYLON.Vector3(x, ball_radius / 2, z),
+    },
+    dimensions: {
+      value: new BABYLON.Vector3(ball_diameter, ball_diameter, ball_diameter),
+      original: new BABYLON.Vector3(ball_diameter, ball_diameter, ball_diameter),
+    },
+    speed: {
+      value: 50,
+      original: 50,
+      max: 100
+    },
+    radius: ball_radius
   });
 }

@@ -126,11 +126,11 @@ export class GameScene {
     return {
       table,
       balls: [
-        createBall(scene, table.pos.x, table.pos.z),
+        createBall(scene, table.pos.value.x, table.pos.value.z),
       ],
       paddles: [
-        createPaddle(table.left_line * 0.9, side.left, scene),
-        createPaddle(table.right_line * 0.9, side.right, scene),
+        createPaddle(table.limits.left * 0.9, side.left, scene),
+        createPaddle(table.limits.right * 0.9, side.right, scene),
       ],
     };
   }

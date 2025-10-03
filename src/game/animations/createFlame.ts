@@ -9,10 +9,21 @@ import { BABYLON, randomFloat2 } from "../../index.js";
  * @returns {BABYLON.ParticleSystem}
  */
 export function createFlame(
-    scene: BABYLON.Scene,
-    position: BABYLON.Vector3 | { x: number; y: number; z: number },
-    size: number = 1,
-    textureUrl: string = "textures/flame.png"
+    {
+        scene,
+        pos: position,
+        size = 1,
+        textureUrl = "textures/flame.png",
+        color1 = new BABYLON.Color4(1, 0.6, 0, 1.0),
+        color2 = new BABYLON.Color4(1, 1, 0, 1.0),
+    }: {
+        scene: BABYLON.Scene,
+        pos: BABYLON.Vector3 | { x: number; y: number; z: number },
+        size?: number,
+        textureUrl?: string,
+        color1?: BABYLON.Color4,
+        color2?: BABYLON.Color4,
+    }
 ): BABYLON.ParticleSystem {
     // Generate a unique offset for each flame instance
     const offset = Math.random() * 1000;
@@ -29,8 +40,8 @@ export function createFlame(
     particleSystem.minEmitBox = new BABYLON.Vector3(-0.6 * size, 0, -0.6 * size);
     particleSystem.maxEmitBox = new BABYLON.Vector3(0.6 * size, 0, 0.6 * size);
 
-    particleSystem.color1 = new BABYLON.Color4(1, 0.6, 0, 1.0);
-    particleSystem.color2 = new BABYLON.Color4(1, 1, 0, 1.0);
+    particleSystem.color1 = color1;
+    particleSystem.color2 = color2;
     particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
 
     particleSystem.minSize = 0.6 * size;

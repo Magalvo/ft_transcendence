@@ -11,59 +11,55 @@ import {
   createFlame,
   hellMode,
   infiniteBallsAdd,
+  GameObject,
 } from "../index.js";
-import type { Mov, Objects3D, SceneData } from "../index.js";
+import type { GameObjectOptions, Mov, Objects3D, ObjectValue, SceneData } from "../index.js";
 
 /**
  * Options for creating a Ball instance.
  */
-type BallOptions = {
-  speed: number;               // Initial ball speed
-  max_speed: number;           // Maximum speed
-  pos: BABYLON.Vector3;        // Start position
-  radius: number;              // Ball radius (not diameter)
-  scene: BABYLON.Scene;        // BabylonJS scene
+export type BallOptions = GameObjectOptions & {
+  radius: number,
+  speed: ObjectValue<number> & { max: number },
+  magic_ball?: boolean,
 };
 
 /**
  * Represents the ball in the game: movement, drawing, collisions, respawn.
  */
-export class Ball {
+export class Ball extends GameObject {
   // Rendering & animation
-  private obj: BABYLON.Mesh;
   public flame_animation: BABYLON.ParticleSystem;
 
   // Ball physics state
-  public original_radius: number;
   public radius: number;
-  private speed: number;
-  private original_speed: number;
-  private speed_modifier: number;
-  private angle: number = 0;
-  private max_speed: number;
+  public original_radius: number;
+  public speed_modifier: number = 1;
+  public angle: number = 0;
   public velocity: number = 0;
   public respawn_timer: number = 0;
-
-  // Position and collision bounds
-  public pos: BABYLON.Vector3;
-  public left_line!: number;
-  public right_line!: number;
-  public upper_line!: number;
-  public lower_line!: number;
-  public near_line!: number;
-  public far_line!: number;
+  public magic_ball: boolean = false;
+  public speed: ObjectValue<number> & { max: number };
 
   constructor(options: BallOptions) {
-    this.pos = options.pos;
+    super(options);
+    // ball specifics
+    this.speed = options.speed;
+    this.magic_ball = options.magic_ball ?? false;
     this.radius = options.radius;
     this.original_radius = options.radius;
-    this.speed = options.speed;
-    this.original_speed = options.speed;
-    this.speed_modifier = 1;
-    this.max_speed = options.max_speed;
-    this.flame_animation = createFlame(options.scene, this.pos, 4);
+    if (!this.magic_ball)
+      this.flame_animation = createFlame({ scene: options.scene, pos: this.pos.value, size: 4 });
+    else
+      this.flame_animation = createFlame({
+        scene: options.scene,
+        pos: this.pos.value,
+        size: 6,
+        color1: new BABYLON.Color4(0.9, 0.2, 1, 1),
+        color2: new BABYLON.Color4(0.5, 0.1, 0.4, 1),
+      });
+      this.flame_animation.emitter = this.pos.value;
     this.obj = this.createMesh(options.scene);
-    this.positionUpdate();
     this.throwBall(false);
   }
 
@@ -76,7 +72,7 @@ export class Ball {
       { diameter: this.radius * 2, segments: 32 },
       scene
     );
-    mesh.position.copyFrom(this.pos);
+    mesh.position = this.pos.value;
 
     const mat = new BABYLON.StandardMaterial("ballMat", scene);
     mat.diffuseColor = new BABYLON.Color3(0.8, 0.95, 1.0);
@@ -114,38 +110,38 @@ export class Ball {
   private paddleCollisions(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
     // Axis-aligned bounding box overlap (AABB)
     if (
-      Math.abs(this.pos.x - paddle.pos.x) - paddle.dimensions.x / 2 - this.radius <= 0 &&
-      Math.abs(this.pos.y - paddle.pos.y) - paddle.dimensions.y / 2 - this.radius <= 0 &&
-      Math.abs(this.pos.z - paddle.pos.z) - paddle.dimensions.z / 2 - this.radius <= 0
+      Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius <= 0 &&
+      Math.abs(this.pos.value.y - paddle.pos.value.y) - paddle.dimensions.value.y / 2 - this.radius <= 0 &&
+      Math.abs(this.pos.value.z - paddle.pos.value.z) - paddle.dimensions.value.z / 2 - this.radius <= 0
     ) {
       // Side collision (X axis)
-      if (this.pos.z > paddle.near_line && this.pos.z < paddle.far_line) {
+      if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far) {
         let inverting = false;
-        if (this.pos.x < paddle.left_line && paddle.side == side.right) {
+        if (this.pos.value.x < paddle.limits.left && paddle.side == side.right) {
           if (this.velocity > 0) inverting = true;
           this.updateMovement(mov.left, true, true);
         }
-        if (this.pos.x > paddle.right_line && paddle.side == side.left) {
+        if (this.pos.value.x > paddle.limits.right && paddle.side == side.left) {
           if (this.velocity < 0) inverting = true;
           this.updateMovement(mov.right, true, true);
         }
-        spawnHitParticles(data.scene, this.pos);
+        spawnHitParticles(data.scene, this.pos.value);
         // hell mode
         if (inverting) {
           if (data.hell_mode == hellMode.infinite_balls)
-            infiniteBallsAdd(data, obj3D, this.pos.x, this.pos.z);
+            infiniteBallsAdd(data, obj3D, this.pos.value.x, this.pos.value.z);
           if (data.hell_mode == hellMode.big_balls)
-            paddle.pos.x -= this.velocity / Math.abs(this.velocity) * 3;
+            paddle.pos.value.x -= this.velocity / Math.abs(this.velocity) * 3;
         }
 
       }
       // Top/bottom collision (Z axis)
-      if (this.pos.x > paddle.left_line && this.pos.x < paddle.right_line) {
-        if (this.pos.z > paddle.far_line)
+      if (this.pos.value.x > paddle.limits.left && this.pos.value.x < paddle.limits.right) {
+        if (this.pos.value.z > paddle.limits.far)
           this.updateMovement(mov.near, false, false);
-        if (this.pos.z < paddle.near_line)
+        if (this.pos.value.z < paddle.limits.near)
           this.updateMovement(mov.far, false, false);
-        spawnHitParticles(data.scene, this.pos);
+        spawnHitParticles(data.scene, this.pos.value);
       }
     }
   }
@@ -155,26 +151,26 @@ export class Ball {
    */
   private wallCollisions(table: Table, data: SceneData) {
     // Z+ wall (far)
-    if (this.far_line >= table.far_line) {
-      this.pos.z = table.far_line - this.radius;
+    if (this.limits.far >= table.limits.far) {
+      this.pos.value.z = table.limits.far - this.radius;
       this.updateMovement(mov.invert_z, false, false);
-      spawnHitParticles(data.scene, this.pos);
+      spawnHitParticles(data.scene, this.pos.value);
     }
     // Z- wall (near)
-    if (this.near_line <= table.near_line) {
-      this.pos.z = table.near_line + this.radius;
+    if (this.limits.near <= table.limits.near) {
+      this.pos.value.z = table.limits.near + this.radius;
       this.updateMovement(mov.invert_z, false, false);
-      spawnHitParticles(data.scene, this.pos);
+      spawnHitParticles(data.scene, this.pos.value);
     }
 
     // X- wall (left): score for right
-    if (this.left_line <= table.left_line) {
+    if (this.limits.left <= table.limits.left) {
       data.score.right++;
       flashZone(data, side.left, table);
       this.throwBall(true);
     }
     // X+ wall (right): score for left
-    if (this.right_line - this.radius >= table.right_line) {
+    if (this.limits.right - this.radius >= table.limits.right) {
       data.score.left++;
       flashZone(data, side.right, table);
       this.throwBall(true);
@@ -186,8 +182,8 @@ export class Ball {
    */
   private throwBall(reset_pos: boolean) {
     const direction: Mov = randomInt(0, 1) ? mov.left : mov.right;
-    this.velocity = this.speed;
-    this.speed = this.original_speed;
+    this.velocity = this.speed.value;
+    this.speed.value = this.speed.value;
     this.angle = 0;
     this.updateMovement(direction, true, false);
     if (reset_pos) {
@@ -203,12 +199,12 @@ export class Ball {
     const angle_rad = this.angle * Math.PI / 180;
     const vx = this.velocity * Math.cos(angle_rad);
     const vz = this.velocity * Math.sin(angle_rad);
-    if (x !== undefined) this.pos.x = x;
-    else if (data) this.pos.x += vx * data.step * this.speed_modifier;
-    if (z !== undefined) this.pos.z = z;
-    else if (data) this.pos.z += vz * data.step * this.speed_modifier;
-    this.obj.position.copyFrom(this.pos);
-    this.positionUpdate();
+    if (x !== undefined) this.pos.value.x = x;
+    else if (data) this.pos.value.x += vx * data.step * this.speed_modifier;
+    if (z !== undefined) this.pos.value.z = z;
+    else if (data) this.pos.value.z += vz * data.step * this.speed_modifier;
+    this.obj.position.copyFrom(this.pos.value);
+    this.updatePosition();
   }
 
   /**
@@ -218,27 +214,14 @@ export class Ball {
     switch (move) {
       case mov.far: this.angle = Math.abs(this.angle); break;
       case mov.near: this.angle = -Math.abs(this.angle); break;
-      case mov.left: this.velocity = -this.speed; break;
-      case mov.right: this.velocity = this.speed; break;
+      case mov.left: this.velocity = -this.speed.value; break;
+      case mov.right: this.velocity = this.speed.value; break;
       case mov.invert_x: this.velocity *= -1; break;
       case mov.invert_z: this.angle *= -1; break;
     }
-    if (increase_speed && this.speed < this.max_speed) this.speed += 2;
+    if (increase_speed && this.speed.value < this.speed.max) this.speed.value += 2;
     if (angle_distortion) this.angle = randomInt(-70, 70);
     this.angle = normalizeAngle180(this.angle);
-  }
-
-  /**
-   * Updates the bounding lines for collision and animates the flame.
-   */
-  private positionUpdate() {
-    this.left_line = this.pos.x - this.radius;
-    this.right_line = this.pos.x + this.radius;
-    this.upper_line = this.pos.y + this.radius;
-    this.lower_line = this.pos.y - this.radius;
-    this.near_line = this.pos.z - this.radius;
-    this.far_line = this.pos.z + this.radius;
-    this.flame_animation.emitter = this.pos;
   }
 
   /**

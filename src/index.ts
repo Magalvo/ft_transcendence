@@ -20,6 +20,7 @@ export * from "./game/animations/flashZone.js";
 export * from "./game/animations/ballHitParticles.ts";
 export * from "./game/animations/createFlame.js";
 export * from "./game/animations/createSkybox.js";
+export * from "./elements/_GameObject_.js";
 export * from "./elements/ball.js";
 export * from "./elements/paddle.js";
 export * from "./elements/table.js";

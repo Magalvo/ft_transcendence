@@ -5,47 +5,27 @@ import {
   mov,
   side,
   hellMode,
+  GameObject,
 } from "../index.js";
-import type { Side, Mov, Objects3D, SceneData } from "../index.js";
+import type { Side, Mov, Objects3D, SceneData, GameObjectOptions, ObjectValue } from "../index.js";
 
 /**
  * Options for Paddle construction.
  */
-type PaddleOptions = {
-  speed: number;                // Paddle movement speed
-  side: Side;                   // Paddle side (left/right)
-  pos: BABYLON.Vector3;         // Initial position
-  dimensions: BABYLON.Vector3;  // Paddle dimensions
-  scene: BABYLON.Scene;         // Babylon.js scene
+type PaddleOptions = GameObjectOptions & {
+  side: Side;
+  speed: ObjectValue<number>,
 };
 
 /**
  * Represents a player or bot paddle.
  */
-export class Paddle {
-  // --- Rendering ---
-  /** Babylon mesh for rendering */
-  private obj: BABYLON.Mesh;
-
-  // --- Paddle dimensions & position ---
-  public original_dimensions: BABYLON.Vector3;  // Unmodified paddle size
-  public dimensions: BABYLON.Vector3;           // Current paddle size (may change due to powerups/mods)
-  private original_pos: BABYLON.Vector3;
-  public pos: BABYLON.Vector3;                  // Paddle position
+export class Paddle extends GameObject {
 
   // --- Side & movement ---
-  public side: Side;                // Paddle side (left/right)
-  private original_speed: number;   // Default movement speed
-  private speed: number;            // Current movement speed (may change due to powerups/mods)
-  private human: boolean;           // Is this paddle controlled by a human?
-
-  // --- Collision bounds (calculated each update) ---
-  public left_line!: number;
-  public right_line!: number;
-  public upper_line!: number;
-  public lower_line!: number;
-  public near_line!: number;
-  public far_line!: number;
+  public side: Side;
+  private human: boolean;
+  public speed: ObjectValue<number>;
 
   // --- Appearance (color themes) ---
   private paddle_color_good: BABYLON.Color3;
@@ -57,17 +37,11 @@ export class Paddle {
    * Constructs a new Paddle.
    */
   constructor(options: PaddleOptions) {
-    // Set position & dimensions (clone to avoid shared references)
-    this.pos = options.pos.clone();
-    this.original_pos = options.pos.clone();
-    this.original_dimensions = options.dimensions.clone();
-    this.dimensions = options.dimensions.clone();
+    super(options)
 
-    // Set movement and side
     this.side = options.side;
-    this.original_speed = options.speed;
-    this.speed = options.speed;
     this.human = true;
+    this.speed = options.speed;
 
     // Color schemes for "heaven" (good) and "hell" (bad) sides
     this.paddle_color_good = new BABYLON.Color3(0.04, 0.06, 0.09);
@@ -77,7 +51,6 @@ export class Paddle {
 
     // Create the mesh and place it
     this.obj = this.initializePaddle(options.scene);
-    this.positionUpdate();
   }
 
   // ======================
@@ -89,12 +62,12 @@ export class Paddle {
    */
   private initializePaddle(scene: BABYLON.Scene): BABYLON.Mesh {
     // Create a box mesh for the paddle
-    const new_paddle = BABYLON.MeshBuilder.CreateBox(
+    const mesh = BABYLON.MeshBuilder.CreateBox(
       "paddle",
-      { width: this.dimensions.x, depth: this.dimensions.z, height: this.dimensions.y },
+      { width: this.dimensions.value.x, depth: this.dimensions.value.z, height: this.dimensions.value.y },
       scene
     );
-    new_paddle.position.set(this.pos.x, this.pos.y, this.pos.z);
+    mesh.position = this.pos.value;
 
     // Material setup
     const paddleMat = new BABYLON.StandardMaterial("paddleMat", scene);
@@ -104,14 +77,14 @@ export class Paddle {
     paddleMat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
     paddleMat.needDepthPrePass = true;
 
-    new_paddle.material = paddleMat;
+    mesh.material = paddleMat;
 
     // Edges rendering
-    new_paddle.enableEdgesRendering();
-    new_paddle.edgesWidth = 6.0;
-    new_paddle.edgesColor = this.edges_color_good;
+    mesh.enableEdgesRendering();
+    mesh.edgesWidth = 6.0;
+    mesh.edgesColor = this.edges_color_good;
 
-    return new_paddle;
+    return mesh;
   }
 
   // ======================
@@ -147,7 +120,7 @@ export class Paddle {
     // Find the ball closest (in x) to the paddle
     let ball = balls[0];
     for (let temp_ball of balls) {
-      if (Math.abs(temp_ball.pos.x - this.pos.x) < Math.abs(ball.pos.x - this.pos.x))
+      if (Math.abs(temp_ball.pos.value.x - this.pos.value.x) < Math.abs(ball.pos.value.x - this.pos.value.x))
         ball = temp_ball;
     }
 
@@ -163,10 +136,10 @@ export class Paddle {
    */
   private botMove2(data: SceneData, ball: Ball) {
     let direction: Mov;
-    if (this.pos.z < ball.pos.z) direction = mov.far;
+    if (this.pos.value.z < ball.pos.value.z) direction = mov.far;
     else direction = mov.near;
 
-    this.move(data, direction, this.speed);
+    this.move(data, direction, this.speed.value);
   }
 
   /**
@@ -174,7 +147,7 @@ export class Paddle {
    */
   private humanMove(data: SceneData) {
     if (this.side == side.left && data.left_paddle_mov != mov.null)
-      this.move(data, data.left_paddle_mov, this.speed);
+      this.move(data, data.left_paddle_mov, this.speed.value);
   }
 
   /**
@@ -183,13 +156,13 @@ export class Paddle {
   private move(data: SceneData, move: Mov, speed: number) {
     switch (move) {
       case mov.far:
-        this.pos.z += speed * data.step;
+        this.pos.value.z += speed * data.step;
         break;
       case mov.near:
-        this.pos.z -= speed * data.step;
+        this.pos.value.z -= speed * data.step;
         break;
     }
-    this.positionUpdate();
+    this.updatePosition();
   }
 
   // ======================
@@ -197,34 +170,15 @@ export class Paddle {
   // ======================
 
   /**
-   * Updates the paddle's position and bounding box for collision detection.
-   */
-  private positionUpdate() {
-    this.obj.position.set(this.pos.x, this.pos.y, this.pos.z);
-    this.pos = this.obj.position;
-
-    // Calculate bounding lines for collision checks
-    // X bounds
-    this.left_line = this.pos.x - this.dimensions.x / 2;
-    this.right_line = this.pos.x + this.dimensions.x / 2;
-    // Y bounds
-    this.upper_line = this.pos.y + this.dimensions.y / 2;
-    this.lower_line = this.pos.y - this.dimensions.y / 2;
-    // Z bounds
-    this.near_line = this.pos.z - this.dimensions.z / 2;
-    this.far_line = this.pos.z + this.dimensions.z / 2;
-  }
-
-  /**
    * Prevents paddle from leaving the table along the Z axis.
    */
   private wallCollisions(table: Table) {
     // Far wall
-    if (this.far_line >= table.far_line)
-      this.pos.z = table.far_line - this.dimensions.z / 2;
+    if (this.limits.far >= table.limits.far)
+      this.pos.value.z = table.limits.far - this.dimensions.value.z / 2;
     // Near wall
-    if (this.near_line <= table.near_line)
-      this.pos.z = table.near_line + this.dimensions.z / 2;
+    if (this.limits.near <= table.limits.near)
+      this.pos.value.z = table.limits.near + this.dimensions.value.z / 2;
   }
 
   /**
@@ -247,21 +201,21 @@ export class Paddle {
 
     // --- Size Update (hell mode) ---
     if (data.hell_mode == hellMode.small_paddles)
-      this.changeSize({ z: this.original_dimensions.z * 0.4 });
+      this.changeSize({ z: this.dimensions.original.z * 0.4 });
     else
       this.changeSize();
 
     // --- Speed Update (hell side & mode) ---
     if (data.hell_mode == hellMode.slow_paddles)
-      this.speed = this.original_speed * 0.5;
+      this.speed.value = this.speed.original * 0.5;
     else if (data.hell_side)
-      this.speed = this.original_speed * 2;
+      this.speed.value = this.speed.original * 2;
     else
-      this.speed = this.original_speed;
+      this.speed.value = this.speed.original;
 
     // --- Change position (hell mode) ---
     if (data.hell_mode != hellMode.big_balls)
-      this.pos.x = this.original_pos.x;
+      this.pos.value.x = this.pos.original.x;
   }
 
   /**
@@ -278,9 +232,9 @@ export class Paddle {
     const size = boundingInfo.maximum.subtract(boundingInfo.minimum);
 
     // Use original dimensions if not overridden
-    const width = options.x ?? this.original_dimensions.x;
-    const height = options.y ?? this.original_dimensions.y;
-    const depth = options.z ?? this.original_dimensions.z;
+    const width = options.x ?? this.dimensions.original.x;
+    const height = options.y ?? this.dimensions.original.y;
+    const depth = options.z ?? this.dimensions.original.z;
 
     // Set mesh scaling to match requested absolute size
     mesh.scaling.x = width / size.x;
@@ -288,8 +242,8 @@ export class Paddle {
     mesh.scaling.z = depth / size.z;
 
     // Update dimensions properties
-    this.dimensions.x = width;
-    this.dimensions.y = height;
-    this.dimensions.z = depth;
+    this.dimensions.value.x = width;
+    this.dimensions.value.y = height;
+    this.dimensions.value.z = depth;
   }
 }
