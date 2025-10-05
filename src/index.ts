@@ -29,6 +29,7 @@ export * from "./utils/strings.js";
 
 // Re-export BabylonJS core and GUI modules under unified names
 export * as BABYLON from "@babylonjs/core";
+export { Vector3 as Vec3 } from "@babylonjs/core";
 export * as GUI from "@babylonjs/gui";
 
 // Import BabylonJS loaders to register all loaders globally (side-effect import)

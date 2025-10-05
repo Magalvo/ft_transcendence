@@ -1,4 +1,4 @@
-import { BABYLON, GameObject } from "../index.js";
+import { BABYLON, GameObject, Vec3 } from "../index.js";
 import type { GameObjectOptions, SceneData } from "../index.js";
 
 /**
@@ -71,13 +71,13 @@ export class Table extends GameObject {
    */
   private drawLines(scene: BABYLON.Scene) {
     const points = [
-      new BABYLON.Vector3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x - this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x - this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x + this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x + this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
-      new BABYLON.Vector3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x - this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x - this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x + this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z + this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x + this.dimensions.value.x / 2, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
+      new Vec3(this.pos.value.x, this.pos.value.y + this.dimensions.value.y / 2, this.pos.value.z - this.dimensions.value.z / 2),
     ];
     this.lines = BABYLON.MeshBuilder.CreateLines("lines", { points }, scene);
     this.lines.color = this.good_color;
@@ -91,11 +91,11 @@ export class Table extends GameObject {
     const circleSegments = 64;
     const circleYOffset = this.pos.value.y + this.dimensions.value.y / 2 + 0.01;
 
-    const points: BABYLON.Vector3[] = [];
+    const points: Vec3[] = [];
     for (let i = 0; i <= circleSegments; i++) {
       const angle = (2 * Math.PI * i) / circleSegments;
       points.push(
-        new BABYLON.Vector3(
+        new Vec3(
           this.pos.value.x + Math.cos(angle) * circleRadius,
           circleYOffset,
           this.pos.value.z + Math.sin(angle) * circleRadius

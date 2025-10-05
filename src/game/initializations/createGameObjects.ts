@@ -3,6 +3,7 @@ import {
   Paddle,
   Table,
   BABYLON,
+  Vec3,
 } from "../../index.js";
 import type { Side } from "../../index.js";
 
@@ -20,12 +21,12 @@ export function createTable(scene: BABYLON.Scene): Table {
   return new Table({
     scene: scene,
     pos: {
-      value: new BABYLON.Vector3(0, -tableHeight / 2, 0),
-      original: new BABYLON.Vector3(0, -tableHeight / 2, 0)
+      value: new Vec3(0, -tableHeight / 2, 0),
+      original: new Vec3(0, -tableHeight / 2, 0)
     },
     dimensions: {
-      value: new BABYLON.Vector3(170, tableHeight, 90),
-      original: new BABYLON.Vector3(170, tableHeight, 90),
+      value: new Vec3(170, tableHeight, 90),
+      original: new Vec3(170, tableHeight, 90),
     },
   });
 }
@@ -42,12 +43,12 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
   return new Paddle({
     scene: scene,
     pos: {
-      value: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
-      original: new BABYLON.Vector3(pos, paddleHeight / 2, 0),
+      value: new Vec3(pos, paddleHeight / 2, 0),
+      original: new Vec3(pos, paddleHeight / 2, 0),
     },
     dimensions: {
-      value: new BABYLON.Vector3(1, paddleHeight, 30),
-      original: new BABYLON.Vector3(1, paddleHeight, 30),
+      value: new Vec3(1, paddleHeight, 30),
+      original: new Vec3(1, paddleHeight, 30),
     },
     side: side,
     speed: {
@@ -69,12 +70,12 @@ export function createBall(scene: BABYLON.Scene, x: number, z: number): Ball {
   return new Ball({
     scene: scene,
     pos: {
-      value: new BABYLON.Vector3(x, ball_radius / 2, z),
-      original: new BABYLON.Vector3(x, ball_radius / 2, z),
+      value: new Vec3(x, ball_radius / 2, z),
+      original: new Vec3(x, ball_radius / 2, z),
     },
     dimensions: {
-      value: new BABYLON.Vector3(ball_diameter, ball_diameter, ball_diameter),
-      original: new BABYLON.Vector3(ball_diameter, ball_diameter, ball_diameter),
+      value: new Vec3(ball_diameter, ball_diameter, ball_diameter),
+      original: new Vec3(ball_diameter, ball_diameter, ball_diameter),
     },
     speed: {
       value: 50,

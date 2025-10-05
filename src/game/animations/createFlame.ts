@@ -1,4 +1,4 @@
-import { BABYLON, randomFloat2 } from "../../index.js";
+import { BABYLON, randomFloat2, Vec3 } from "../../index.js";
 
 /**
  * Creates a fire/flame particle system at a given position.
@@ -18,7 +18,7 @@ export function createFlame(
         color2 = new BABYLON.Color4(1, 1, 0, 1.0),
     }: {
         scene: BABYLON.Scene,
-        pos: BABYLON.Vector3 | { x: number; y: number; z: number },
+        pos: Vec3 | { x: number; y: number; z: number },
         size?: number,
         textureUrl?: string,
         color1?: BABYLON.Color4,
@@ -30,15 +30,15 @@ export function createFlame(
     const particleSystem = new BABYLON.ParticleSystem("flame", Math.round(500 * size), scene);
 
     const emitterPos =
-        position instanceof BABYLON.Vector3
+        position instanceof Vec3
             ? position
-            : new BABYLON.Vector3(position.x, position.y, position.z);
+            : new Vec3(position.x, position.y, position.z);
 
     particleSystem.particleTexture = new BABYLON.Texture(textureUrl, scene);
 
     particleSystem.emitter = emitterPos;
-    particleSystem.minEmitBox = new BABYLON.Vector3(-0.6 * size, 0, -0.6 * size);
-    particleSystem.maxEmitBox = new BABYLON.Vector3(0.6 * size, 0, 0.6 * size);
+    particleSystem.minEmitBox = new Vec3(-0.6 * size, 0, -0.6 * size);
+    particleSystem.maxEmitBox = new Vec3(0.6 * size, 0, 0.6 * size);
 
     particleSystem.color1 = color1;
     particleSystem.color2 = color2;
@@ -53,12 +53,12 @@ export function createFlame(
     particleSystem.emitRate = 100 * size;
 
     // Initial random direction
-    particleSystem.direction1 = new BABYLON.Vector3(
+    particleSystem.direction1 = new Vec3(
         randomFloat2(-0.1, 0.1),
         randomFloat2(0.2, 1.5),
         randomFloat2(-0.1, 0.1)
     );
-    particleSystem.direction2 = new BABYLON.Vector3(
+    particleSystem.direction2 = new Vec3(
         randomFloat2(-0.1, 0.1),
         randomFloat2(0.2, 1.5),
         randomFloat2(-0.1, 0.1)
@@ -74,8 +74,8 @@ export function createFlame(
         const time = performance.now() * 0.001 + offset;
         const jitterX = Math.sin(time * 2.4) * 0.15 + Math.cos(time * 1.3) * 0.07;
         const jitterZ = Math.sin(time * 1.2) * 0.13 + Math.cos(time * 1.7) * 0.09;
-        particleSystem.direction1 = new BABYLON.Vector3(-0.12 + jitterX, 1, -0.12 + jitterZ);
-        particleSystem.direction2 = new BABYLON.Vector3(0.12 + jitterX, 1, 0.12 + jitterZ);
+        particleSystem.direction1 = new Vec3(-0.12 + jitterX, 1, -0.12 + jitterZ);
+        particleSystem.direction2 = new Vec3(0.12 + jitterX, 1, 0.12 + jitterZ);
 
         // Optionally, smoothly vary flame size over time
         particleSystem.minSize = (0.6 + 0.08 * Math.sin(time * 2.1)) * size;

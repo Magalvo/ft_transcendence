@@ -6,244 +6,195 @@ import {
   side,
   hellMode,
   GameObject,
+  Vec3,
 } from "../index.js";
-import type { Side, Mov, Objects3D, SceneData, GameObjectOptions, ObjectValue } from "../index.js";
+import type {
+  Side,
+  Mov,
+  Objects3D,
+  SceneData,
+  GameObjectOptions,
+  ObjectValue,
+} from "../index.js";
 
 /**
- * Options for Paddle construction.
+ * PaddleOptions extends base GameObjectOptions to add
+ * paddle-specific properties.
  */
 type PaddleOptions = GameObjectOptions & {
   side: Side;
-  speed: ObjectValue<number>,
+  speed: ObjectValue<number>;
 };
 
 /**
- * Represents a player or bot paddle.
+ * Paddle class: Controls player or bot paddle logic,
+ * appearance, and interactions with the table and balls.
  */
 export class Paddle extends GameObject {
-
-  // --- Side & movement ---
+  // --- Core properties ---
   public side: Side;
-  private human: boolean;
   public speed: ObjectValue<number>;
+  private human: boolean;
 
-  // --- Appearance (color themes) ---
-  private paddle_color_good: BABYLON.Color3;
-  private paddle_color_bad: BABYLON.Color3;
-  private edges_color_good: BABYLON.Color4;
-  private edges_color_bad: BABYLON.Color4;
+  // --- Visual properties for themes ---
+  private readonly paddleGood: BABYLON.Color3 = new BABYLON.Color3(0.04, 0.06, 0.09);
+  private readonly paddleBad: BABYLON.Color3 = new BABYLON.Color3(0.8, 0.01, 0.01);
+  private readonly edgeGood: BABYLON.Color4 = new BABYLON.Color4(0.2, 0.45, 1.0, 1.0);
+  private readonly edgeBad: BABYLON.Color4 = new BABYLON.Color4(1.0, 0.45, 0.2, 1.0);
 
   /**
-   * Constructs a new Paddle.
+   * Constructor initializes paddle with visual style,
+   * side, speed, and mesh creation.
    */
   constructor(options: PaddleOptions) {
-    super(options)
-
+    super(options);
     this.side = options.side;
-    this.human = true;
     this.speed = options.speed;
+    this.human = true;
 
-    // Color schemes for "heaven" (good) and "hell" (bad) sides
-    this.paddle_color_good = new BABYLON.Color3(0.04, 0.06, 0.09);
-    this.paddle_color_bad = new BABYLON.Color3(0.8, 0.01, 0.01);
-    this.edges_color_good = new BABYLON.Color4(0.2, 0.45, 1.0, 1.0);
-    this.edges_color_bad = new BABYLON.Color4(1.0, 0.45, 0.2, 1.0);
-
-    // Create the mesh and place it
-    this.obj = this.initializePaddle(options.scene);
+    // Create paddle mesh
+    this.obj = this.createMesh(options.scene);
   }
 
-  // ======================
-  //   DRAWING METHODS
-  // ======================
-
   /**
-   * Initializes and returns the paddle mesh.
+   * Creates the paddle mesh with initial styling and edge rendering.
    */
-  private initializePaddle(scene: BABYLON.Scene): BABYLON.Mesh {
-    // Create a box mesh for the paddle
+  private createMesh(scene: BABYLON.Scene): BABYLON.Mesh {
     const mesh = BABYLON.MeshBuilder.CreateBox(
       "paddle",
-      { width: this.dimensions.value.x, depth: this.dimensions.value.z, height: this.dimensions.value.y },
+      {
+        width: this.dimensions.value.x,
+        depth: this.dimensions.value.z,
+        height: this.dimensions.value.y,
+      },
       scene
     );
     mesh.position = this.pos.value;
 
-    // Material setup
-    const paddleMat = new BABYLON.StandardMaterial("paddleMat", scene);
-    paddleMat.diffuseColor = this.paddle_color_good;
-    paddleMat.alpha = 0.5;
-    paddleMat.specularColor = new BABYLON.Color3(0, 0, 0);
-    paddleMat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
-    paddleMat.needDepthPrePass = true;
+    const mat = new BABYLON.StandardMaterial("paddleMat", scene);
+    mat.diffuseColor = this.paddleGood;
+    mat.alpha = 0.5;
+    mat.specularColor = new BABYLON.Color3(0, 0, 0);
+    mat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
+    mat.needDepthPrePass = true;
+    mesh.material = mat;
 
-    mesh.material = paddleMat;
-
-    // Edges rendering
     mesh.enableEdgesRendering();
     mesh.edgesWidth = 6.0;
-    mesh.edgesColor = this.edges_color_good;
+    mesh.edgesColor = this.edgeGood;
 
     return mesh;
   }
 
-  // ======================
-  //    PUBLIC METHODS
-  // ======================
-
   /**
-   * Updates paddle logic: movement, collisions, and color.
+   * Main update function: Handles movement, collision,
+   * and appearance logic each frame.
    */
   public update(obj: Objects3D, data: SceneData) {
-    // Determine if paddle is human-controlled
+    // Determine if user or AI controls this paddle
     this.human =
       (this.side == side.left && data.left_player_human) ||
       (this.side == side.right && data.right_player_human);
 
-    // Move paddle (either human or bot logic)
-    if (this.human) this.humanMove(data);
-    else this.botMove(data, obj.balls);
+    // Move paddle according to control type
+    this.human
+      ? this.handleHumanMovement(data)
+      : this.handleBotMovement(data, obj.balls);
 
-    // Handle wall collisions and color/size changes
-    this.wallCollisions(obj.table);
-    this.hellUpdate(data);
+    this.keepWithinTable(obj.table);
+    this.updateAppearanceAndStats(data);
   }
 
-  // ======================
-  //   MOVEMENT METHODS
-  // ======================
+  // ====== MOVEMENT LOGIC ======
 
   /**
-   * Bot AI: finds the closest ball and moves toward it if the ball is approaching.
+   * AI: Move toward the closest ball if it's coming toward this paddle.
    */
-  private botMove(data: SceneData, balls: Ball[]) {
-    // Find the ball closest (in x) to the paddle
-    let ball = balls[0];
-    for (let temp_ball of balls) {
-      if (Math.abs(temp_ball.pos.value.x - this.pos.value.x) < Math.abs(ball.pos.value.x - this.pos.value.x))
-        ball = temp_ball;
+  private handleBotMovement(data: SceneData, balls: Ball[]) {
+    // Find closest ball along x-axis
+    let closest = balls.reduce((prev, b) =>
+      Math.abs(b.pos.value.x - this.pos.value.x) <
+      Math.abs(prev.pos.value.x - this.pos.value.x)
+        ? b
+        : prev
+    );
+
+    // Only move if the ball is approaching
+    if (
+      (this.side == side.left && closest.velocity < 0) ||
+      (this.side == side.right && closest.velocity > 0)
+    ) {
+      this.moveTowardBall(data, closest);
     }
-
-    // Only track balls moving toward the paddle
-    if (this.side == side.left && ball.velocity < 0)
-      this.botMove2(data, ball);
-    if (this.side == side.right && ball.velocity > 0)
-      this.botMove2(data, ball);
   }
 
   /**
-   * Moves the bot paddle toward the ball's z position.
+   * Bot moves toward the ball's Z position.
    */
-  private botMove2(data: SceneData, ball: Ball) {
-    let direction: Mov;
-    if (this.pos.value.z < ball.pos.value.z) direction = mov.far;
-    else direction = mov.near;
-
+  private moveTowardBall(data: SceneData, ball: Ball) {
+    const direction: Mov =
+      this.pos.value.z < ball.pos.value.z ? mov.far : mov.near;
     this.move(data, direction, this.speed.value);
   }
 
   /**
-   * Human-controlled movement: checks for keyboard input.
+   * Handles user keyboard input for movement.
    */
-  private humanMove(data: SceneData) {
-    if (this.side == side.left && data.left_paddle_mov != mov.null)
+  private handleHumanMovement(data: SceneData) {
+    if (
+      this.side == side.left &&
+      data.left_paddle_mov != mov.null
+    ) {
       this.move(data, data.left_paddle_mov, this.speed.value);
+    }
+    // Right paddle controls can be added similarly if needed
   }
 
   /**
-   * Moves the paddle along the Z axis.
+   * Move the paddle along the Z axis.
    */
-  private move(data: SceneData, move: Mov, speed: number) {
-    switch (move) {
-      case mov.far:
-        this.pos.value.z += speed * data.step;
-        break;
-      case mov.near:
-        this.pos.value.z -= speed * data.step;
-        break;
-    }
+  private move(data: SceneData, direction: Mov, speed: number) {
+    if (direction === mov.far) this.pos.value.z += speed * data.step;
+    if (direction === mov.near) this.pos.value.z -= speed * data.step;
     this.updatePosition();
   }
 
-  // ======================
-  //    PRIVATE METHODS
-  // ======================
+  // ====== COLLISION & APPEARANCE ======
 
   /**
-   * Prevents paddle from leaving the table along the Z axis.
+   * Prevents the paddle from moving outside the table along the Z axis.
    */
-  private wallCollisions(table: Table) {
-    // Far wall
+  private keepWithinTable(table: Table) {
     if (this.limits.far >= table.limits.far)
       this.pos.value.z = table.limits.far - this.dimensions.value.z / 2;
-    // Near wall
     if (this.limits.near <= table.limits.near)
       this.pos.value.z = table.limits.near + this.dimensions.value.z / 2;
   }
 
   /**
-   * Updates paddle appearance and attributes based on "hell" mode and side.
+   * Updates paddle color, size, and speed based on game mode and side.
    */
-  private hellUpdate(data: SceneData) {
-    // --- Color Update (side) ---
-    let paddle_color: BABYLON.Color3;
-    let edges_color: BABYLON.Color4;
-    if (!data.hell_side) {
-      paddle_color = this.paddle_color_good;
-      edges_color = this.edges_color_good;
-    } else {
-      paddle_color = this.paddle_color_bad;
-      edges_color = this.edges_color_bad;
-    }
+  private updateAppearanceAndStats(data: SceneData) {
+    // Choose color scheme based on hell_side
+    const isHell = !!data.hell_side;
     const mat = this.obj.material as BABYLON.StandardMaterial;
-    mat.diffuseColor = paddle_color;
-    this.obj.edgesColor = edges_color;
+    mat.diffuseColor = isHell ? this.paddleBad : this.paddleGood;
+    this.obj.edgesColor = isHell ? this.edgeBad : this.edgeGood;
 
-    // --- Size Update (hell mode) ---
+    // Change paddle size for hellMode
     if (data.hell_mode == hellMode.small_paddles)
-      this.changeSize({ z: this.dimensions.original.z * 0.4 });
-    else
-      this.changeSize();
+      this.changeSize(new Vec3(1, 0.3, 0.3));
+    else this.changeSize();
 
-    // --- Speed Update (hell side & mode) ---
+    // Adjust paddle speed depending on mode/side
     if (data.hell_mode == hellMode.slow_paddles)
       this.speed.value = this.speed.original * 0.5;
-    else if (data.hell_side)
+    else if (isHell)
       this.speed.value = this.speed.original * 2;
-    else
-      this.speed.value = this.speed.original;
+    else this.speed.value = this.speed.original;
 
-    // --- Change position (hell mode) ---
+    // Adjust X position if not in big_balls mode
     if (data.hell_mode != hellMode.big_balls)
       this.pos.value.x = this.pos.original.x;
-  }
-
-  /**
-   * Changes the paddle's size in world units. Only specified axes are changed.
-   * @param options - Object with x, y, z properties to override dimensions.
-   */
-  private changeSize(options: {
-    x?: number,
-    y?: number,
-    z?: number
-  } = {}) {
-    const mesh = this.obj;
-    const boundingInfo = mesh.getBoundingInfo();
-    const size = boundingInfo.maximum.subtract(boundingInfo.minimum);
-
-    // Use original dimensions if not overridden
-    const width = options.x ?? this.dimensions.original.x;
-    const height = options.y ?? this.dimensions.original.y;
-    const depth = options.z ?? this.dimensions.original.z;
-
-    // Set mesh scaling to match requested absolute size
-    mesh.scaling.x = width / size.x;
-    mesh.scaling.y = height / size.y;
-    mesh.scaling.z = depth / size.z;
-
-    // Update dimensions properties
-    this.dimensions.value.x = width;
-    this.dimensions.value.y = height;
-    this.dimensions.value.z = depth;
   }
 }

@@ -1,4 +1,4 @@
-import { BABYLON, createFlame, createSkybox } from "../../index.js";
+import { BABYLON, createFlame, createSkybox, Vec3 } from "../../index.js";
 import type { Objects3D } from "../../index.js";
 
 /* ------------------- *
@@ -38,10 +38,10 @@ export function createSceneParts(
     camera: createCamera(scene),
     light: createLight(scene),
     environment: createEnvironment(scene),
-    flame_R1: createFlame({scene: scene, pos: { x: obj3D.table.right_line * 1.1, y: 0, z: obj3D.table.far_line }, size: 10}),
-    flame_R2: createFlame({scene: scene, pos: { x: obj3D.table.right_line * 1.1, y: 0, z: obj3D.table.near_line }, size: 10}),
-    flame_L1: createFlame({scene: scene, pos: { x: obj3D.table.left_line * 1.1, y: 0, z: obj3D.table.far_line }, size: 10}),
-    flame_L2: createFlame({scene: scene, pos: { x: obj3D.table.left_line * 1.1, y: 0, z: obj3D.table.near_line }, size: 10}),
+    flame_R1: createFlame({scene: scene, pos: { x: obj3D.table.limits.right * 1.1, y: 0, z: obj3D.table.limits.far }, size: 10}),
+    flame_R2: createFlame({scene: scene, pos: { x: obj3D.table.limits.right * 1.1, y: 0, z: obj3D.table.limits.near }, size: 10}),
+    flame_L1: createFlame({scene: scene, pos: { x: obj3D.table.limits.left * 1.1, y: 0, z: obj3D.table.limits.far }, size: 10}),
+    flame_L2: createFlame({scene: scene, pos: { x: obj3D.table.limits.left * 1.1, y: 0, z: obj3D.table.limits.near }, size: 10}),
     sky_box: createSkybox(scene),
     hellMusic: createAudio(1),
     heavenMusic: createAudio(2),
@@ -71,7 +71,7 @@ function createAudio(nb: number): HTMLAudioElement {
 function createLight(scene: BABYLON.Scene): BABYLON.Light {
   const light = new BABYLON.HemisphericLight(
     "hemiLight",
-    new BABYLON.Vector3(0, 1, 0),
+    new Vec3(0, 1, 0),
     scene
   );
   return light;
@@ -106,7 +106,7 @@ export function createCamera(scene: BABYLON.Scene): BABYLON.ArcRotateCamera {
     -Math.PI / 2,
     Math.PI / 4,
     175,
-    new BABYLON.Vector3(0, 0, 0),
+    new Vec3(0, 0, 0),
     scene
   );
   camera.attachControl();

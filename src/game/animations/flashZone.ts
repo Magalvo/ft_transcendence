@@ -1,4 +1,4 @@
-import { BABYLON, side } from "../../index.js";
+import { BABYLON, side, Vec3 } from "../../index.js";
 import type { SceneData, Side, Table } from "../../index.js";
 
 /**
@@ -11,18 +11,18 @@ function createFlashPlane(
   baseWidth: number,
   initialScale: number
 ) {
-  const anchorEdge = camp_side === side.left ? table.left_line : table.right_line;
+  const anchorEdge = camp_side === side.left ? table.limits.left : table.limits.right;
   const plane = BABYLON.MeshBuilder.CreatePlane(
     "flashZone",
-    { width: baseWidth, height: table.dimensions.z },
+    { width: baseWidth, height: table.dimensions.value.z },
     data.scene
   );
-  plane.position = new BABYLON.Vector3(
+  plane.position = new Vec3(
     camp_side === side.left
       ? anchorEdge + (baseWidth * initialScale) / 2
       : anchorEdge - (baseWidth * initialScale) / 2,
-    table.upper_line + 0.05,
-    table.pos.z
+    table.limits.upper + 0.05,
+    table.pos.value.z
   );
   plane.rotation.x = Math.PI / 2;
 
@@ -35,7 +35,7 @@ function createFlashPlane(
   mat.needAlphaBlending = () => true;
   plane.material = mat;
 
-  plane.scaling = new BABYLON.Vector3(initialScale, 1, initialScale);
+  plane.scaling = new Vec3(initialScale, 1, initialScale);
 
   return plane;
 }
@@ -97,8 +97,8 @@ function updateFlashPlanePosition(
 ) {
   const scale = plane.scaling.x;
   plane.position.x = camp_side === side.left
-    ? table.left_line + (baseWidth * scale) / 2
-    : table.right_line - (baseWidth * scale) / 2;
+    ? table.limits.left + (baseWidth * scale) / 2
+    : table.limits.right - (baseWidth * scale) / 2;
 }
 
 /**
@@ -109,7 +109,7 @@ export function flashZone(
   camp_side: Side,
   table: Table
 ): void {
-  const baseWidth = table.dimensions.x * 0.1;
+  const baseWidth = table.dimensions.value.x * 0.1;
   const initialScale = 0.4;
   const finalScale = 1.15;
   const fadeInEnd = 18;

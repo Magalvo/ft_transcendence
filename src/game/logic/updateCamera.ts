@@ -1,4 +1,4 @@
-import { BABYLON, hellMode } from "../../index.js";
+import { BABYLON, hellMode, Vec3 } from "../../index.js";
 import type { Parts3D, SceneData } from "../../index.js";
 
 /**
@@ -36,7 +36,7 @@ export function updateCamera(data: SceneData, parts3D: Parts3D) {
     camera.alpha += (cameraAlpha - camera.alpha) * Math.min(1, smooth * data.step);
     camera.beta += (cameraBeta - camera.beta) * Math.min(1, smooth * data.step);
     camera.radius += (cameraRadius - camera.radius) * Math.min(1, smooth * data.step);
-    camera.target = new BABYLON.Vector3(0, 0, 0);
+    camera.target = new Vec3(0, 0, 0);
 }
 
 export function rotateCamera(parts3D: Parts3D, data: SceneData) {
