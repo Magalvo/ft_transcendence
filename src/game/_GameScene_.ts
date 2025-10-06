@@ -49,7 +49,7 @@ export type SceneData = {
   // --- Camera & View ---
   camera_pos: number,
   // --- Gameplay Modifiers ---
-  hell_side: boolean,
+  is_hell: boolean,
   hell_mode: HellMode,
   // --- Players Controls ---
   left_paddle_mov: Mov,
@@ -107,7 +107,7 @@ export class GameScene {
       camera_pos: 1,
       keysPressed: [],
       step: 0,
-      hell_side: false,
+      is_hell: false,
       hell_mode: hellMode.null,
       left_player_human: true,
       right_player_human: false,

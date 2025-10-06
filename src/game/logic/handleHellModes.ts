@@ -1,13 +1,32 @@
-import { createBall, hellMode } from "../../index.js";
+import { createBall, hellMode, magicEffect } from "../../index.js";
 import type { Objects3D, SceneData } from "../../index.js";
 
 
 export function handleHellModes(data: SceneData, obj3D: Objects3D) {
+    // extra balls modes
     if (data.hell_mode == hellMode.multipleBalls)
         multipleBalls(data, obj3D);
     else if (data.hell_mode == hellMode.infinite_balls) { }
     else
         removeExtraBalls(obj3D);
+
+    // effect modes
+    switch (data.hell_mode) {
+        case hellMode.big_balls:
+            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.big)); break;
+        case hellMode.fast_balls:
+            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.crazy_fast)); break;
+        case hellMode.small_paddles:
+            obj3D.paddles.forEach(paddle => paddle.hellEffects.push(magicEffect.small)); break;
+        case hellMode.slow_paddles:
+            obj3D.paddles.forEach(paddle => paddle.hellEffects.push(magicEffect.slow)); break;
+        case hellMode.infinite_balls:
+            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.medium_fast)); break;
+        default:
+            obj3D.paddles.forEach(paddle => paddle.hellEffects = []);
+            obj3D.balls.forEach(ball => ball.hellEffects = []);
+            break;
+    }
 }
 
 function multipleBalls(data: SceneData, obj3D: Objects3D) {

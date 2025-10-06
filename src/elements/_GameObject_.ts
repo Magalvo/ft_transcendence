@@ -1,4 +1,4 @@
-import { BABYLON, Vec3 } from "../index.js";
+import { BABYLON, Vec3, type MagicEffect } from "../index.js";
 
 /**
  * Options required for GameObject construction.
@@ -40,6 +40,8 @@ export abstract class GameObject {
   public limits: ObjectLimits = {      // Bounding box, updated on position/size change
     left: 0, right: 0, upper: 0, lower: 0, near: 0, far: 0
   };
+  public hellEffects: MagicEffect[] = [];
+  public magicBallEffects: MagicEffect[] = [];
 
   constructor(options: GameObjectOptions) {
     this.scene = options.scene;
@@ -66,12 +68,12 @@ export abstract class GameObject {
   protected updatePosition() {
     const { x, y, z } = this.pos.value;
     const { x: w, y: h, z: d } = this.dimensions.value;
-    this.limits.left   = x - w / 2;
-    this.limits.right  = x + w / 2;
-    this.limits.upper  = y + h / 2;
-    this.limits.lower  = y - h / 2;
-    this.limits.near   = z - d / 2;
-    this.limits.far    = z + d / 2;
+    this.limits.left = x - w / 2;
+    this.limits.right = x + w / 2;
+    this.limits.upper = y + h / 2;
+    this.limits.lower = y - h / 2;
+    this.limits.near = z - d / 2;
+    this.limits.far = z + d / 2;
   }
 
   /**

@@ -1,9 +1,9 @@
 import {
-  Ball,
   Paddle,
   Table,
   BABYLON,
   Vec3,
+  PlayingBall,
 } from "../../index.js";
 import type { Side } from "../../index.js";
 
@@ -47,8 +47,8 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
       original: new Vec3(pos, paddleHeight / 2, 0),
     },
     dimensions: {
-      value: new Vec3(1, paddleHeight, 30),
-      original: new Vec3(1, paddleHeight, 30),
+      value: new Vec3(3, paddleHeight, 30),
+      original: new Vec3(3, paddleHeight, 30),
     },
     side: side,
     speed: {
@@ -64,10 +64,10 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
  * @param scene - The BabylonJS scene where the ball will be added
  * @returns {Ball} The created Ball instance
  */
-export function createBall(scene: BABYLON.Scene, x: number, z: number): Ball {
+export function createBall(scene: BABYLON.Scene, x: number, z: number): PlayingBall {
   const ball_radius = 2;
   const ball_diameter = ball_radius * 2;
-  return new Ball({
+  return new PlayingBall({
     scene: scene,
     pos: {
       value: new Vec3(x, ball_radius / 2, z),

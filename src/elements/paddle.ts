@@ -1,12 +1,12 @@
 import {
   BABYLON,
-  Ball,
   Table,
   mov,
   side,
   hellMode,
   GameObject,
   Vec3,
+  magicEffect,
 } from "../index.js";
 import type {
   Side,
@@ -15,6 +15,8 @@ import type {
   SceneData,
   GameObjectOptions,
   ObjectValue,
+  Ball,
+  MagicEffect,
 } from "../index.js";
 
 /**
@@ -102,7 +104,11 @@ export class Paddle extends GameObject {
       : this.handleBotMovement(data, obj.balls);
 
     this.keepWithinTable(obj.table);
-    this.updateAppearanceAndStats(data);
+    this.updateAppearance(data);
+    if (data.is_hell)
+      this.handleEffects(this.hellEffects, data);
+    else
+      this.handleEffects(this.magicBallEffects, data);
   }
 
   // ====== MOVEMENT LOGIC ======
@@ -114,7 +120,7 @@ export class Paddle extends GameObject {
     // Find closest ball along x-axis
     let closest = balls.reduce((prev, b) =>
       Math.abs(b.pos.value.x - this.pos.value.x) <
-      Math.abs(prev.pos.value.x - this.pos.value.x)
+        Math.abs(prev.pos.value.x - this.pos.value.x)
         ? b
         : prev
     );
@@ -174,24 +180,41 @@ export class Paddle extends GameObject {
   /**
    * Updates paddle color, size, and speed based on game mode and side.
    */
-  private updateAppearanceAndStats(data: SceneData) {
+  private updateAppearance(data: SceneData) {
     // Choose color scheme based on hell_side
-    const isHell = !!data.hell_side;
+    const isHell = !!data.is_hell;
     const mat = this.obj.material as BABYLON.StandardMaterial;
     mat.diffuseColor = isHell ? this.paddleBad : this.paddleGood;
     this.obj.edgesColor = isHell ? this.edgeBad : this.edgeGood;
+  }
 
-    // Change paddle size for hellMode
-    if (data.hell_mode == hellMode.small_paddles)
-      this.changeSize(new Vec3(1, 0.3, 0.3));
-    else this.changeSize();
+  private handleEffects(effects: MagicEffect[], data: SceneData) {
+    let size_x: number = 1;
+    let size_y: number = 1;
+    let size_z: number = 1;
+    let speed: number =
+      (data.is_hell)
+        ? this.speed.original * 2
+        : this.speed.original;
 
-    // Adjust paddle speed depending on mode/side
-    if (data.hell_mode == hellMode.slow_paddles)
-      this.speed.value = this.speed.original * 0.5;
-    else if (isHell)
-      this.speed.value = this.speed.original * 2;
-    else this.speed.value = this.speed.original;
+    for (let effect of effects) {
+      switch (effect) {
+        case magicEffect.big:
+          size_z = 3; break;
+        case magicEffect.small:
+          size_y = 0.3; size_z = 0.3; break;
+        case magicEffect.thick:
+          size_x = 3; break;
+        case magicEffect.slow:
+          speed = this.speed.original * 0.5; break;
+        case magicEffect.medium_fast:
+          speed = this.speed.original * 1.5; break;
+        case magicEffect.crazy_fast:
+          speed = this.speed.original * 4; break;
+      }
+    }
+    this.changeSize(new Vec3(size_x, size_y, size_z));
+    this.speed.value = speed;
 
     // Adjust X position if not in big_balls mode
     if (data.hell_mode != hellMode.big_balls)

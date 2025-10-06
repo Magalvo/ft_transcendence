@@ -117,9 +117,9 @@ export class Table extends GameObject {
    * Updates the table color theme based on camp side.
    */
   public update(data: SceneData) {
-    if (!data.hell_side)
+    if (!data.is_hell)
       this.changeTableColors(this.good_color);
-    if (data.hell_side)
+    if (data.is_hell)
       this.changeTableColors(this.bad_color);
   }
 

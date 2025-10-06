@@ -8,7 +8,7 @@ import type { Objects3D, Parts3D, SceneData } from "../../index.js";
  */
 export function updateEnvironment(parts3D: Parts3D, data: SceneData, obj3D: Objects3D) {
     // Heaven & Hell: different effects for right vs left side
-    if (!data.hell_side) {
+    if (!data.is_hell) {
         parts3D.flame_L1.stop();
         parts3D.flame_L2.stop();
         parts3D.flame_R1.stop();
@@ -16,7 +16,7 @@ export function updateEnvironment(parts3D: Parts3D, data: SceneData, obj3D: Obje
         for (let ball of obj3D.balls)
             ball.flame_animation.stop();
         parts3D.sky_box.rotation.y += 0.001;
-    } else if (data.hell_side) {
+    } else if (data.is_hell) {
         parts3D.flame_L1.start();
         parts3D.flame_L2.start();
         parts3D.flame_R1.start();

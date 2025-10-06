@@ -30,9 +30,6 @@ export function gameUpdate(
     obj2D.guiGame.rootContainer.isVisible = true;
   }
 
-  // Handle hell modes
-  handleHellModes(data, obj3D);
-
   // To avoid physics bugs, split large dt into small steps
   const MAX_DT = 0.05;
   let dtLeft = dt;
@@ -70,7 +67,7 @@ function updateGameObjects(
   updateCamera(data, parts3D);
   updateScoreLabels(obj2D, data);
   updateTimer(obj2D, data);
-  updateDevilTimer(obj2D, data);
+  updateDevilTimer(obj2D, data, obj3D);
   updateEnvironment(parts3D, data, obj3D);
   updateMusic(data, parts3D);
 }

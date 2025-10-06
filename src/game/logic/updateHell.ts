@@ -1,4 +1,4 @@
-import { hellMode, randomInt, type HellMode, type SceneData } from "../../index.js";
+import { handleHellModes, hellMode, randomInt, type HellMode, type Objects3D, type SceneData } from "../../index.js";
 
 let used_modes_list: HellMode[] = [];
 
@@ -16,7 +16,6 @@ function getRandomHellMod(): HellMode {
     }
     // Type assertion: assumes nb is always a valid HellMode value
     return nb as HellMode;
-    return hellMode.end_list as HellMode; // temp
 }
 
 function wasAlreadyUsed(random_mode: HellMode): boolean {
@@ -42,6 +41,9 @@ function wasAlreadyUsed(random_mode: HellMode): boolean {
  * Randomly selects and updates the current hell mode for the game scene.
  * @param data - The current scene/game state object. Its hell_mode property will be updated.
  */
-export function updateHell(data: SceneData) {
+export function updateHell(data: SceneData, obj3D: Objects3D) {
     data.hell_mode = getRandomHellMod();
+
+    // Handle hell modes
+    handleHellModes(data, obj3D);
 }

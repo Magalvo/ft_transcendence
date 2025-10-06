@@ -1,7 +1,7 @@
-import { hellMode, updateHell, type Objects2D, type SceneData } from "../../index.js";
+import { handleHellModes, hellMode, updateHell, type Objects2D, type Objects3D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const DEVIL_DURATION = 20;
+const DEVIL_DURATION = 7;
 const GOOD_DURATION = 5;
 
 // Internal timers for each side (in seconds)
@@ -13,11 +13,9 @@ let goodElapsed = 0;
  * @param obj2D - UI objects for the scene
  * @param data - The current scene/game state
  */
-export function updateDevilTimer(obj2D: Objects2D, data: SceneData) {
-    // Advance the global time
-    data.time += data.step;
+export function updateDevilTimer(obj2D: Objects2D, data: SceneData, obj3D: Objects3D) {
     // Update which side is "good" if needed
-    advanceAndSwitchSides(data);
+    advanceAndSwitchSides(data, obj3D);
     // Update the timer label in the UI
     updateTimerLabel(obj2D);
 }
@@ -42,22 +40,23 @@ function updateTimerLabel(obj2D: Objects2D) {
  * Advances the timers and switches the "good" side when time runs out.
  * @param data - The current scene/game state
  */
-function advanceAndSwitchSides(data: SceneData) {
+function advanceAndSwitchSides(data: SceneData, obj3D: Objects3D) {
     // Advance the right timer depending on which side is good
-    if (!data.hell_side) {
+    if (!data.is_hell) {
         goodElapsed += data.step;
-    } else if (data.hell_side) {
+    } else if (data.is_hell) {
         devilElapsed += data.step;
     }
     // Switch sides when the timer is up
     if (goodElapsed >= GOOD_DURATION) {
         goodElapsed = 0;
-        data.hell_side = true;
-        updateHell(data);
+        data.is_hell = true;
+        updateHell(data, obj3D);
     }
     if (devilElapsed >= DEVIL_DURATION) {
         devilElapsed = 0;
-        data.hell_side = false;
+        data.is_hell = false;
         data.hell_mode = hellMode.null;
+        handleHellModes(data, obj3D);
     }
 }

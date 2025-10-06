@@ -38,6 +38,22 @@ export const hellMode = {
 
 export type HellMode = typeof hellMode[keyof typeof hellMode];
 
+/* magic effects */
+export const magicEffect = {
+  null: 0,
+  big: 1,
+  small: 2,
+  slow: 3, 
+  medium_fast: 4,
+  crazy_fast: 5,
+  freeze: 6,
+  thick: 7,
+
+  end_list: 7
+} as const;
+
+export type MagicEffect = typeof magicEffect[keyof typeof magicEffect];
+
 /* keyboard keys code */
 export const keyCode = {
   A: 65,
