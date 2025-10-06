@@ -35,8 +35,20 @@ export class PlayingBall extends Ball {
    */
   public update(obj3D: Objects3D, data: SceneData) {
     if (this.updateRespawnTimer(data.step)) return;
-    this.move(data);
-    obj3D.paddles.forEach(paddle => this.paddleCollisions(paddle, data, obj3D));
+    let prevPos = { x: this.pos.value.x, y: this.pos.value.y, z: this.pos.value.z };
+    this.move(data, undefined, undefined, () => {
+      for (const paddle of obj3D.paddles) {
+        // Chama colisão a cada mini-passo, passando a posição anterior
+        if (
+          Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius.value <= 0 &&
+          Math.abs(this.pos.value.y - paddle.pos.value.y) - paddle.dimensions.value.y / 2 - this.radius.value <= 0 &&
+          Math.abs(this.pos.value.z - paddle.pos.value.z) - paddle.dimensions.value.z / 2 - this.radius.value <= 0
+        ) {
+          this.paddleCollisions(paddle, data, obj3D);
+        }
+      }
+      prevPos = { x: this.pos.value.x, y: this.pos.value.y, z: this.pos.value.z };
+    });
     this.wallCollisions(obj3D.table, data);
     if (data.is_hell)
       this.handleEffects(this.hellEffects, data);
@@ -56,8 +68,8 @@ export class PlayingBall extends Ball {
           size = new Vec3(0.5, 0.5, 0.5); break;
         case magicEffect.slow:
           speed = 0.5; break;
-        case magicEffect.medium_fast:
-          speed = 1.5; break;
+        case magicEffect.normal_speed:
+          speed = 1; break;
         case magicEffect.crazy_fast:
           speed = 4; break;
       }

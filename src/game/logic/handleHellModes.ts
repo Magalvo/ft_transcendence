@@ -21,7 +21,7 @@ export function handleHellModes(data: SceneData, obj3D: Objects3D) {
         case hellMode.slow_paddles:
             obj3D.paddles.forEach(paddle => paddle.hellEffects.push(magicEffect.slow)); break;
         case hellMode.infinite_balls:
-            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.medium_fast)); break;
+            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.normal_speed)); break;
         default:
             obj3D.paddles.forEach(paddle => paddle.hellEffects = []);
             obj3D.balls.forEach(ball => ball.hellEffects = []);

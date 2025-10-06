@@ -207,7 +207,7 @@ export class Paddle extends GameObject {
           size_x = 3; break;
         case magicEffect.slow:
           speed = this.speed.original * 0.5; break;
-        case magicEffect.medium_fast:
+        case magicEffect.normal_speed:
           speed = this.speed.original * 1.5; break;
         case magicEffect.crazy_fast:
           speed = this.speed.original * 4; break;

@@ -44,7 +44,7 @@ export const magicEffect = {
   big: 1,
   small: 2,
   slow: 3, 
-  medium_fast: 4,
+  normal_speed: 4,
   crazy_fast: 5,
   freeze: 6,
   thick: 7,

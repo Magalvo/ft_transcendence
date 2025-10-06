@@ -169,14 +169,46 @@ export abstract class Ball extends GameObject {
   /**
    * Move the ball based on velocity, angle, and current speed modifier.
    */
-  protected move(data: SceneData | null, x?: number, z?: number) {
+  /**
+   * Move the ball in increments of 0.1 units, calling onStep after each mini-step.
+   * This allows robust collision detection with walls and paddles.
+   */
+  protected move(
+    data: SceneData | null,
+    x?: number,
+    z?: number,
+    onStep?: () => void
+  ) {
     const a = this.angle * Math.PI / 180;
     const vx = this.velocity * Math.cos(a);
     const vz = this.velocity * Math.sin(a);
-    if (x !== undefined) this.pos.value.x = x;
-    else if (data) this.pos.value.x += vx * data.step * this.speed_modifier;
-    if (z !== undefined) this.pos.value.z = z;
-    else if (data) this.pos.value.z += vz * data.step * this.speed_modifier;
+    const stepSize = 0.1;
+    if (x !== undefined) {
+      this.pos.value.x = x;
+    } else if (data) {
+      let totalDx = vx * data.step * this.speed_modifier;
+      let dxSign = Math.sign(totalDx);
+      let dx = Math.abs(totalDx);
+      while (dx > 0) {
+        const moveStep = Math.min(dx, stepSize);
+        this.pos.value.x += moveStep * dxSign;
+        dx -= moveStep;
+        if (onStep) onStep();
+      }
+    }
+    if (z !== undefined) {
+      this.pos.value.z = z;
+    } else if (data) {
+      let totalDz = vz * data.step * this.speed_modifier;
+      let dzSign = Math.sign(totalDz);
+      let dz = Math.abs(totalDz);
+      while (dz > 0) {
+        const moveStep = Math.min(dz, stepSize);
+        this.pos.value.z += moveStep * dzSign;
+        dz -= moveStep;
+        if (onStep) onStep();
+      }
+    }
     this.obj.position.copyFrom(this.pos.value);
     this.updatePosition();
   }
