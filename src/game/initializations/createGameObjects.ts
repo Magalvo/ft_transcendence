@@ -47,8 +47,8 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
       original: new Vec3(pos, paddleHeight / 2, 0),
     },
     dimensions: {
-      value: new Vec3(3, paddleHeight, 30),
-      original: new Vec3(3, paddleHeight, 30),
+      value: new Vec3(0.1, paddleHeight, 30),
+      original: new Vec3(0.1, paddleHeight, 30),
     },
     side: side,
     speed: {

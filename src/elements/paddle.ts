@@ -202,7 +202,7 @@ export class Paddle extends GameObject {
         case magicEffect.big:
           size_z = 3; break;
         case magicEffect.small:
-          size_y = 0.3; size_z = 0.3; break;
+          size_y = 0.4; size_z = 0.4; break;
         case magicEffect.thick:
           size_x = 3; break;
         case magicEffect.slow:

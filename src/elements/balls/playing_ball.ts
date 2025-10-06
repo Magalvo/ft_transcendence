@@ -59,7 +59,7 @@ export class PlayingBall extends Ball {
         case magicEffect.medium_fast:
           speed = 1.5; break;
         case magicEffect.crazy_fast:
-          speed = 10; break;
+          speed = 4; break;
       }
     }
     this.changeSize(size);
