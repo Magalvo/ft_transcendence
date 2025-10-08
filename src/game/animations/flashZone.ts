@@ -1,4 +1,4 @@
-import { BABYLON, side, Vec3 } from "../../index.js";
+import { BABYLON, Color3, side, Vec3 } from "../../index.js";
 import type { SceneData, Side, Table } from "../../index.js";
 
 /**
@@ -29,8 +29,8 @@ function createFlashPlane(
   const mat = new BABYLON.StandardMaterial("flashMat", data.scene);
   mat.emissiveColor =
     !data.is_hell
-      ? new BABYLON.Color3(0.7, 0.7, 1)
-      : new BABYLON.Color3(1, 0.2, 0.2);
+      ? new Color3(0.7, 0.7, 1)
+      : new Color3(1, 0.2, 0.2);
   mat.alpha = 0.0;
   mat.needAlphaBlending = () => true;
   plane.material = mat;

@@ -11,6 +11,8 @@ import {
   hellMode,
   infiniteBallsAdd,
   GameObject,
+  Color3,
+  PlayingBall,
 } from "../../index.js";
 import type { GameObjectOptions, Mov, Objects3D, ObjectValue, SceneData } from "../../index.js";
 
@@ -49,10 +51,10 @@ export abstract class Ball extends GameObject {
     );
     mesh.position = this.pos.value;
     const mat = new BABYLON.StandardMaterial("ballMat", scene);
-    mat.diffuseColor = new BABYLON.Color3(0.8, 0.95, 1.0);
+    mat.diffuseColor = new Color3(0.8, 0.95, 1.0);
     mat.alpha = 0.8;
-    mat.specularColor = new BABYLON.Color3(0, 0, 0);
-    mat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
+    mat.specularColor = new Color3(0, 0, 0);
+    mat.emissiveColor = new Color3(0.09, 0.12, 0.18);
     mat.needDepthPrePass = true;
     mesh.material = mat;
     return mesh;
@@ -68,12 +70,18 @@ export abstract class Ball extends GameObject {
   }
 
   // Paddle collision (AABB overlap)
-  protected paddleCollisions(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
-    const overlap =
-      Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius.value <= 0 &&
-      Math.abs(this.pos.value.y - paddle.pos.value.y) - paddle.dimensions.value.y / 2 - this.radius.value <= 0 &&
-      Math.abs(this.pos.value.z - paddle.pos.value.z) - paddle.dimensions.value.z / 2 - this.radius.value <= 0;
-    if (!overlap) return;
+  protected paddleCollisionsCheck(data: SceneData, obj3D: Objects3D) {
+    for (let paddle of obj3D.paddles) {
+      const overlap =
+        Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius.value <= 0 &&
+        Math.abs(this.pos.value.y - paddle.pos.value.y) - paddle.dimensions.value.y / 2 - this.radius.value <= 0 &&
+        Math.abs(this.pos.value.z - paddle.pos.value.z) - paddle.dimensions.value.z / 2 - this.radius.value <= 0;
+      if (overlap)
+        this.paddleCollisionAction(paddle, data, obj3D);
+    }
+  }
+
+  protected paddleCollisionAction(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
     // Side collision (X axis)
     if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far) {
       let inverting = false;
@@ -120,27 +128,38 @@ export abstract class Ball extends GameObject {
     }
     // X- left wall: score for right
     if (this.limits.left <= table.limits.left) {
-      data.score.right++;
-      flashZone(data, side.left, table);
-      this.throwBall(true);
+      if (this instanceof PlayingBall) {
+        data.score.right++;
+        flashZone(data, side.left, table);
+        this.throwBall(true, table);
+      }
+      else 
+        this.updateMovement(mov.invert_x, false, false);
+      
     }
     // X+ right wall: score for left
     if (this.limits.right - this.radius.value >= table.limits.right) {
-      data.score.left++;
-      flashZone(data, side.right, table);
-      this.throwBall(true);
+      if (this instanceof PlayingBall) {
+        data.score.left++;
+        flashZone(data, side.right, table);
+        this.throwBall(true, table);
+      }
+      else 
+        this.updateMovement(mov.invert_x, false, false);
+      
     }
   }
 
   // Respawn ball at center and launch in random direction
-  protected throwBall(reset_pos: boolean) {
+  protected throwBall(reset_pos: boolean, table?: Table) {
     const direction: Mov = randomInt(0, 1) ? mov.left : mov.right;
     this.velocity = this.speed.value;
     this.speed.value = this.speed.value;
     this.angle = 0;
     this.updateMovement(direction, true, false);
     if (reset_pos) {
-      this.move(null!, 0, 0);
+      const { x, z } = table ? table.pos.value : { x: 0, z: 0 };
+      this.move(null!, x, z);
       this.updateRespawnTimer(0, 0.5); // 0.5s respawn
     }
   }

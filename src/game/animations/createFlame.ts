@@ -40,9 +40,16 @@ export function createFlame(
     particleSystem.minEmitBox = new Vec3(-0.6 * size, 0, -0.6 * size);
     particleSystem.maxEmitBox = new Vec3(0.6 * size, 0, 0.6 * size);
 
-    particleSystem.color1 = color1;
-    particleSystem.color2 = color2;
-    particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
+    // Blend input colors with more saturation for colorfulness
+    const blend = (c: BABYLON.Color4, factor = 0.7) => new BABYLON.Color4(
+        Math.min(1, c.r * factor + 0.7 * (1 - factor)),
+        Math.min(1, c.g * factor + 0.3 * (1 - factor)),
+        Math.min(1, c.b * factor + 0.5 * (1 - factor)),
+        c.a
+    );
+    particleSystem.color1 = blend(color1, 0.85);
+    particleSystem.color2 = blend(color2, 0.65);
+    particleSystem.colorDead = new BABYLON.Color4(color1.r, color1.g, color1.b, 0.0); // fade out to main color
 
     particleSystem.minSize = 0.6 * size;
     particleSystem.maxSize = 1.25 * size;

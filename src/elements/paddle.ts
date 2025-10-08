@@ -1,5 +1,5 @@
 
-import { BABYLON, Table, mov, side, hellMode, GameObject, Vec3, magicEffect } from "../index.js";
+import { BABYLON, Table, mov, side, hellMode, GameObject, Vec3, magicEffect, Color3, Color4 } from "../index.js";
 import type { Side, Mov, Objects3D, SceneData, GameObjectOptions, ObjectValue, Ball } from "../index.js";
 
 // Paddle options
@@ -13,10 +13,10 @@ export class Paddle extends GameObject {
   public side: Side;
   public speed: ObjectValue<number>;
   private human: boolean;
-  private readonly paddleGood = new BABYLON.Color3(0.04, 0.06, 0.09);
-  private readonly paddleBad = new BABYLON.Color3(0.8, 0.01, 0.01);
-  private readonly edgeGood = new BABYLON.Color4(0.2, 0.45, 1.0, 1.0);
-  private readonly edgeBad = new BABYLON.Color4(1.0, 0.45, 0.2, 1.0);
+  private readonly paddleGood = new Color3(0.04, 0.06, 0.09);
+  private readonly paddleBad = new Color3(0.8, 0.01, 0.01);
+  private readonly edgeGood = new Color4(0.2, 0.45, 1.0, 1.0);
+  private readonly edgeBad = new Color4(1.0, 0.45, 0.2, 1.0);
 
   constructor(options: PaddleOptions) {
     super(options);
@@ -88,12 +88,13 @@ export class Paddle extends GameObject {
     let size_x = 1, size_y = 1, size_z = 1;
     let speed = data.is_hell ? this.speed.original * 2 : this.speed.original;
     for (let effect of effects) {
-      if (effect === magicEffect.big) size_z = 3;
+      if (effect === magicEffect.big) size_z = 2;
       if (effect === magicEffect.small) { size_y = 0.4; size_z = 0.4; }
-      if (effect === magicEffect.thick) size_x = 3;
+      if (effect === magicEffect.thick) size_x = 5;
       if (effect === magicEffect.slow) speed = this.speed.original * 0.5;
       if (effect === magicEffect.normal_speed) speed = this.speed.original * 1;
       if (effect === magicEffect.crazy_fast) speed = this.speed.original * 4;
+      if (effect === magicEffect.freeze) speed = this.speed.original * 0.1;
     }
     this.changeSize(new Vec3(size_x, size_y, size_z));
     this.speed.value = speed;
@@ -116,8 +117,8 @@ export class Paddle extends GameObject {
     const mat = new BABYLON.StandardMaterial("paddleMat", scene);
     mat.diffuseColor = this.paddleGood;
     mat.alpha = 0.5;
-    mat.specularColor = new BABYLON.Color3(0, 0, 0);
-    mat.emissiveColor = new BABYLON.Color3(0.09, 0.12, 0.18);
+    mat.specularColor = new Color3(0, 0, 0);
+    mat.emissiveColor = new Color3(0.09, 0.12, 0.18);
     mat.needDepthPrePass = true;
     mesh.material = mat;
     mesh.enableEdgesRendering();

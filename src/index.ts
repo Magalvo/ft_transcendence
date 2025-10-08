@@ -4,13 +4,14 @@ export * from "./game/initializations/createGameObjects.js";
 export * from "./game/logic/_GameLogic_.js";
 export * from "./game/logic/updateLabels.js";
 export * from "./game/logic/updateTimer.js";
-export * from "./game/logic/updateDevilTimer.js";
+export * from "./game/logic/updateHellTimer.js";
 export * from "./game/logic/updateEnvironment.js";
 export * from "./game/logic/updateCamera.js";
 export * from "./game/logic/updateMusic.js";
 export * from "./game/logic/updateHell.js";
 export * from "./game/logic/handleHellModes.js";
 export * from "./game/logic/handleKeyboard.js";
+export * from "./game/logic/magicBallsController.js";
 export * from "./game/initializations/createSceneParts.js";
 export * from "./game/initializations/create2DParts.js";
 export * from "./game/initializations/defineEvents.js";
@@ -31,7 +32,7 @@ export * from "./utils/strings.js";
 
 // Re-export BabylonJS core and GUI modules under unified names
 export * as BABYLON from "@babylonjs/core";
-export { Vector3 as Vec3 } from "@babylonjs/core";
+export { Vector3 as Vec3, Color3 as Color3, Color4 as Color4 } from "@babylonjs/core";
 export * as GUI from "@babylonjs/gui";
 
 // Import BabylonJS loaders to register all loaders globally (side-effect import)

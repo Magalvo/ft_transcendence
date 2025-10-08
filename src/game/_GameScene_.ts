@@ -4,7 +4,7 @@ import {
   Paddle,
   Table,
   side,
-  createBall,
+  createPlayingBall,
   createPaddle,
   createTable,
   createSceneParts,
@@ -126,7 +126,7 @@ export class GameScene {
     return {
       table,
       balls: [
-        createBall(scene, table.pos.value.x, table.pos.value.z),
+        createPlayingBall(scene, table.pos.value.x, table.pos.value.z),
       ],
       paddles: [
         createPaddle(table.limits.left * 0.8, side.left, scene),

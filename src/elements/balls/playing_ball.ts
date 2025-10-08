@@ -28,8 +28,7 @@ export class PlayingBall extends Ball {
   // Move and check paddle collisions at each mini-step
   private moveWithPaddleCollisions(obj3D: Objects3D, data: SceneData) {
     this.move(data, undefined, undefined, () => {
-      for (const paddle of obj3D.paddles)
-        this.paddleCollisions(paddle, data, obj3D);
+        this.paddleCollisionsCheck(data, obj3D);
     });
   }
 

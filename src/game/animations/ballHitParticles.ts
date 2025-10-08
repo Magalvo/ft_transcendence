@@ -1,15 +1,15 @@
-import { BABYLON, Vec3 } from "../../index.js";
+import { BABYLON, Color3, Color4, Vec3 } from "../../index.js";
 
 /**
  * Spawns a burst of particles at the given position (e.g., when the ball hits a side).
  * @param scene - The BabylonJS scene.
  * @param position - Where to spawn the particles (Vec3).
- * @param color - Optional: main color of the particles (BABYLON.Color4 or BABYLON.Color3).
+ * @param color - Optional: main color of the particles (Color4 or Color3).
  */
 export function spawnHitParticles(
     scene: BABYLON.Scene,
     position: Vec3,
-    color: BABYLON.Color4 | BABYLON.Color3 = new BABYLON.Color4(0.6, 0.8, 1, 1)
+    color: Color4 | Color3 = new Color4(0.6, 0.8, 1, 1)
 ) {
     const particleSystem = new BABYLON.ParticleSystem("hitParticles", 30, scene);
 
@@ -22,12 +22,12 @@ export function spawnHitParticles(
     particleSystem.maxEmitBox = new Vec3(0, 0, 0);
 
     // Colors
-    if (color instanceof BABYLON.Color3) {
+    if (color instanceof Color3) {
         particleSystem.color1 = color.toColor4(1);
         particleSystem.color2 = color.toColor4(0.7);
     } else {
         particleSystem.color1 = color;
-        particleSystem.color2 = new BABYLON.Color4(color.r, color.g, color.b, 0.5);
+        particleSystem.color2 = new Color4(color.r, color.g, color.b, 0.5);
     }
 
     // Size

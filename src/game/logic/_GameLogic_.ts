@@ -1,4 +1,4 @@
-import { pauseScreen, handleKeyboardEvents, updateCamera, updateScoreLabels, updateEnvironment, rotateCamera, updateTimer, updateMusic, updateDevilTimer, handleHellModes } from "../../index.js";
+import { pauseScreen, handleKeyboardEvents, updateCamera, updateScoreLabels, updateEnvironment, rotateCamera, updateTimer, updateMusic, updateHellTimer, handleHellModes, magicBallsController } from "../../index.js";
 import type { Objects2D, Objects3D, Parts3D, SceneData } from "../../index.js";
 
 /**
@@ -67,7 +67,8 @@ function updateGameObjects(
   updateCamera(data, parts3D);
   updateScoreLabels(obj2D, data);
   updateTimer(obj2D, data);
-  updateDevilTimer(obj2D, data, obj3D);
+  updateHellTimer(obj2D, data, obj3D);
+  magicBallsController(data, obj3D);
   updateEnvironment(parts3D, data, obj3D);
   updateMusic(data, parts3D);
 }

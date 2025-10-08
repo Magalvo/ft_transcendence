@@ -1,4 +1,4 @@
-import { createBall, hellMode, magicEffect } from "../../index.js";
+import { createPlayingBall, hellMode, magicEffect } from "../../index.js";
 import type { Objects3D, SceneData } from "../../index.js";
 
 
@@ -30,14 +30,15 @@ export function handleHellModes(data: SceneData, obj3D: Objects3D) {
 }
 
 function multipleBalls(data: SceneData, obj3D: Objects3D) {
-    const balls_amount = 5;
+    const balls_amount = 3;
     while (obj3D.balls.length < balls_amount)
-        obj3D.balls.push(createBall(data.scene, obj3D.table.pos.value.x, obj3D.table.pos.value.z));
+        obj3D.balls.push(createPlayingBall(data.scene, obj3D.table.pos.value.x, obj3D.table.pos.value.z));
 }
 
 export function infiniteBallsAdd(data: SceneData, obj3D: Objects3D, x: number, z: number) {
-    if (obj3D.balls.length < 15)
-        obj3D.balls.push(createBall(data.scene, x, z));
+    const max_balls = 15;
+    if (obj3D.balls.length < max_balls)
+        obj3D.balls.push(createPlayingBall(data.scene, x, z));
 }
 
 function removeExtraBalls(obj3D: Objects3D) {

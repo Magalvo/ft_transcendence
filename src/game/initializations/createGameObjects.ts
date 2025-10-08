@@ -1,6 +1,6 @@
 
 import { Paddle, Table, BABYLON, Vec3, PlayingBall } from "../../index.js";
-import type { Side } from "../../index.js";
+import { MagicBall, type MagicEffect, type Side } from "../../index.js";
 
 // Create a new Table at the center of the scene
 export function createTable(scene: BABYLON.Scene): Table {
@@ -25,7 +25,7 @@ export function createPaddle(pos: number, side: Side, scene: BABYLON.Scene): Pad
 }
 
 // Create a new Ball at given x, z
-export function createBall(scene: BABYLON.Scene, x: number, z: number): PlayingBall {
+export function createPlayingBall(scene: BABYLON.Scene, x: number, z: number): PlayingBall {
   const r = 2, d = r * 2;
   return new PlayingBall({
     scene,
@@ -33,5 +33,18 @@ export function createBall(scene: BABYLON.Scene, x: number, z: number): PlayingB
     dimensions: { value: new Vec3(d, d, d), original: new Vec3(d, d, d) },
     speed: { value: 50, original: 50, max: 100 },
     radius: r,
+  });
+}
+
+// Create a new Ball with given effect at given x, z
+export function createMagicBall(scene: BABYLON.Scene, x: number, z: number, effect: MagicEffect): MagicBall {
+  const r = 1.5, d = r * 2;
+  return new MagicBall({
+    scene,
+    pos: { value: new Vec3(x, r / 2, z), original: new Vec3(x, r / 2, z) },
+    dimensions: { value: new Vec3(d, d, d), original: new Vec3(d, d, d) },
+    speed: { value: 40, original: 40, max: 40 },
+    radius: r,
+    effect,
   });
 }
