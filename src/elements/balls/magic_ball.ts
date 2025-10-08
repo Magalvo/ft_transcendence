@@ -1,4 +1,4 @@
-import { createFlame, Ball, magicEffect, Color4 } from "../../index.js";
+import { createFlame, Ball, magicEffect, Color4, showWarningMessage } from "../../index.js";
 import type { BallOptions, MagicEffect, Objects3D, Paddle, SceneData } from "../../index.js";
 
 // Options for MagicBall
@@ -45,11 +45,13 @@ export class MagicBall extends Ball {
 
     if (data.time - this.paddle_hit_timestamp >= effect_duration && this.paddle_hit_ref) {
       // remove effect
-      this.paddle_hit_ref.magicBallEffects.pop();
+      const index1 = this.paddle_hit_ref.magicBallEffects.indexOf(this.magic_effect);
+      if (index1 !== -1)
+        this.paddle_hit_ref.magicBallEffects.splice(index1, 1);
       // erase ball
-      const index = obj3D.balls.indexOf(this);
-      if (index !== -1)
-        obj3D.balls.splice(index, 1);
+      const index2 = obj3D.balls.indexOf(this);
+      if (index2 !== -1)
+        obj3D.balls.splice(index2, 1);
     }
   }
 
@@ -62,6 +64,7 @@ export class MagicBall extends Ball {
     this.paddle_hit_timestamp = data.time;
     this.paddle_hit_ref = paddle;
     this.dispose();
+    showWarningMessage(data.scene, "snorlax, I choose you!", paddle.side);
   }
 
   private setEffectColor() {

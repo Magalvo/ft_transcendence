@@ -13,13 +13,7 @@ export const mov = {
 
 export type Mov = typeof mov[keyof typeof mov];
 
-/* sides of the table */
-export const side = {
-  left: "left",
-  right: "right",
-} as const;
-
-export type Side = typeof side[keyof typeof side];
+export type Side = typeof mov.left | typeof mov.right;
 
 /* hell mods */
 export const hellMode = {

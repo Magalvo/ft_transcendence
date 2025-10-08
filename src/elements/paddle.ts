@@ -1,6 +1,6 @@
 
-import { BABYLON, Table, mov, side, hellMode, GameObject, Vec3, magicEffect, Color3, Color4 } from "../index.js";
-import type { Side, Mov, Objects3D, SceneData, GameObjectOptions, ObjectValue, Ball } from "../index.js";
+import { BABYLON, Table, mov, hellMode, GameObject, Vec3, magicEffect, Color3, Color4, PlayingBall } from "../index.js";
+import type { Mov, Objects3D, SceneData, GameObjectOptions, ObjectValue, Ball, Side } from "../index.js";
 
 // Paddle options
 type PaddleOptions = GameObjectOptions & {
@@ -37,24 +37,25 @@ export class Paddle extends GameObject {
 
   // Check if this paddle is human-controlled
   private isHuman(data: SceneData) {
-    return (this.side == side.left && data.left_player_human) ||
-           (this.side == side.right && data.right_player_human);
+    return (this.side == "left" && data.left_player_human) ||
+           (this.side == "right" && data.right_player_human);
   }
 
   // Move paddle by user input
   private handleHuman(data: SceneData) {
-    if (this.side == side.left && data.left_paddle_mov != mov.null)
+    if (this.side == "left" && data.left_paddle_mov != mov.null)
       this.move(data, data.left_paddle_mov, this.speed.value);
     // Add right paddle controls if needed
   }
 
   // AI: move toward closest ball if approaching
   private handleBot(data: SceneData, balls: Ball[]) {
-    const closest = balls.reduce((prev, b) =>
+    const filteredBalls = balls.filter(e => e instanceof PlayingBall);
+    const closest = filteredBalls.reduce((prev, b) =>
       Math.abs(b.pos.value.x - this.pos.value.x) < Math.abs(prev.pos.value.x - this.pos.value.x) ? b : prev
     );
-    if ((this.side == side.left && closest.velocity < 0) ||
-        (this.side == side.right && closest.velocity > 0)) {
+    if ((this.side == "left" && closest.velocity < 0) ||
+        (this.side == "right" && closest.velocity > 0)) {
       this.move(data, this.pos.value.z < closest.pos.value.z ? mov.far : mov.near, this.speed.value);
     }
   }

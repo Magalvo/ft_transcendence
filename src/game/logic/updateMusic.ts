@@ -1,4 +1,3 @@
-import { side } from "../../index.js";
 import type { Parts3D, SceneData } from "../../index.js";
 
 export function updateMusic(data: SceneData, parts3D: Parts3D) {

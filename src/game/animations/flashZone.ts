@@ -1,4 +1,4 @@
-import { BABYLON, Color3, side, Vec3 } from "../../index.js";
+import { BABYLON, Color3, Vec3 } from "../../index.js";
 import type { SceneData, Side, Table } from "../../index.js";
 
 /**
@@ -11,14 +11,14 @@ function createFlashPlane(
   baseWidth: number,
   initialScale: number
 ) {
-  const anchorEdge = camp_side === side.left ? table.limits.left : table.limits.right;
+  const anchorEdge = camp_side === "left" ? table.limits.left : table.limits.right;
   const plane = BABYLON.MeshBuilder.CreatePlane(
     "flashZone",
     { width: baseWidth, height: table.dimensions.value.z },
     data.scene
   );
   plane.position = new Vec3(
-    camp_side === side.left
+    camp_side === "left"
       ? anchorEdge + (baseWidth * initialScale) / 2
       : anchorEdge - (baseWidth * initialScale) / 2,
     table.limits.upper + 0.05,
@@ -96,7 +96,7 @@ function updateFlashPlanePosition(
   baseWidth: number
 ) {
   const scale = plane.scaling.x;
-  plane.position.x = camp_side === side.left
+  plane.position.x = camp_side === "left"
     ? table.limits.left + (baseWidth * scale) / 2
     : table.limits.right - (baseWidth * scale) / 2;
 }

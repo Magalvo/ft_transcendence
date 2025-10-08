@@ -3,7 +3,6 @@ import {
   Ball,
   Paddle,
   Table,
-  side,
   createPlayingBall,
   createPaddle,
   createTable,
@@ -129,8 +128,8 @@ export class GameScene {
         createPlayingBall(scene, table.pos.value.x, table.pos.value.z),
       ],
       paddles: [
-        createPaddle(table.limits.left * 0.8, side.left, scene),
-        createPaddle(table.limits.right * 0.8, side.right, scene),
+        createPaddle(table.limits.left * 0.8, "left", scene),
+        createPaddle(table.limits.right * 0.8, "right", scene),
       ],
     };
   }

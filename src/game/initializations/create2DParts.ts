@@ -1,4 +1,4 @@
-import { GUI, side } from "../../index.js";
+import { GUI } from "../../index.js";
 import type { Side } from "../../index.js";
 
 /**
@@ -34,8 +34,8 @@ export function create2DParts(): Objects2D {
 
   return {
     guiGame: guiTexture,
-    left_score_label: createScoreLabel(guiTexture, side.left),
-    right_score_label: createScoreLabel(guiTexture, side.right),
+    left_score_label: createScoreLabel(guiTexture, "left"),
+    right_score_label: createScoreLabel(guiTexture, "right"),
     timer_label: createTimer(guiTexture),
     devil_timer_label: createDevilTimer(guiTexture),
   };
@@ -56,8 +56,8 @@ function createScoreLabel(
   scoreText.color = "white";
   scoreText.fontSize = "100px";
   scoreText.top = "-40%";
-  if (s === side.left) scoreText.left = "-40%";
-  if (s === side.right) scoreText.left = "40%";
+  if (s === "left") scoreText.left = "-40%";
+  if (s === "right") scoreText.left = "40%";
   advancedTexture.addControl(scoreText);
   return scoreText;
 }

@@ -4,7 +4,6 @@ import {
   Table,
   mov,
   randomInt,
-  side,
   normalizeAngle180,
   flashZone,
   spawnHitParticles,
@@ -85,11 +84,11 @@ export abstract class Ball extends GameObject {
     // Side collision (X axis)
     if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far) {
       let inverting = false;
-      if (this.pos.value.x < paddle.limits.left && paddle.side == side.right) {
+      if (this.pos.value.x < paddle.limits.left && paddle.side == "right") {
         if (this.velocity > 0) inverting = true;
         this.updateMovement(mov.left, true, true);
       }
-      if (this.pos.value.x > paddle.limits.right && paddle.side == side.left) {
+      if (this.pos.value.x > paddle.limits.right && paddle.side == "left") {
         if (this.velocity < 0) inverting = true;
         this.updateMovement(mov.right, true, true);
       }
@@ -130,7 +129,7 @@ export abstract class Ball extends GameObject {
     if (this.limits.left <= table.limits.left) {
       if (this instanceof PlayingBall) {
         data.score.right++;
-        flashZone(data, side.left, table);
+        flashZone(data, "left", table);
         this.throwBall(true, table);
       }
       else 
@@ -141,7 +140,7 @@ export abstract class Ball extends GameObject {
     if (this.limits.right - this.radius.value >= table.limits.right) {
       if (this instanceof PlayingBall) {
         data.score.left++;
-        flashZone(data, side.right, table);
+        flashZone(data, "right", table);
         this.throwBall(true, table);
       }
       else 
