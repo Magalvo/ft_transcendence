@@ -133,7 +133,7 @@ export abstract class Ball extends GameObject {
         data.score.right++;
         flashZone(data, "left", table);
         this.throwBall(true, table);
-        showWarningMessage({scene:data.scene,message: "Score +1",side: "right", color: "green"});
+        showWarningMessage({scene:data.scene,message: "Score +1",side: "right", color: "green", duration: 2000});
         if (data.hell_mode == hellMode.infinite_balls && obj3D.balls.length > 1)
         {
           const index = obj3D.balls.indexOf(this);

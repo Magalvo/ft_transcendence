@@ -11,6 +11,7 @@ export class MagicBall extends Ball {
   private paddle_hit_ref?: Paddle;
   private color1!: Color4;
   private color2!: Color4;
+  private effect_duration = 5;
 
   constructor(options: MagicBallOptions) {
     super(options);
@@ -41,9 +42,7 @@ export class MagicBall extends Ball {
   }
 
   private updateEffectTimer(obj3D: Objects3D, data: SceneData) {
-    const effect_duration = 5;
-
-    if (data.time - this.paddle_hit_timestamp >= effect_duration && this.paddle_hit_ref) {
+    if (data.time - this.paddle_hit_timestamp >= this.effect_duration && this.paddle_hit_ref) {
       // remove effect
       const index1 = this.paddle_hit_ref.magicBallEffects.indexOf(this.magic_effect);
       if (index1 !== -1)
@@ -92,6 +91,6 @@ export class MagicBall extends Ball {
       [magicEffect.thick]: "Your paddle is THICK!",
     };
     const msg = effectMessages[this.magic_effect];
-    if (msg) showWarningMessage({ scene: data.scene, message: msg, side: paddle.side });
+    if (msg) showWarningMessage({ scene: data.scene, message: msg, side: paddle.side, duration: this.effect_duration * 1000 });
   }
 }
