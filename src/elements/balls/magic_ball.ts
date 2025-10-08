@@ -64,7 +64,7 @@ export class MagicBall extends Ball {
     this.paddle_hit_timestamp = data.time;
     this.paddle_hit_ref = paddle;
     this.dispose();
-    showWarningMessage(data.scene, "snorlax, I choose you!", paddle.side);
+    this.showMessage(data, paddle);
   }
 
   private setEffectColor() {
@@ -79,5 +79,19 @@ export class MagicBall extends Ball {
     };
     const def: [Color4, Color4] = [new Color4(0.9, 0.2, 1, 1), new Color4(0.5, 0.1, 0.4, 1)];
     [this.color1, this.color2] = effectColors[this.magic_effect] || def;
+  }
+
+  private showMessage(data:SceneData, paddle:Paddle) {
+    const effectMessages: Record<number, string> = {
+      [magicEffect.big]: "Your paddle is now BIG!",
+      [magicEffect.small]: "Your paddle shrunk!",
+      [magicEffect.slow]: "Your paddle is slowed!",
+      [magicEffect.normal_speed]: "You have got no effect!",
+      [magicEffect.crazy_fast]: "Super speed!",
+      [magicEffect.freeze]: "Frozen paddle!",
+      [magicEffect.thick]: "Your paddle is THICK!",
+    };
+    const msg = effectMessages[this.magic_effect];
+    if (msg) showWarningMessage(data.scene, msg, paddle.side);
   }
 }

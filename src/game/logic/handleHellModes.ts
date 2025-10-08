@@ -31,7 +31,7 @@ export function handleHellModes(data: SceneData, obj3D: Objects3D) {
 
 function multipleBalls(data: SceneData, obj3D: Objects3D) {
     const balls_amount = 3;
-    while (obj3D.balls.length < balls_amount)
+    while (obj3D.balls.length <= balls_amount)
         obj3D.balls.push(createPlayingBall(data.scene, obj3D.table.pos.value.x, obj3D.table.pos.value.z));
 }
 

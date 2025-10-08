@@ -1,7 +1,10 @@
 import { createMagicBall, MagicBall, magicEffect, randomInt, type MagicEffect, type Objects3D, type SceneData } from "../../index.js";
 
 // Internal timers for each side (in seconds)
-let next_magic_ball = 0;
+const min_time = 5;
+const max_time = 15;
+const max_balls = 4;
+let next_magic_ball = randomInt(min_time, max_time);
 let magic_balls_ref: MagicBall[] = [];
 
 /**
@@ -41,8 +44,8 @@ function advanceTimer(data: SceneData, obj3D: Objects3D) {
     next_magic_ball -= data.step;
     // spawn new magic ball if timer is up
     if (next_magic_ball <= 0) {
-        next_magic_ball = randomInt(5, 10);
-        if (!data.is_hell && obj3D.balls.length < 5) {
+        next_magic_ball = randomInt(min_time, max_time);
+        if (!data.is_hell && obj3D.balls.filter(e => e instanceof MagicBall).length < max_balls) {
             const new_ball = createMagicBall(data.scene, random_x, random_z, getRandomEffect());
             obj3D.balls.push(new_ball);
             magic_balls_ref.push(new_ball);
@@ -60,5 +63,4 @@ function getRandomEffect(): MagicEffect {
     nb = all[randomInt(0, all.length - 1)] as MagicEffect;
     used_modes_list.push(nb);
     return nb;
-    return magicEffect.slow; // temp
 }

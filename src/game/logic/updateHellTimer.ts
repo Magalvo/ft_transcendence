@@ -1,8 +1,8 @@
-import { handleHellModes, hellMode, updateHell, type Objects2D, type Objects3D, type SceneData } from "../../index.js";
+import { handleHellModes, hellMode, showWarningMessage, updateHell, type Objects2D, type Objects3D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const HEll_DURATION = 15;
-const HEAVEN_DURATION = 60;
+const HEll_DURATION = 5;
+const HEAVEN_DURATION = 5;
 
 // Internal timers for each side (in seconds)
 let devilElapsed = 0;
@@ -52,6 +52,7 @@ function advanceAndSwitchSides(data: SceneData, obj3D: Objects3D) {
         goodElapsed = 0;
         data.is_hell = true;
         updateHell(data, obj3D);
+        showHellModeMessage(data);
     }
     if (devilElapsed >= HEll_DURATION) {
         devilElapsed = 0;
@@ -59,4 +60,19 @@ function advanceAndSwitchSides(data: SceneData, obj3D: Objects3D) {
         data.hell_mode = hellMode.null;
         handleHellModes(data, obj3D);
     }
+}
+
+function showHellModeMessage(data: SceneData) {
+    const hellModeMessages: Record<number, string> = {
+        [hellMode.inverted_keys]: "Inverted keys!",
+        [hellMode.small_paddles]: "Paddles are now small!",
+        [hellMode.slow_paddles]: "Paddles are slowed!",
+        [hellMode.fast_balls]: "Balls are super fast!",
+        [hellMode.big_balls]: "Balls are now BIG!",
+        [hellMode.multipleBalls]: "Multiple balls!",
+        [hellMode.infinite_balls]: "Infinite balls mode!",
+        [hellMode.twisted_view]: "Twisted view!",
+    };
+    const msg = hellModeMessages[data.hell_mode];
+    if (msg) showWarningMessage(data.scene, msg, "center", HEll_DURATION * 1000);
 }

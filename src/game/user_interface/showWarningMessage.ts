@@ -1,5 +1,8 @@
 import { GUI, BABYLON } from "../../index.js";
 
+// Track active messages per side
+const activeMessages: { [side: string]: GUI.Rectangle[] } = { left: [], right: [], center: [] };
+
 export function showWarningMessage(scene: BABYLON.Scene, message: string, side: "left" | "right" | "center", duration = 3000) {
     const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
 
@@ -21,7 +24,12 @@ export function showWarningMessage(scene: BABYLON.Scene, message: string, side: 
         rect.left = "0px";
     }
     rect.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-    rect.top = "-40px";
+
+    // Stack messages: each new message pushes older ones up
+    const stack = activeMessages[side];
+    const baseOffset = 40; // px from bottom
+    const spacing = 90; // px between messages
+    rect.top = `-${baseOffset + spacing * stack.length}px`;
 
     const textBlock = new GUI.TextBlock();
     textBlock.text = message;
@@ -36,6 +44,8 @@ export function showWarningMessage(scene: BABYLON.Scene, message: string, side: 
     textBlock.paddingRight = "40px";
     rect.addControl(textBlock);
     gui.addControl(rect);
+
+    stack.push(rect);
 
     setTimeout(() => {
         // Fade out animation
@@ -54,6 +64,12 @@ export function showWarningMessage(scene: BABYLON.Scene, message: string, side: 
         rect.animations = [fadeAnim];
         scene.beginAnimation(rect, 0, 50, false, 1, () => {
             gui.removeControl(rect);
+            // Remove from stack and update positions
+            const idx = stack.indexOf(rect);
+            if (idx !== -1) stack.splice(idx, 1);
+            stack.forEach((r, i) => {
+                r.top = `-${baseOffset + spacing * i}px`;
+            });
         });
     }, duration);
 }
