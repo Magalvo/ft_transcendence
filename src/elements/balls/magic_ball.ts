@@ -36,7 +36,7 @@ export class MagicBall extends Ball {
     if (this.updateRespawnTimer(data.step)) return;
     this.move(data);
     this.paddleCollisionsCheck(data, obj3D);
-    this.wallCollisions(obj3D.table, data);
+    this.wallCollisions(obj3D, data);
 
   }
 
@@ -81,7 +81,7 @@ export class MagicBall extends Ball {
     [this.color1, this.color2] = effectColors[this.magic_effect] || def;
   }
 
-  private showMessage(data:SceneData, paddle:Paddle) {
+  private showMessage(data: SceneData, paddle: Paddle) {
     const effectMessages: Record<number, string> = {
       [magicEffect.big]: "Your paddle is now BIG!",
       [magicEffect.small]: "Your paddle shrunk!",
@@ -92,6 +92,6 @@ export class MagicBall extends Ball {
       [magicEffect.thick]: "Your paddle is THICK!",
     };
     const msg = effectMessages[this.magic_effect];
-    if (msg) showWarningMessage(data.scene, msg, paddle.side);
+    if (msg) showWarningMessage({ scene: data.scene, message: msg, side: paddle.side });
   }
 }

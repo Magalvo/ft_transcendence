@@ -21,7 +21,7 @@ export class PlayingBall extends Ball {
   public update(obj3D: Objects3D, data: SceneData) {
     if (this.updateRespawnTimer(data.step)) return;
     this.moveWithPaddleCollisions(obj3D, data);
-    this.wallCollisions(obj3D.table, data);
+    this.wallCollisions(obj3D, data);
     this.applyEffects(data);
   }
 

@@ -12,6 +12,7 @@ import {
   GameObject,
   Color3,
   PlayingBall,
+  showWarningMessage,
 } from "../../index.js";
 import type { GameObjectOptions, Mov, Objects3D, ObjectValue, SceneData } from "../../index.js";
 
@@ -112,7 +113,8 @@ export abstract class Ball extends GameObject {
   }
 
   // Wall collision and scoring
-  protected wallCollisions(table: Table, data: SceneData) {
+  protected wallCollisions(obj3D: Objects3D, data: SceneData) {
+    const table = obj3D.table;
     // Z+ far wall
     if (this.limits.far >= table.limits.far) {
       this.pos.value.z = table.limits.far - this.radius.value;
@@ -131,6 +133,13 @@ export abstract class Ball extends GameObject {
         data.score.right++;
         flashZone(data, "left", table);
         this.throwBall(true, table);
+        showWarningMessage({scene:data.scene,message: "Score +1",side: "right", color: "green"});
+        if (data.hell_mode == hellMode.infinite_balls && obj3D.balls.length > 1)
+        {
+          const index = obj3D.balls.indexOf(this);
+          this.dispose();
+          if (index != -1) obj3D.balls.splice(index, 1);
+        }
       }
       else 
         this.updateMovement(mov.invert_x, false, false);
@@ -142,6 +151,13 @@ export abstract class Ball extends GameObject {
         data.score.left++;
         flashZone(data, "right", table);
         this.throwBall(true, table);
+        showWarningMessage({scene:data.scene,message: "Score +1",side: "left", color: "green"});
+        if (data.hell_mode == hellMode.infinite_balls && obj3D.balls.length > 1)
+        {
+          const index = obj3D.balls.indexOf(this);
+          this.dispose();
+          if (index != -1) obj3D.balls.splice(index, 1);
+        }
       }
       else 
         this.updateMovement(mov.invert_x, false, false);

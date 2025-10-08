@@ -3,7 +3,21 @@ import { GUI, BABYLON } from "../../index.js";
 // Track active messages per side
 const activeMessages: { [side: string]: GUI.Rectangle[] } = { left: [], right: [], center: [] };
 
-export function showWarningMessage(scene: BABYLON.Scene, message: string, side: "left" | "right" | "center", duration = 3000) {
+export function showWarningMessage(
+    {
+        scene,
+        message,
+        side,
+        duration = 3000,
+        color = "red",
+    }: {
+        scene: BABYLON.Scene,
+        message: string,
+        side: "left" | "right" | "center",
+        duration?: number,
+        color?: "red" | "green",
+    }
+) {
     const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
 
     const rect = new GUI.Rectangle();
@@ -12,7 +26,11 @@ export function showWarningMessage(scene: BABYLON.Scene, message: string, side: 
     rect.cornerRadius = 12;
     rect.color = "#fff";
     rect.thickness = 2;
-    rect.background = "rgba(255,0,0,0.3)";
+    if (color == "red")
+        rect.background = "rgba(255,0,0,0.3)";
+    else if (color == "green")
+        rect.background = "rgba(0, 255, 76, 0.3)";
+
     if (side === "left") {
         rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
         rect.left = "40px";

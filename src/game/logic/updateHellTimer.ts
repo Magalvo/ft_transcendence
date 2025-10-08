@@ -1,8 +1,8 @@
 import { handleHellModes, hellMode, showWarningMessage, updateHell, type Objects2D, type Objects3D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const HEll_DURATION = 5;
-const HEAVEN_DURATION = 5;
+const HEll_DURATION = 15;
+const HEAVEN_DURATION = 30;
 
 // Internal timers for each side (in seconds)
 let devilElapsed = 0;
@@ -74,5 +74,5 @@ function showHellModeMessage(data: SceneData) {
         [hellMode.twisted_view]: "Twisted view!",
     };
     const msg = hellModeMessages[data.hell_mode];
-    if (msg) showWarningMessage(data.scene, msg, "center", HEll_DURATION * 1000);
+    if (msg) showWarningMessage({ scene: data.scene, message: msg, side: "center", duration: HEll_DURATION * 1000 });
 }
