@@ -26,6 +26,7 @@ export class Table extends GameObject {
     this.good_color = new Color3(0.7, 0.7, 1);
     this.bad_color = new Color3(1, 0.2, 0.2);
     this.obj = this.initializeTable(options.scene);
+    this.obj.freezeWorldMatrix();
   }
 
   /* ***************** *

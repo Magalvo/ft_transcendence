@@ -36,7 +36,7 @@ export class PlayingBall extends Ball {
   private applyEffects(data: SceneData) {
     const effects = data.is_hell ? this.hellEffects : this.magicBallEffects;
     let size = new Vec3(1, 1, 1);
-    let speed = data.is_hell ? 2 : 1;
+    let speed = 1;
     for (let effect of effects) {
       if (effect === magicEffect.big) size = new Vec3(3, 3, 3);
       if (effect === magicEffect.small) size = new Vec3(0.5, 0.5, 0.5);

@@ -87,7 +87,7 @@ export class Paddle extends GameObject {
   private applyEffects(data: SceneData) {
     const effects = data.is_hell ? this.hellEffects : this.magicBallEffects;
     let size_x = 1, size_y = 1, size_z = 1;
-    let speed = data.is_hell ? this.speed.original * 2 : this.speed.original;
+    let speed = this.speed.original;
     for (let effect of effects) {
       if (effect === magicEffect.big) size_z = 2;
       if (effect === magicEffect.small) { size_y = 0.4; size_z = 0.4; }

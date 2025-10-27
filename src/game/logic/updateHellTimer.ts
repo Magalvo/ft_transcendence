@@ -1,7 +1,7 @@
 import { handleHellModes, hellMode, showWarningMessage, updateHell, type Objects2D, type Objects3D, type SceneData } from "../../index.js";
 
 // Constants for how long each side is active (in seconds)
-const HEll_DURATION = 15;
+const HEll_DURATION = 20;
 const HEAVEN_DURATION = 30;
 
 // Internal timers for each side (in seconds)
