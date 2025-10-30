@@ -1,0 +1,208 @@
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+*:focus,
+*:focus-visible,
+*:focus-within {
+	outline-color: var(--colors-accent-200);
+}
+
+.app {
+	min-height: 100vh;
+	max-width: 600px;
+	margin: 0 auto;
+	padding: 1.25rem;
+
+	display: flex;
+	flex-direction: column;
+	row-gap: 1rem;
+}
+
+.username {
+	display: grid;
+	row-gap: 0.5rem;
+	width: 300px;
+
+	& > span {
+		font-size: var(--font-size-sm);
+		color: var(--colors-gray-600);
+	}
+
+	& > input {
+		border: 1px solid var(--color-gray-200);
+		border-radius: var(--round-md);
+		padding: 0.5rem;
+	}
+}
+
+.chat {
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	height: 500px;
+	width: 380px;
+	border-radius: var(--round-xl);
+}
+
+.header {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	place-items: center start;
+	padding: 1rem;
+	border-bottom: 1px solid var(--colors-gray-200);
+}
+
+.room-name {
+	font-weight: var(--font-weight-bold);
+}
+
+.close-btn {
+	width: 2rem;
+	height: 2rem;
+	display: grid;
+	place-content: center;
+	border-radius: var(--round-full);
+	transition: background-color 0.3s;
+
+	&:hover {
+		background-color: var(--colors-gray-100);
+	}
+
+	& > svg {
+		width: 1.3rem;
+		height: 1.3rem;
+	}
+}
+
+.msg-list {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	row-gap: 1rem;
+	padding: 1rem;
+	overflow-y: auto;
+	scroll-behavior: smooth;
+	background-color: var(--color-gray-100);
+}
+
+.msg {
+	display: flex;
+	flex-direction: column;
+	row-gap: 0.5rem;
+	place-self: start;
+	align-items: flex-start;
+
+	&.mine {
+		place-self: end;
+		align-items: flex-end;
+	}
+
+
+	&__sender {
+		display: flex;
+		align-items: center;
+		column-gap: 0.3rem;
+	}
+
+	&__sender-avatar {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: var(--round-full);
+	}
+
+	&__sender-name {
+		font-size: var(--font-size-sm);
+		color: var(--colors-gray-500);
+	}
+
+	&__content {
+		background-color: var(--colors-white);
+		padding: 0.75rem;
+		border-radius: var(--round-lg);
+		border-top-left-radius: 0;
+	}
+
+	&__content.mine {
+		background-color: var(--colors-accent-500);
+		color: var(--colors-white);
+		border-top-left-radius: var(--round-lg);
+		border-top-right-radius: 0;
+	}
+}
+
+form {
+	display: flex;
+	padding: 0.5rem;
+
+	& input {
+		flex: 1;
+		margin: 0.5rem;
+
+		&:focus {
+			outline: none;
+		}
+	}
+
+	& button {
+		width: 2.5rem;
+		height: 2.5rem;
+		display: grid;
+		place-content: center;
+		color: var(--colors-accent-600);
+
+		& > svg {
+			width: 1.25rem;
+			height: 1.25rem;
+		}
+	}
+}
+
+.popover {
+	$popover: &;
+	position: fixed;
+	bottom: 1rem;
+	right: 1rem;
+
+	&__trigger {
+		width: 4rem;
+		height: 4rem;
+		background-color: var(--colors-accent-500);
+		color: var(--colors-white);
+		border-radius: var(--round-full);
+		display: grid;
+		place-content: center;
+		transition: background-color 0.3s;
+
+		&:hover {
+			background-color: var(--colors-accent-600);
+		}
+
+		& > svg {
+			width: 2rem;
+			height: 2rem;
+		}
+	}
+
+	&__panel {
+		position: absolute;
+		bottom: 0;
+		right: 0;
+		z-index: 10;
+		transform: translateY(calc(100% + 1rem));
+		opacity: 0;
+		transition: transform 0.5s, opacity 0.8s;
+	}
+
+	&[data-open] {
+		#{$popover}__trigger {
+			transform: translateY(calc(100% + 1rem));
+			opacity: 0;
+		}
+
+		#{$popover}__panel {
+			transform: none;
+			opacity: 1;
+		}
+	}
+}

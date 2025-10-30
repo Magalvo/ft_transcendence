@@ -1,0 +1,22 @@
+{
+  "name": "chat-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "serve": "node -r esbuild-register scripts/server.ts"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.25.11",
+    "esbuild-register": "^3.6.0",
+    "nanoid": "^5.1.6",
+    "sass": "^1.93.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "ws": "^8.18.3"
+  }
+}
