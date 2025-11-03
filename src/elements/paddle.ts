@@ -45,7 +45,8 @@ export class Paddle extends GameObject {
   private handleHuman(data: SceneData) {
     if (this.side == "left" && data.left_paddle_mov != mov.null)
       this.move(data, data.left_paddle_mov, this.speed.value);
-    // Add right paddle controls if needed
+    if (this.side == "right" && data.right_paddle_mov != mov.null)
+      this.move(data, data.right_paddle_mov, this.speed.value);
   }
 
   // AI: move toward closest ball if approaching
