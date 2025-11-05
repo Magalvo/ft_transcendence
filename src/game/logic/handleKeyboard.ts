@@ -1,5 +1,5 @@
 import { hellMode, keyCode, mov } from "../../index.js";
-import type { SceneData } from "../../index.js";
+import type { GameData } from "../../index.js";
 
 /**
  * Handles keyboard input to:
@@ -8,68 +8,70 @@ import type { SceneData } from "../../index.js";
  * move players
  * @param data - Scene/game state
  */
-export function handleKeyboardEvents(data: SceneData) {
+export function handleKeyboardEvents(data: GameData) {
     cameraMov(data);
     gamePause(data);
-    if (data.hell_mode == hellMode.inverted_keys)
+    if (data.mods.hell_mode == hellMode.inverted_keys)
         invertedPlayersMove(data);
     else
         normalPlayersMove(data);
 }
 
-function normalPlayersMove(data: SceneData) {
+function normalPlayersMove(data: GameData) {
+    const input = data.input;
     // LEFT PLAYER 
     // move far 'A' 'W'
     // move near 'S' 'D'
-    if (data.keysPressed[keyCode.W] || data.keysPressed[keyCode.A])
-        data.left_paddle_mov = mov.far;
-    else if (data.keysPressed[keyCode.S] || data.keysPressed[keyCode.D])
-        data.left_paddle_mov = mov.near;
+    if (input.keysPressed[keyCode.W] || input.keysPressed[keyCode.A])
+        input.left_paddle_mov = mov.far;
+    else if (input.keysPressed[keyCode.S] || input.keysPressed[keyCode.D])
+        input.left_paddle_mov = mov.near;
     else
-        data.left_paddle_mov = mov.null;
+        input.left_paddle_mov = mov.null;
 
     // RIGHT PLAYER 
     // move far '←' '↑'
     // move near '→' '↓'
-    if (data.keysPressed[keyCode.LEFT_ARROW] || data.keysPressed[keyCode.UP_ARROW])
-        data.right_paddle_mov = mov.far;
-    else if (data.keysPressed[keyCode.RIGHT_ARROW] || data.keysPressed[keyCode.DOWN_ARROW])
-        data.right_paddle_mov = mov.near;
+    if (input.keysPressed[keyCode.LEFT_ARROW] || input.keysPressed[keyCode.UP_ARROW])
+        input.right_paddle_mov = mov.far;
+    else if (input.keysPressed[keyCode.RIGHT_ARROW] || input.keysPressed[keyCode.DOWN_ARROW])
+        input.right_paddle_mov = mov.near;
     else
-        data.right_paddle_mov = mov.null;
+        input.right_paddle_mov = mov.null;
 }
 
-function invertedPlayersMove(data: SceneData) {
+function invertedPlayersMove(data: GameData) {
+    const input = data.input;
     // LEFT PLAYER 
     // move far 'A' 'W'
     // move near 'S' 'D'
-    if (data.keysPressed[keyCode.W] || data.keysPressed[keyCode.A])
-        data.left_paddle_mov = mov.near;
-    else if (data.keysPressed[keyCode.S] || data.keysPressed[keyCode.D])
-        data.left_paddle_mov = mov.far;
+    if (input.keysPressed[keyCode.W] || input.keysPressed[keyCode.A])
+        input.left_paddle_mov = mov.near;
+    else if (input.keysPressed[keyCode.S] || input.keysPressed[keyCode.D])
+        input.left_paddle_mov = mov.far;
     else
-        data.left_paddle_mov = mov.null;
+        input.left_paddle_mov = mov.null;
 
     // RIGHT PLAYER 
     // move far '←' '↑'
     // move near '→' '↓'
-    if (data.keysPressed[keyCode.LEFT_ARROW] || data.keysPressed[keyCode.UP_ARROW])
-        data.right_paddle_mov = mov.near;
-    else if (data.keysPressed[keyCode.RIGHT_ARROW] || data.keysPressed[keyCode.DOWN_ARROW])
-        data.right_paddle_mov = mov.far;
+    if (input.keysPressed[keyCode.LEFT_ARROW] || input.keysPressed[keyCode.UP_ARROW])
+        input.right_paddle_mov = mov.near;
+    else if (input.keysPressed[keyCode.RIGHT_ARROW] || input.keysPressed[keyCode.DOWN_ARROW])
+        input.right_paddle_mov = mov.far;
     else
-        data.right_paddle_mov = mov.null;
+        input.right_paddle_mov = mov.null;
 }
 
-function cameraMov(data: SceneData) {
+function cameraMov(data: GameData) {
     // Switch camera presets with 'Z', 'X', 'C'
-    if (data.keysPressed[keyCode.Z]) data.camera_pos = 2;
-    if (data.keysPressed[keyCode.X]) data.camera_pos = 1;
-    if (data.keysPressed[keyCode.C]) data.camera_pos = 3;
+    if (data.input.keysPressed[keyCode.Z]) data.flags.camera_pos = 2;
+    if (data.input.keysPressed[keyCode.X]) data.flags.camera_pos = 1;
+    if (data.input.keysPressed[keyCode.C]) data.flags.camera_pos = 3;
 }
 
-function gamePause(data: SceneData) {
+function gamePause(data: GameData) {
     // Put game on pause with 'P'
-    if (data.keysPressed[keyCode.P]) data.pause_screen = true;
-    if (data.keysPressed[keyCode.ESC]) data.pause_screen = true;
+    if (data.input.keysPressed[keyCode.P]) data.flags.pause_screen = true;
+    if (data.input.keysPressed[keyCode.ESC]) data.flags.pause_screen = true;
 }

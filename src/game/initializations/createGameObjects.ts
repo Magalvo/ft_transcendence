@@ -1,6 +1,24 @@
 
-import { Paddle, Table, BABYLON, Vec3, PlayingBall } from "../../index.js";
+import { Paddle, Table, BABYLON, Vec3, PlayingBall, type GameObjects } from "../../index.js";
 import { MagicBall, type MagicEffect, type Side } from "../../index.js";
+
+/**
+ * Creates all 3D objects (meshes)
+ * @param scene 
+ * @returns 
+ */
+export function createInitialObjects3D(scene: BABYLON.Scene): GameObjects {
+  const table = createTable(scene);
+  const balls = [
+    createPlayingBall(scene, table.pos.value.x, table.pos.value.z),
+  ];
+  const paddles = [
+    createPaddle(table.limits.left * 0.8, "left", scene),
+    createPaddle(table.limits.right * 0.8, "right", scene),
+  ];
+
+  return { table, balls, paddles };
+}
 
 // Create a new Table at the center of the scene
 export function createTable(scene: BABYLON.Scene): Table {

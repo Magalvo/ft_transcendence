@@ -14,7 +14,7 @@ import {
   PlayingBall,
   showWarningMessage,
 } from "../../index.js";
-import type { GameObjectOptions, Mov, Objects3D, ObjectValue, SceneData } from "../../index.js";
+import type { GameObjectOptions, Mov, ObjectValue, GameData } from "../../index.js";
 
 
 // Ball options type
@@ -38,7 +38,7 @@ export abstract class Ball extends GameObject {
     super(options);
     this.radius = { value: options.radius, original: options.radius };
     this.speed = options.speed;
-    this.obj = this.createMesh(options.scene);
+    this.mesh = this.createMesh(options.scene);
     this.throwBall(false);
   }
 
@@ -65,23 +65,23 @@ export abstract class Ball extends GameObject {
 
   // Clean up mesh and particles
   public dispose() {
-    this.obj?.dispose();
+    this.mesh?.dispose();
     this.flame_animation?.dispose();
   }
 
   // Paddle collision (AABB overlap)
-  protected paddleCollisionsCheck(data: SceneData, obj3D: Objects3D) {
-    for (let paddle of obj3D.paddles) {
+  protected paddleCollisionsCheck(data: GameData) {
+    for (let paddle of data.obj3D.paddles) {
       const overlap =
         Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius.value <= 0 &&
         Math.abs(this.pos.value.y - paddle.pos.value.y) - paddle.dimensions.value.y / 2 - this.radius.value <= 0 &&
         Math.abs(this.pos.value.z - paddle.pos.value.z) - paddle.dimensions.value.z / 2 - this.radius.value <= 0;
       if (overlap)
-        this.paddleCollisionAction(paddle, data, obj3D);
+        this.paddleCollisionAction(paddle, data);
     }
   }
 
-  protected paddleCollisionAction(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
+  protected paddleCollisionAction(paddle: Paddle, data: GameData) {
     // Side collision (X axis)
     if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far) {
       let inverting = false;
@@ -96,9 +96,9 @@ export abstract class Ball extends GameObject {
       spawnHitParticles(data.scene, this.pos.value);
       // Hell mode effects
       if (inverting) {
-        if (data.hell_mode == hellMode.infinite_balls)
-          infiniteBallsAdd(data, obj3D, this.pos.value.x, this.pos.value.z);
-        if (data.hell_mode == hellMode.big_balls)
+        if (data.mods.hell_mode == hellMode.infinite_balls)
+          infiniteBallsAdd(data, this.pos.value.x, this.pos.value.z);
+        if (data.mods.hell_mode == hellMode.big_balls)
           paddle.pos.value.x -= this.velocity / Math.abs(this.velocity) * 3;
       }
     }
@@ -113,8 +113,8 @@ export abstract class Ball extends GameObject {
   }
 
   // Wall collision and scoring
-  protected wallCollisions(obj3D: Objects3D, data: SceneData) {
-    const table = obj3D.table;
+  protected wallCollisions(data: GameData) {
+    const table = data.obj3D.table;
     // Z+ far wall
     if (this.limits.far >= table.limits.far) {
       this.pos.value.z = table.limits.far - this.radius.value;
@@ -130,38 +130,36 @@ export abstract class Ball extends GameObject {
     // X- left wall: score for right
     if (this.limits.left <= table.limits.left) {
       if (this instanceof PlayingBall) {
-        data.score.right++;
+        data.mods.score.right++;
         flashZone(data, "left", table);
         this.throwBall(true, table);
-        showWarningMessage({scene:data.scene,message: "Score +1",side: "right", color: "green", duration: 2000});
-        if (data.hell_mode == hellMode.infinite_balls && obj3D.balls.length > 1)
-        {
-          const index = obj3D.balls.indexOf(this);
+        showWarningMessage({ scene: data.scene, message: "Score +1", side: "right", color: "green", duration: 2000 });
+        if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
+          const index = data.obj3D.balls.indexOf(this);
           this.dispose();
-          if (index != -1) obj3D.balls.splice(index, 1);
+          if (index != -1) data.obj3D.balls.splice(index, 1);
         }
       }
-      else 
+      else
         this.updateMovement(mov.invert_x, false, false);
-      
+
     }
     // X+ right wall: score for left
     if (this.limits.right - this.radius.value >= table.limits.right) {
       if (this instanceof PlayingBall) {
-        data.score.left++;
+        data.mods.score.left++;
         flashZone(data, "right", table);
         this.throwBall(true, table);
-        showWarningMessage({scene:data.scene,message: "Score +1",side: "left", color: "green"});
-        if (data.hell_mode == hellMode.infinite_balls && obj3D.balls.length > 1)
-        {
-          const index = obj3D.balls.indexOf(this);
+        showWarningMessage({ scene: data.scene, message: "Score +1", side: "left", color: "green" });
+        if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
+          const index = data.obj3D.balls.indexOf(this);
           this.dispose();
-          if (index != -1) obj3D.balls.splice(index, 1);
+          if (index != -1) data.obj3D.balls.splice(index, 1);
         }
       }
-      else 
+      else
         this.updateMovement(mov.invert_x, false, false);
-      
+
     }
   }
 
@@ -184,7 +182,7 @@ export abstract class Ball extends GameObject {
    * Use onStep to check collisions at each mini-step.
    */
   protected move(
-    data: SceneData | null,
+    data: GameData | null,
     x?: number,
     z?: number,
     onStep?: () => void
@@ -196,7 +194,7 @@ export abstract class Ball extends GameObject {
     if (x !== undefined) {
       this.pos.value.x = x;
     } else if (data) {
-      let totalDx = vx * data.step * this.speed_modifier;
+      let totalDx = vx * data.mods.step * this.speed_modifier;
       let dxSign = Math.sign(totalDx);
       let dx = Math.abs(totalDx);
       while (dx > 0) {
@@ -209,7 +207,7 @@ export abstract class Ball extends GameObject {
     if (z !== undefined) {
       this.pos.value.z = z;
     } else if (data) {
-      let totalDz = vz * data.step * this.speed_modifier;
+      let totalDz = vz * data.mods.step * this.speed_modifier;
       let dzSign = Math.sign(totalDz);
       let dz = Math.abs(totalDz);
       while (dz > 0) {
@@ -219,7 +217,7 @@ export abstract class Ball extends GameObject {
         if (onStep) onStep();
       }
     }
-    this.obj.position.copyFrom(this.pos.value);
+    this.mesh.position.copyFrom(this.pos.value);
     this.updatePosition();
   }
 
@@ -243,12 +241,12 @@ export abstract class Ball extends GameObject {
   protected updateRespawnTimer(step: number, time?: number): boolean {
     if (time !== undefined) {
       this.respawn_timer = time;
-      this.obj.isVisible = false;
+      this.mesh.isVisible = false;
     } else if (this.respawn_timer > 0) {
       this.respawn_timer -= step;
       return true;
     } else {
-      this.obj.isVisible = true;
+      this.mesh.isVisible = true;
     }
     return false;
   }

@@ -33,7 +33,7 @@ export type ObjectValue<T> = {
  * Abstract base for all game objects with 3D mesh, position, size, and limits.
  */
 export abstract class GameObject {
-  public obj!: BABYLON.Mesh;           // Babylon mesh (must be set in subclass)
+  public mesh!: BABYLON.Mesh;           // Babylon mesh (must be set in subclass)
   public scene: BABYLON.Scene;         // Reference to scene
   public pos: ObjectValue<Vec3>;       // Position (mutable and original)
   public dimensions: ObjectValue<Vec3>;// Size/scale (mutable and original)
@@ -59,7 +59,7 @@ export abstract class GameObject {
    * Clean up resources.
    */
   dispose() {
-    this.obj?.dispose();
+    this.mesh?.dispose();
   }
 
   /**
@@ -80,7 +80,7 @@ export abstract class GameObject {
    * Rescales and updates dimensions for powerups or game modes.
    */
   protected changeSize(scale: Vec3 = new Vec3(1, 1, 1)) {
-    this.obj.scaling.set(scale.x, scale.y, scale.z);
+    this.mesh.scaling.set(scale.x, scale.y, scale.z);
     this.dimensions.value.x = this.dimensions.original.x * scale.x;
     this.dimensions.value.y = this.dimensions.original.y * scale.y;
     this.dimensions.value.z = this.dimensions.original.z * scale.z;

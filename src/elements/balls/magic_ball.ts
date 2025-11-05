@@ -1,5 +1,5 @@
 import { createFlame, Ball, magicEffect, Color4, showWarningMessage } from "../../index.js";
-import type { BallOptions, MagicEffect, Objects3D, Paddle, SceneData } from "../../index.js";
+import type { BallOptions, MagicEffect, Paddle, GameData } from "../../index.js";
 
 // Options for MagicBall
 export type MagicBallOptions = BallOptions & { effect: MagicEffect };
@@ -32,35 +32,35 @@ export class MagicBall extends Ball {
   }
 
   // Main update: move, check collisions
-  public update(obj3D: Objects3D, data: SceneData) {
-    if (this.paddle_hit_ref) { this.updateEffectTimer(obj3D, data); return; };
-    if (this.updateRespawnTimer(data.step)) return;
+  public update(data: GameData) {
+    if (this.paddle_hit_ref) { this.updateEffectTimer(data); return; };
+    if (this.updateRespawnTimer(data.mods.step)) return;
     this.move(data);
-    this.paddleCollisionsCheck(data, obj3D);
-    this.wallCollisions(obj3D, data);
+    this.paddleCollisionsCheck(data);
+    this.wallCollisions(data);
 
   }
 
-  private updateEffectTimer(obj3D: Objects3D, data: SceneData) {
-    if (data.time - this.paddle_hit_timestamp >= this.effect_duration && this.paddle_hit_ref) {
+  private updateEffectTimer(data: GameData) {
+    if (data.mods.time - this.paddle_hit_timestamp >= this.effect_duration && this.paddle_hit_ref) {
       // remove effect
       const index1 = this.paddle_hit_ref.magicBallEffects.indexOf(this.magic_effect);
       if (index1 !== -1)
         this.paddle_hit_ref.magicBallEffects.splice(index1, 1);
       // erase ball
-      const index2 = obj3D.balls.indexOf(this);
+      const index2 = data.obj3D.balls.indexOf(this);
       if (index2 !== -1)
-        obj3D.balls.splice(index2, 1);
+        data.obj3D.balls.splice(index2, 1);
     }
   }
 
   // Paddle collision: add hell effects
-  protected paddleCollisionAction(paddle: Paddle, data: SceneData, obj3D: Objects3D) {
-    super.paddleCollisionAction(paddle, data, obj3D);
+  protected paddleCollisionAction(paddle: Paddle, data: GameData) {
+    super.paddleCollisionAction(paddle, data);
     // apply effect
     paddle.magicBallEffects.push(this.magic_effect);
     // erase that ball
-    this.paddle_hit_timestamp = data.time;
+    this.paddle_hit_timestamp = data.mods.time;
     this.paddle_hit_ref = paddle;
     this.dispose();
     this.showMessage(data, paddle);
@@ -80,7 +80,7 @@ export class MagicBall extends Ball {
     [this.color1, this.color2] = effectColors[this.magic_effect] || def;
   }
 
-  private showMessage(data: SceneData, paddle: Paddle) {
+  private showMessage(data: GameData, paddle: Paddle) {
     const effectMessages: Record<number, string> = {
       [magicEffect.big]: "Your paddle is now BIG!",
       [magicEffect.small]: "Your paddle shrunk!",

@@ -1,19 +1,19 @@
-import { type Objects2D, type SceneData } from "../../index.js";
+import { type GameData } from "../../index.js";
 
 /**
  * Updates time, timer label and time events.
  * @param obj2D - 2D UI objects
  * @param data - Scene/game state
  */
-export function updateTimer(obj2D: Objects2D, data: SceneData) {
+export function updateTimer(data: GameData) {
     // advance timer
-    data.time += data.step;
-    updateTimerLabel(obj2D, data);
+    data.mods.time += data.mods.step;
+    updateTimerLabel(data);
 }
 
-function updateTimerLabel(obj2D: Objects2D, data: SceneData) {
+function updateTimerLabel(data: GameData) {
     // get total time rounded to to seconds
-    const total_seconds = Math.floor(data.time);
+    const total_seconds = Math.floor(data.mods.time);
     // separate minutes and seconds
     const min = Math.floor(total_seconds / 60);
     const seconds = total_seconds % 60;
@@ -21,5 +21,5 @@ function updateTimerLabel(obj2D: Objects2D, data: SceneData) {
     const formatted_min = String(min).padStart(2, '0');
     const formatted_seconds = String(seconds).padStart(2, '0');
     // update label
-    obj2D.timer_label.text = formatted_min + ":" + formatted_seconds;
+    data.obj2D.timer_label.text = formatted_min + ":" + formatted_seconds;
 }

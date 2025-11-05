@@ -1,5 +1,5 @@
 import { GUI } from "../../index.js";
-import type { Parts3D, SceneData } from "../../index.js";
+import type { Environment3D, GameData } from "../../index.js";
 
 /**
  * Stores the menu GUI texture globally for use within this module.
@@ -9,7 +9,7 @@ let guiTexture!: GUI.AdvancedDynamicTexture;
 /**
  * Initializes the menu by creating a fullscreen GUI texture.
  */
-export function createMenu() {
+export function createMainMenu() {
   guiTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("menu_GUI", true, { width: 1920, height: 1080 });
   guiTexture.idealWidth = 1920;
   guiTexture.idealHeight = 1080;
@@ -17,24 +17,20 @@ export function createMenu() {
 
 /**
  * Starts and displays the game menu, including positioning the camera and showing the loading overlay.
- * @param data - Scene/game state
- * @param parts3D - 3D scene parts
+ * @param data
  */
-export function startMenu(data: SceneData, parts3D: Parts3D) {
-  positionCamera(parts3D);
-
-  // Optionally, add a menu background image:
-  // createBackground();
+export function startMainMenu(data: GameData) {
+  positionCamera(data.env);
 
   createTitle();
 
   // Show loading overlay for a minimum duration and then show menu buttons
   const hideLoading = showLoadingOverlay({ minDuration: 3000 });
   Promise.all([
-    waitForScene(parts3D.scene)
+    waitForScene(data.scene)
   ]).then(() => {
     hideLoading(() => {
-      createButtons(data, parts3D);
+      createButtons(data);
     });
   });
 }
@@ -45,12 +41,7 @@ function waitForScene(scene: any): Promise<void> {
   });
 }
 
-/**
- * Creates the main menu buttons: Play, Left Player, and Right Player.
- * @param data - Scene/game state
- * @param parts3D - 3D scene parts
- */
-function createButtons(data: SceneData, parts3D: Parts3D) {
+function createButtons(data: GameData) {
   // Play button
   const playBtn = GUI.Button.CreateSimpleButton("play", "PLAY");
   playBtn.width = "200px";
@@ -61,8 +52,8 @@ function createButtons(data: SceneData, parts3D: Parts3D) {
   playBtn.fontSize = 32;
   playBtn.onPointerUpObservable.add(() => {
     guiTexture.dispose();
-    data.game_running = true;
-    parts3D.camera.detachControl();
+    data.flags.game_running = true;
+    data.env.camera.detachControl();
   });
   guiTexture.addControl(playBtn);
 
@@ -76,8 +67,8 @@ function createButtons(data: SceneData, parts3D: Parts3D) {
   leftPlayer.left = "-30%";
   leftPlayer.fontSize = 32;
   leftPlayer.onPointerUpObservable.add(() => {
-    data.left_player_human = !data.left_player_human;
-    leftPlayer.textBlock!.text = data.left_player_human ? "HUMAN" : "BOT";
+    data.input.left_player_human = !data.input.left_player_human;
+    leftPlayer.textBlock!.text = data.input.left_player_human ? "HUMAN" : "BOT";
   });
   guiTexture.addControl(leftPlayer);
 
@@ -91,28 +82,12 @@ function createButtons(data: SceneData, parts3D: Parts3D) {
   rightPlayer.left = "30%";
   rightPlayer.fontSize = 32;
   rightPlayer.onPointerUpObservable.add(() => {
-    data.right_player_human = !data.right_player_human;
-    rightPlayer.textBlock!.text = data.right_player_human ? "HUMAN" : "BOT";
+    data.input.right_player_human = !data.input.right_player_human;
+    rightPlayer.textBlock!.text = data.input.right_player_human ? "HUMAN" : "BOT";
   });
   guiTexture.addControl(rightPlayer);
 }
 
-/**
- * (Optional) Creates a background image for the menu.
- * Disabled by default—uncomment in startMenu to use.
- */
-function createBackground() {
-  const bg = new GUI.Image("bg", "textures/menu_bg.jpg");
-  bg.stretch = GUI.Image.STRETCH_UNIFORM;
-  bg.width = 2;
-  bg.height = 2;
-  bg.zIndex = 0;
-  guiTexture.addControl(bg);
-}
-
-/**
- * Creates the game title and subtitle on the menu.
- */
 function createTitle() {
   const title = new GUI.TextBlock();
   title.text = "Heaven's Pong";
@@ -133,7 +108,7 @@ function createTitle() {
  * Positions the camera for the menu view.
  * @param parts3D - 3D scene parts
  */
-function positionCamera(parts3D: Parts3D) {
+function positionCamera(parts3D: Environment3D) {
   parts3D.camera.beta = Math.PI;
   parts3D.camera.radius = 250;
 }

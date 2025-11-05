@@ -1,7 +1,8 @@
 // Export all main modules and elements for easy import elsewhere in the project
-export * from "./game/_GameScene_.js";
+export * from "./game/__GameScene.js";
+export * from "./game/SceneData.js";
 export * from "./game/initializations/createGameObjects.js";
-export * from "./game/logic/_GameLogic_.js";
+export * from "./game/logic/__GameLogic.js";
 export * from "./game/logic/updateLabels.js";
 export * from "./game/logic/updateTimer.js";
 export * from "./game/logic/updateHellTimer.js";
@@ -22,7 +23,7 @@ export * from "./game/animations/flashZone.js";
 export * from "./game/animations/ballHitParticles.ts";
 export * from "./game/animations/createFlame.js";
 export * from "./game/animations/createSkybox.js";
-export * from "./elements/_GameObject_.js";
+export * from "./elements/__GameObject.js";
 export * from "./elements/balls/_Ball_.js";
 export * from "./elements/balls/playing_ball.js";
 export * from "./elements/balls/magic_ball.js";

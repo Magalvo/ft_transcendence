@@ -1,5 +1,5 @@
 import { BABYLON, createFlame, createSkybox, Vec3 } from "../../index.js";
-import type { Objects3D } from "../../index.js";
+import type { GameObjects } from "../../index.js";
 
 /* ------------------- *
  *  SCENE PARTS (3D)   *
@@ -8,7 +8,7 @@ import type { Objects3D } from "../../index.js";
 /**
  * Container type for all 3D scene "parts" (camera, environment, effects, etc).
  */
-export type Parts3D = {
+export type Environment3D = {
   scene: BABYLON.Scene,
   hellMusic: HTMLAudioElement,
   heavenMusic: HTMLAudioElement,
@@ -23,17 +23,15 @@ export type Parts3D = {
 };
 
 /**
- * Creates all main 3D scene parts for the game (camera, effects, environment, etc).
- * @param data - Current game/scene state
+ * Creates all 3D environment parts for the game (camera, effects, environment, etc).
  * @param obj3D - All 3D game objects (needed for placement)
  * @param scene - The BabylonJS scene
- * @returns {Parts3D}
+ * @returns {Environment3D}
  */
-export function createSceneParts(
-  obj3D: Objects3D,
+export function createEnvironment3D(
+  obj3D: GameObjects,
   scene: BABYLON.Scene
-): Parts3D {
-  // create all 3D parts
+): Environment3D {
   return {
     camera: createCamera(scene),
     light: createLight(scene),

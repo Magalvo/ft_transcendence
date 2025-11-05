@@ -1,5 +1,5 @@
 import { BABYLON, GameObject, Vec3 } from "../index.js";
-import { Color3, type GameObjectOptions, type SceneData } from "../index.js";
+import { Color3, type GameObjectOptions, type GameData } from "../index.js";
 
 /**
  * Options for Table construction.
@@ -25,8 +25,8 @@ export class Table extends GameObject {
     this.dimensions = options.dimensions;
     this.good_color = new Color3(0.7, 0.7, 1);
     this.bad_color = new Color3(1, 0.2, 0.2);
-    this.obj = this.initializeTable(options.scene);
-    this.obj.freezeWorldMatrix();
+    this.mesh = this.initializeTable(options.scene);
+    this.mesh.freezeWorldMatrix();
   }
 
   /* ***************** *
@@ -117,7 +117,7 @@ export class Table extends GameObject {
   /**
    * Updates the table color theme based on camp side.
    */
-  public update(data: SceneData) {
+  public update(data: GameData) {
     if (!data.is_hell)
       this.changeTableColors(this.good_color);
     if (data.is_hell)
@@ -129,7 +129,7 @@ export class Table extends GameObject {
    */
   private changeTableColors(color: Color3) {
     // Base table mesh
-    const mat = this.obj.material as BABYLON.PBRMaterial;
+    const mat = this.mesh.material as BABYLON.PBRMaterial;
     mat.albedoColor = color;
     mat.subSurface.tintColor = color;
     // Lines and circle
@@ -138,7 +138,7 @@ export class Table extends GameObject {
   }
 
   public flash(color: Color3 = new Color3(0, 0.6, 1), duration: number = 200) {
-    const mat = this.obj.material as BABYLON.PBRMaterial;
+    const mat = this.mesh.material as BABYLON.PBRMaterial;
     if (!mat) return;
     mat.emissiveColor = color;
     setTimeout(() => {

@@ -19,7 +19,6 @@ export type Objects2D = {
 
 /**
  * Creates all main 2D UI elements for the game (score labels, UI texture, etc).
- * @param data - Current game/scene state
  * @returns {Objects2D}
  */
 export function create2DParts(): Objects2D {

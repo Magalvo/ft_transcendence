@@ -1,40 +1,38 @@
-import { hellMode, PlayingBall } from "../../index.js";
-import type { Objects3D, Parts3D, SceneData } from "../../index.js";
+import { hellMode, PlayingBall, type GameData } from "../../index.js";
 
 /**
  * Updates the environment (e.g., flames, skybox) based on the current side.
- * @param parts3D - 3D scene parts (flames, skybox, etc.)
  * @param data - Scene/game state
  */
-export function updateEnvironment(parts3D: Parts3D, data: SceneData, obj3D: Objects3D) {
+export function updateEnvironment(data: GameData) {
+    const env = data.env;
     // Heaven & Hell: different effects for right vs left side
-    if (!data.is_hell) {
-        parts3D.flame_L1.stop();
-        parts3D.flame_L2.stop();
-        parts3D.flame_R1.stop();
-        parts3D.flame_R2.stop();
-        for (let ball of obj3D.balls)
+    if (!data.mods.is_hell) {
+        env.flame_L1.stop();
+        env.flame_L2.stop();
+        env.flame_R1.stop();
+        env.flame_R2.stop();
+        for (let ball of data.obj3D.balls)
             if (ball instanceof PlayingBall)
                 ball.flame_animation.stop();
-        parts3D.sky_box.rotation.y += 0.001;
-    } else if (data.is_hell) {
-        parts3D.flame_L1.start();
-        parts3D.flame_L2.start();
-        parts3D.flame_R1.start();
-        parts3D.flame_R2.start();
-        for (let ball of obj3D.balls)
+        env.sky_box.rotation.y += 0.001;
+    } else if (data.mods.is_hell) {
+        env.flame_L1.start();
+        env.flame_L2.start();
+        env.flame_R1.start();
+        env.flame_R2.start();
+        for (let ball of data.obj3D.balls)
             if (ball instanceof PlayingBall)
                 ball.flame_animation.start();
-        parts3D.sky_box.rotation.y += 0.05;
+        env.sky_box.rotation.y += 0.05;
     }
 
     const canvas = document.getElementById("renderCanvas");
     if (canvas) {
         // rotate all canvas (hell mode)
-        if (data.hell_mode == hellMode.twisted_view)
+        if (data.mods.hell_mode == hellMode.twisted_view)
             canvas.style.transform = "scaleX(-1)";
         else
             canvas.style.transform = "scaleX(1)";
-
     }
 }

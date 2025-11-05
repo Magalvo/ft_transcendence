@@ -1,11 +1,11 @@
 import { BABYLON, Color3, Vec3 } from "../../index.js";
-import type { SceneData, Side, Table } from "../../index.js";
+import type { GameData, Side, Table } from "../../index.js";
 
 /**
  * Creates the flash mesh and its material.
  */
 function createFlashPlane(
-  data: SceneData,
+  data: GameData,
   camp_side: Side,
   table: Table,
   baseWidth: number,
@@ -105,7 +105,7 @@ function updateFlashPlanePosition(
  * Main function: flashZone, using all helpers.
  */
 export function flashZone(
-  data: SceneData,
+  data: GameData,
   camp_side: Side,
   table: Table
 ): void {
