@@ -24,7 +24,7 @@ app.register(swagger_1.default, {
     transform: fastify_type_provider_zod_1.jsonSchemaTransform
 });
 app.register(swagger_ui_1.default, {
-    routePrefix: '/docs'
+    routePrefix: '/api'
 });
 // Definição de um endpoint de exemplo
 app.after(() => {

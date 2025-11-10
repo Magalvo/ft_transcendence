@@ -1,0 +1,15 @@
+services: 
+  gateway:
+    container_name: ApiGateWay
+    build:
+      context: ./Gateway  
+      dockerfile: Dockerfile
+    ports: 
+      - "333:333"
+    networks:
+      - transcendencenet
+    restart: on-failure
+
+networks:
+  transcendencenet:
+    driver: bridge
