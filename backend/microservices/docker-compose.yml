@@ -9,6 +9,19 @@ services:
     networks:
       - transcendencenet
     restart: on-failure
+    depends_on:
+      - auth
+  auth:
+      container_name: Auth
+      build:
+        context: ./Auth
+        dockerfile: Dockerfile
+      ports:
+        - "3000:3000"
+      networks:
+        - transcendencenet
+      restart: on-failure
+
 
 networks:
   transcendencenet:
