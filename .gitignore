@@ -1,5 +1,6 @@
 # Prerequisites
 *.d
+*.env
 
 # Compiled Object files
 *.slo
@@ -39,3 +40,6 @@
 
 # debug information files
 *.dwo
+
+# Node modules
+**/node_modules/
