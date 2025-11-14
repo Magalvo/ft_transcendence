@@ -42,8 +42,13 @@ export class RouteHandler{
                 props:[]
             }
 
+            const componentInstance  = new (route.pageComponent as any)() ;
+
             global.rootElement.innerHTML = global.currentRoute.template;
 
+            if(typeof componentInstance.afterRender === 'function') {
+                 componentInstance.afterRender();
+             }
 
             this.changeAnchorListeners();
         }
