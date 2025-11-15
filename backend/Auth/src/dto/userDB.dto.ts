@@ -2,14 +2,15 @@
 
 class userDBDTO {
 
-    username: string;
+    id: string;
 
+    username: string;
     
     passwordHash: string;
 
     twoFactorSecret: string;
 
-    twoFactorCode: string;
+
     
 }
 

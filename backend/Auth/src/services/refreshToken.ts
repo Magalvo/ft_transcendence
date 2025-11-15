@@ -8,6 +8,8 @@ import jwt from "jsonwebtoken";
 const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
      try {
             const JWT_SECRET = process.env.JWT_SECRET as string;
+
+            
             const { refreshToken } = req.body as { refreshToken: string };
             const rawStored: any = await db.raw("SELECT * FROM refresh_tokens WHERE token = ? LIMIT 1", [refreshToken]);
             const stored: RefreshToken | undefined = Array.isArray(rawStored[0]) ? rawStored[0][0] : undefined;

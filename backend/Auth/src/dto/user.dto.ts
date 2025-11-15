@@ -9,7 +9,6 @@ class userDTO {
     @Length(8)
     password: string;
 
-    @Length(8)
     twoFactorCode?:string;
 }
 

@@ -12,6 +12,7 @@ import resetPass from "../services/resetPass.js";
 import faSetup from "../services/faSetup.js";
 import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
+import checkAcess from "../services/checkAcess.js";
 
 
 export default async function authRoutes(app: FastifyInstance) {
@@ -111,5 +112,9 @@ app.post("/login", async (req, reply) => {
   // --- 2FA VERIFY ---
   app.post("/2fa/verify", async (req, reply) => {
     return await faVerify(req,reply);
+  });
+
+  app.post("/checkAcess", async (req, reply) => {
+    return await checkAcess(req,reply);
   });
 }
