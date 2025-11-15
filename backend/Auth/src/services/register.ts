@@ -7,6 +7,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import UserDTO from "../dto/user.dto.js";
 import { validate, ValidationError } from "class-validator";
+import { plainToInstance } from "class-transformer";
 
 
 
@@ -14,20 +15,16 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
     try {
         const JWT_SECRET = process.env.JWT_SECRET as string;
 
-        const user : UserDTO = req.body as any;
+        const user : UserDTO = plainToInstance(UserDTO,req.body);
 
         const erros: ValidationError[] = await validate(user);
-        console.log(erros);
-        if(erros.length > 0){
-            
+
+       if(erros.length > 0){
             const erroMsg = erros.map(erro => {
-                return Object.values(erro.constraints as any)[0]; 
-            })
-
+                return erro.constraints ? Object.values(erro.constraints)[0] : 'Unknow Error'; 
+            });
             const finalMsg = erroMsg.join('; ');
-            // I NEED FIX THIS
-
-            return sendError(reply, `Erro de validação: ${erros}`, 400);
+            return sendError(reply, `: ${finalMsg}`, 400);
         }
 
 
