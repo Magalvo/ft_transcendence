@@ -1,18 +1,17 @@
-import { IsEmail, Length } from "class-validator";
+import { Length } from "class-validator";
 
 
-
-class UserDTO {
+class userDTO {
 
     @Length(5)
     username: string;
-
+    
     @Length(8)
     password: string;
 
-    @IsEmail()
-    email: string;
-
+    @Length(8)
+    twoFactorCode?:string;
 }
 
-export default UserDTO;
+
+export default userDTO;

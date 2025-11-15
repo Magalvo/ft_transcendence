@@ -5,7 +5,7 @@ import db from '../db.js';
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import UserDTO from "../dto/user.dto.js";
+import UserRegisterDTO from "../dto/userRegister.dto.js";
 import { validate, ValidationError } from "class-validator";
 import { plainToInstance } from "class-transformer";
 
@@ -15,7 +15,7 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
     try {
         const JWT_SECRET = process.env.JWT_SECRET as string;
 
-        const user : UserDTO = plainToInstance(UserDTO,req.body);
+        const user : UserRegisterDTO = plainToInstance(UserRegisterDTO,req.body);
 
         const erros: ValidationError[] = await validate(user);
 
