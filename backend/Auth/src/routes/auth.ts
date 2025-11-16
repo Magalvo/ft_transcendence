@@ -12,7 +12,7 @@ import resetPass from "../services/resetPass.js";
 import faSetup from "../services/faSetup.js";
 import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
-import checkAcess from "../services/checkAcess.js";
+
 
 
 export default async function authRoutes(app: FastifyInstance) {
@@ -67,7 +67,7 @@ export default async function authRoutes(app: FastifyInstance) {
               user = { id, username: profile.name ?? profile.email, email: profile.email, online: true };
             }
 
-            const jwtToken = jwt.sign({ username: user.username, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+            const jwtToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
             reply.redirect(`http://localhost:3000/?token=${jwtToken}`);
           } catch (err: any) {
             app.log.error("Google OAuth error:", err);
@@ -96,11 +96,11 @@ app.post("/login", async (req, reply) => {
   });
 
   // --- FORGOT / RESET PASSWORD ---
-  app.post("/forgot", async (req, reply) => {
+  app.post("/forgot",async (req, reply) => {
     return await forgotPass(req,reply);
   });
 
-  app.post("/reset-password", async (req, reply) => {
+  app.post("/reset-password",async (req, reply) => {
     return await resetPass(req,reply);
   });
 
@@ -114,7 +114,5 @@ app.post("/login", async (req, reply) => {
     return await faVerify(req,reply);
   });
 
-  app.post("/checkAcess", async (req, reply) => {
-    return await checkAcess(req,reply);
-  });
+
 }

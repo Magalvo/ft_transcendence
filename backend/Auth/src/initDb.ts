@@ -13,6 +13,9 @@ async function main() {
         table.string("email").nullable();
         table.boolean("online").defaultTo(false);
         table.dateTime("last_request").nullable();
+        table.string("resetToken").nullable();
+        table.dateTime("resetExpires").nullable();
+
       });
       console.log("Table 'users' created!");
       

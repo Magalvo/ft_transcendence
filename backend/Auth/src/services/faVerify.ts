@@ -10,9 +10,11 @@ import authenticate from "../middleware/authenticate.js";
 const faVerify = async (req: FastifyRequest, reply : FastifyReply) => {
     try {
       const decoded = await authenticate(req, reply);
-      if (!decoded) return;
+      if (!decoded)
+         return;
 
       const { code } = req.body as { code: string };
+      
       const rawUser: any = await db.raw("SELECT * FROM users WHERE username = ? LIMIT 1", [decoded.username]);
       const user: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
 

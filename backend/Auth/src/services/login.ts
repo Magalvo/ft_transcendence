@@ -27,7 +27,7 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
                 return erro.constraints ? Object.values(erro.constraints)[0] : 'Unknow Error'; 
             });
             const finalMsg = erroMsg.join('; ');
-            return sendError(reply, `: ${finalMsg}`, 400);
+            return sendError(reply, `: ${finalMsg}`, 401);
         }
        
        
@@ -53,7 +53,7 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
 
         const userId = userDB.id;
    
-        const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ userId : userId }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = crypto.randomBytes(64).toString("hex");
         const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const last_update = new Date().toISOString();

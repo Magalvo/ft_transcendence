@@ -23,15 +23,7 @@ app.register(proxy, {
   rewritePrefix: '/api', 
   
  
-  http2: false ,
-
-
-  replyOptions: {
-    onError: (reply, error) => {
-      console.log("ERRO NO PROXY:", error);
-      reply.send(error);
-    },
-  },
+  http2: false 
 });
 
 app.ready(() => {

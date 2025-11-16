@@ -46,7 +46,7 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
         await db.raw("INSERT INTO users (id, username, passwordHash, email, online, last_request) VALUES (?, ?, ?, ?, ?,?)", [ id, user.username, passwordHash, user.email, false,last_update]);
         const username = user.username
         // JWT & Refresh token
-        const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = crypto.randomBytes(64).toString("hex");
         const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
        

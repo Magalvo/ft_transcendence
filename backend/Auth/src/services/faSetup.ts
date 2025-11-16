@@ -11,11 +11,14 @@ const faSetup =  async (req: FastifyRequest, reply : FastifyReply) => {
     
   try {
     const decoded = await authenticate(req, reply);
-    if (!decoded) return;
+    if (!decoded)
+       return;
 
     const rawUser: any = await db.raw("SELECT * FROM users WHERE username = ? LIMIT 1", [decoded.username]);
     const user: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
-    if (!user) return sendError(reply, "User not found", 404);
+   
+    if (!user) 
+      return sendError(reply, "User not found", 404);
 
     const secret = speakeasy.generateSecret({ name: `FT Transcendence (${user.username})` });
     await db.raw("UPDATE users SET tempTwoFactorSecret = ? WHERE username = ?", [secret.base32, user.username]);
@@ -28,9 +31,9 @@ const faSetup =  async (req: FastifyRequest, reply : FastifyReply) => {
 
     const qr = await qrcode.toDataURL(otpauthUrl);
 
-    sendSuccess(reply, { qr, secret: secret.base32, message: "Scan this QR code with your authenticator app" });
+    return sendSuccess(reply, { qr, secret: secret.base32, message: "Scan this QR code with your authenticator app" });
   } catch (err: any) {
-    sendError(reply, "Internal server error", 500);
+    return sendError(reply, "Internal server error", 500);
   }
 
 
