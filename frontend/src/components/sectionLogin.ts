@@ -19,7 +19,7 @@ const sectionLogin =  `
             >
         </div>
     </div>    
-    <div class="mb-6 relative hidden signup-form">
+    <div class="mb-6 relative hidden signup-form" id="emailForm">
         <label for="username" class="block text-sm font-medium text-gray-700 mb-1 pl-1">
             Email
         </label>

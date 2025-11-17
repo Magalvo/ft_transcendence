@@ -3,6 +3,7 @@ import { PageComponent } from "../decorators/page";
 import bgTest from "../../assets/bg-test.png"
 import axios from "axios";
 import sectionLogin from "../components/sectionLogin";
+import AuthService from "../services/AuthService";
 
 
 @PageComponent({
@@ -26,7 +27,7 @@ import sectionLogin from "../components/sectionLogin";
                        + sectionLogin + `
                         <div class="flex items-center justify-between mb-6">
                            
-                            <div>
+                            <div id="forgotPass">
                                 <a href="#" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
                                     Forgot password?
                                 </a>
@@ -80,14 +81,16 @@ import sectionLogin from "../components/sectionLogin";
                     </form>
                     
                     <!-- Footer -->
-                    <div class="mt-8 text-center signin-form">
-                        <p class="text-gray-600 text-sm">
+                    <div class="mt-8 text-center signin-form text-sm">
+                        <span class="text-gray-600 text-sm" id="textSing">
                             Don't have an account? 
+                             </span>
                             <span class="text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer" id="signup-span">
                                 Sign up
                             </span>
-                        </p>
+                     
                     </div>
+                    
                 </div>
             </div>         
         </div>
@@ -98,60 +101,73 @@ import sectionLogin from "../components/sectionLogin";
 
 export class LoginPage{
 
-
-    private currentState : string = 'SingUp';
-
-    private setCurrentState(current){
-        this.currentState = current;
-    }
-      private erroLogin() {
-        const usernameInput = document.getElementById('username') as HTMLInputElement;
-        const passwordInput = document.getElementById('password') as HTMLInputElement;
-
-        if (!usernameInput || !passwordInput) return;
+    // True Sing in  False Sign up
+    private currentState : boolean = true;
+    private authService = new AuthService();
+ 
+      private erroLogin(element : HTMLElement) {
 
         const normalFocusClasses = ['focus:ring-indigo-500', 'focus:border-transparent'];
         
         const errorClasses = ['border-red-500', 'focus:ring-red-500', 'focus:border-red-500'];
 
         
-        usernameInput.classList.remove(...normalFocusClasses);
-        passwordInput.classList.remove(...normalFocusClasses);
-        
-      
-        usernameInput.classList.add(...errorClasses);
-        passwordInput.classList.add(...errorClasses);
+        element.classList.remove(...normalFocusClasses);
+        element.classList.add(...errorClasses);
+       
 
 
         setTimeout(() => { 
-        
-            usernameInput.classList.remove(...errorClasses);
-            passwordInput.classList.remove(...errorClasses);
-            
-            usernameInput.classList.add(...normalFocusClasses);
-            passwordInput.classList.add(...normalFocusClasses);
+            element.classList.remove(...errorClasses);
+
+            element.classList.add(...normalFocusClasses);
         }, 7000);
         
     }
 
-    private redirectToHomePage(token : string,refreshToken : string){
-         
-        cookieStore.set('token', token);
-        cookieStore.set('refreshToken', refreshToken);
-        const button = document.getElementById('login') as HTMLButtonElement;
-        button.textContent = 'Redirecting...'
-       
-        setTimeout(() => {
-            button.textContent = 'Sign In';
-            window.location.href = '/';
-        }, 1000);     
-    }
+
 
     async register(event: MouseEvent){
-        console.log('Registrar');
+        event.preventDefault();
+        const button = event.target as HTMLButtonElement;
+        button.disabled = true  
+
+        const usernameEl = document.getElementById('username') as HTMLInputElement;
+        const passwordEl = document.getElementById('password') as HTMLInputElement;
+        const emailEl = document.getElementById('email') as HTMLInputElement;
+        
+        const username = usernameEl?.value;
+        const password = passwordEl?.value;
+        const email = emailEl?.value;
+
+        if(!username || username.length < 3)
+            return this.erroLogin(usernameEl);
+
+        if(!password || password.length < 8)
+            return this.erroLogin(passwordEl);
+        
+        if(!this.authService.parseEmail(email))
+            return this.erroLogin(emailEl);
+
+        try{
+            const { token, refreshToken } = await this.authService.register({username, password, email});
+            console.log(token, refreshToken);
+            console.log('Redirect to home');
+            this.authService.redirectToHomePage(token, refreshToken);
+        }  catch (error: any){
+            if(error.response?.status === 400){
+                this.erroLogin(usernameEl);
+                this.erroLogin(passwordEl);
+                this.erroLogin(emailEl);  
+            }
+        }finally{
+            button.disabled = false;
+        }
+        
+      
 
     }
-     async auth(event: MouseEvent) {
+    async auth(event: MouseEvent) {
       
         event.preventDefault(); 
         const button = event.target as HTMLButtonElement;
@@ -164,23 +180,20 @@ export class LoginPage{
         const username = usernameEl?.value;
         const password = passwordEl?.value;
 
-        if(!username || !password)
-            return console.log('invalid');
+        if(!username || username.length < 3)
+            return this.erroLogin(usernameEl);
+
+        if(!password || password.length < 3)
+            return this.erroLogin(passwordEl);
             
         try{
-        const response = await axios.post("http://localhost:3333/auth/login",{
-           username:  username,
-           password: password
-        })
-            if(response.status === 200){
-            const {token, refreshToken} = response.data.data
-            this.redirectToHomePage(token,refreshToken);
-        }
-
-       }catch (response: any){
-
-          if(response.status === 401){
-            this.erroLogin();
+           const { token, refreshToken } = await this.authService.login(username, password);
+           
+           this.authService.redirectToHomePage(token, refreshToken);
+        }catch (error: any){
+          if(error.response?.status === 401){
+            this.erroLogin(usernameEl);
+            this.erroLogin(passwordEl);
         }
        }finally{
             button.disabled = false;
@@ -190,23 +203,52 @@ export class LoginPage{
 
 
     afterRender(){
-        console.log('Login Page Renderizada adicionando eventos');
 
         const LoginButton = document.getElementById('login');
         const RegisterButton = document.getElementById('register');
-
         const signupSpan = document.getElementById('signup-span');
 
-
-        // 5. Adicionamos o 'listener' para o evento 'click'
         LoginButton !== null ? LoginButton.addEventListener('click', this.auth.bind(this)) : ''
-        RegisterButton !== null ? RegisterButton.addEventListener('click',this.register.bind(this)) : ''
-
+        RegisterButton !== null ? RegisterButton.addEventListener('click',this.register.bind(this)) : '' 
+        signupSpan !== null ? signupSpan.addEventListener('click', this.loginAction.bind(this)) : ''
     
-        
     }
 
+    private loginAction(event: MouseEvent){
 
+        event.preventDefault();
+        
+        const LoginButton = document.getElementById('login');
+        const RegisterButton = document.getElementById('register');
+        const signupSpan = document.getElementById('signup-span') as HTMLSpanElement;
+        const forgotPass = document.getElementById('forgotPass');
+        const textSing = document.getElementById('textSing') as HTMLParagraphElement;
+        const emailForm = document.getElementById('emailForm');
+        
+        if(this.currentState === true){
+            this.setVisibilty('block',RegisterButton);
+            this.setVisibilty('block',emailForm);
+            this.setVisibilty('none',LoginButton);
+            this.setVisibilty('none',forgotPass);
+            signupSpan.textContent = 'Sign in';
+            textSing.textContent = 'Already have an account?';
+            this.setCurrentState(false);
+         }else{
+            this.setVisibilty('none',RegisterButton);
+            this.setVisibilty('none',emailForm);
+            this.setVisibilty('block',LoginButton);
+            this.setVisibilty('block',forgotPass);
+            signupSpan.textContent = 'Sign up';
+            textSing.textContent = 'Don\'t have an account?';
+            this.setCurrentState(true);
+         }
+    }
+    
+
+    private setCurrentState(state: boolean){
+        this.currentState = state;
+    
+    }
     setVisibilty(display : string, element : HTMLElement | null){
         if(element)
             element.style.display = display;
