@@ -11,6 +11,7 @@ import {
   undefineKeyEvents,
   createInitialObjects3D,
   type GameData,
+  closeMainMenu,
 } from "../index.js";
 import { io, Socket } from "socket.io-client";
 
@@ -130,6 +131,22 @@ export class GameScene {
         this.data.mods.score.left = serverState.score.left;
         this.data.mods.score.right = serverState.score.right;
       }
+
+      this.data.mods.time = serverState.time;
+      this.data.mods.is_hell = serverState.isHell;
+      this.data.mods.hell_mode = serverState.activeHellMode;
+
+      if (serverState.isHell) {
+        this.data.mods.devilElapsed = serverState.hellTimer;
+      } else {
+        this.data.mods.goodElapsed = serverState.hellTimer;
+      }
+
+      if (serverState.status === 1 && !this.data.flags.game_running) {
+        // este código nunca chega a ser executado
+        closeMainMenu(this.data);
+        this.data.flags.game_running = true;
+      }
     });
   }
 
@@ -137,7 +154,11 @@ export class GameScene {
     this.resetScene();
 
     createMainMenu();
-    startMainMenu(this.data);
+    startMainMenu(this.data, () => {
+      if (this.socket) {
+        this.socket.emit('playerReady');
+      }
+    });
 
     let lastTime = performance.now();
 

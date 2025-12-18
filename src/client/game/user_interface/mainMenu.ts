@@ -19,7 +19,7 @@ export function createMainMenu() {
  * Starts and displays the game menu, including positioning the camera and showing the loading overlay.
  * @param data
  */
-export function startMainMenu(data: GameData) {
+export function startMainMenu(data: GameData, onPlayClicked: () => void) {
   positionCamera(data.env);
 
   createTitle();
@@ -30,7 +30,7 @@ export function startMainMenu(data: GameData) {
     waitForScene(data.scene)
   ]).then(() => {
     hideLoading(() => {
-      createButtons(data);
+      createButtons(data, onPlayClicked);
     });
   });
 }
@@ -41,7 +41,13 @@ function waitForScene(scene: any): Promise<void> {
   });
 }
 
-function createButtons(data: GameData) {
+export function closeMainMenu(data: GameData)
+{
+    data.env.camera.detachControl();
+    guiTexture.dispose();
+}
+
+function createButtons(data: GameData, onPlayClicked: () => void) {
   // Play button
   const playBtn = GUI.Button.CreateSimpleButton("play", "PLAY");
   playBtn.width = "200px";
@@ -51,9 +57,8 @@ function createButtons(data: GameData) {
   playBtn.top = "30%";
   playBtn.fontSize = 32;
   playBtn.onPointerUpObservable.add(() => {
-    guiTexture.dispose();
-    data.flags.game_running = true;
-    data.env.camera.detachControl();
+    playBtn.textBlock!.text = "WAITING...";
+    onPlayClicked();
   });
   guiTexture.addControl(playBtn);
 

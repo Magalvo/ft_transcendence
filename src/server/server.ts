@@ -3,12 +3,12 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { ServerBall } from './elements/ServerBall.js';
 import { ServerPaddle } from './elements/ServerPaddle.js';
-import { mov } from '../shared/strings.js';
+import { hellMode, mov } from '../shared/strings.js';
+import { GameStatus } from '../shared/types.js';
+import { randomInt } from '../shared/utils.js';
 
-// Configuração Básica do Servidor
 const app = express();
 const httpServer = createServer(app);
-// Configura o Socket.io com CORS (para permitir conexão do Vite/Client)
 const io = new Server(httpServer, {
     cors: {
         origin: "*", // Em produção, muda isto para o URL do teu site
@@ -19,9 +19,11 @@ const io = new Server(httpServer, {
 const PORT = 3000;
 
 // --- ESTADO DO JOGO ---
+let status:GameStatus = GameStatus.WAITING;
+
 const ball = new ServerBall(0, 0);
-const paddleLeft = new ServerPaddle('left', -80);
-const paddleRight = new ServerPaddle('right', 80);
+const paddleLeft = new ServerPaddle('left', -68);
+const paddleRight = new ServerPaddle('right', 68);
 const score = { left: 0, right: 0 };
 
 const inputs = {
@@ -29,10 +31,16 @@ const inputs = {
     right: mov.null
 };
 
-const players: { [side: string]: string | null } = {
-    left: null,
-    right: null
-};
+const players: { [side: string]: string | null } = { left: null, right: null };
+const playersReady: { [side: string]: boolean } = { left: false, right: false };
+
+// Timers Globais
+const HEAVEN_DURATION = 30;
+const HELL_DURATION = 20;
+let gameTime = 0;
+let phaseTimer = 0;
+let isHell = false;
+let currentHellMode: number = hellMode.null;
 
 // --- SOCKET.IO EVENTOS ---
 io.on('connection', (socket) => {
@@ -53,6 +61,31 @@ io.on('connection', (socket) => {
     socket.emit('init', { side: side });
     console.log(`Jogador ${socket.id} atribuído a: ${side}`);
 
+    socket.on('playerReady', () => {
+        const side = (players.left === socket.id) ? 'left' : (players.right === socket.id) ? 'right' : null;
+        
+        if (side) {
+            playersReady[side] = true;
+            console.log(`Jogador ${side} está pronto!`);
+
+            // Se ambos estiverem prontos, arranca o jogo!
+            if (playersReady.left && playersReady.right) {
+                startGame();
+            }
+        }
+    });
+
+    // --- NOVO: Pausa (Qualquer jogador pode pausar) ---
+    socket.on('pauseGame', () => {
+        if (status === GameStatus.RUNNING) {
+            status = GameStatus.PAUSED;
+            io.emit('gamePaused'); // Avisa todos para mostrar menu
+        } else if (status === GameStatus.PAUSED) {
+            status = GameStatus.RUNNING;
+            io.emit('gameResumed');
+        }
+    });
+
     // 3. Receber Input (Só aceita se for do dono da raquete)
     socket.on('input', (data) => {
         // Segurança básica: só aceita input se o socket for o dono desse lado
@@ -67,15 +100,56 @@ io.on('connection', (socket) => {
         if (players.right === socket.id) players.right = null;
     });
 });
+
+function startGame() {
+    console.log("AMBOS PRONTOS -> INICIAR JOGO!");
+    status = GameStatus.RUNNING;
+    // Resetar variáveis se necessário (score, tempo)
+    gameTime = 0;
+    phaseTimer = 0;
+    isHell = false;
+    currentHellMode = hellMode.null;
+    score.left = 0;
+    score.right = 0;
+    ball.throwBall(); // Reinicia bola
+}
+
 // --- GAME LOOP (60 FPS) ---
 const TICK_RATE = 60;
 const TICK_MS = 1000 / TICK_RATE; // ~16.66 ms
 
 setInterval(() => {
+    if (status !== GameStatus.RUNNING) {
+        // Mesmo em pausa, enviamos o estado para o cliente não "perder" a conexão visual
+        // mas não atualizamos posições.
+        return; 
+    }
+
     const dt = TICK_MS / 1000;
+    gameTime += dt;
+
+    // --- LÓGICA DO INFERNO (SERVER SIDE) ---
+    phaseTimer += dt;
+    
+    if (!isHell && phaseTimer >= HEAVEN_DURATION) {
+        // Entrar no Inferno
+        isHell = true;
+        phaseTimer = 0;
+        // Escolher modo aleatório (exceto o null=0 e o end_list)
+        currentHellMode = randomInt(1, hellMode.end_list - 1); 
+        console.log("MODO INFERNO ATIVADO:", currentHellMode);
+    } 
+    else if (isHell && phaseTimer >= HELL_DURATION) {
+        // Voltar ao Céu
+        isHell = false;
+        phaseTimer = 0;
+        currentHellMode = hellMode.null;
+        console.log("VOLTÁMOS AO CÉU");
+    }
 
     // 1. Atualizar física
-    const updateResult = ball.update(dt);
+    const paddles = [paddleLeft, paddleRight];
+    const updateResult = ball.update(dt, paddles);
 
     if (updateResult === 'left')
         score.left++;
@@ -92,7 +166,11 @@ setInterval(() => {
             { side: 'left', pos: paddleLeft.pos.asArray() },
             { side: 'right', pos: paddleRight.pos.asArray() }
         ],
-        score: score
+        score: score,
+        time: gameTime,
+        hellTimer: phaseTimer, // Envia o timer da fase atual para a UI
+        isHell: isHell,
+        activeHellMode: currentHellMode
     };
 
     // 3. Enviar

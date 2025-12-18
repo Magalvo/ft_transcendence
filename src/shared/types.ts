@@ -1,5 +1,14 @@
 // src/shared/types.ts
 
+export const GameStatus = {
+    WAITING: 0,
+    RUNNING: 1,
+    PAUSED: 2,
+    ENDED: 3
+} as const;
+
+export type GameStatus = typeof GameStatus[keyof typeof GameStatus];
+
 export interface IVector3 {
     x: number;
     y: number;
@@ -25,7 +34,9 @@ export interface IGameState {
     paddles: IPaddleState[];
     balls: IBallState[];
     score: { left: number; right: number };
+    status: GameStatus;
     time: number;
+    hellTimer: number;
     isHell: boolean;
-    hellMode: number;
+    activeHellMode: number;
 }
