@@ -70,4 +70,6 @@ export interface GameData {
     flags: GameFlags;
     obj2D: Objects2D;
     env: Environment3D;
+    socket?: any;
+    mySide?: string;
 }

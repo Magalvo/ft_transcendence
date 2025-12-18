@@ -10,6 +10,8 @@ import {
   updateHellTimer,
   magicBallsController,
   type GameData,
+  mov,
+  type Mov
 } from "../../index.js";
 
 /**
@@ -54,9 +56,9 @@ function updateGameObjects(
 ) {
   // Update the table, balls, and paddles
   data.obj3D.table.update(data);
-  for (const ball of data.obj3D.balls) {
-    ball.update(data);
-  }
+  // for (const ball of data.obj3D.balls) {
+  //   ball.update(data);
+  // }
   for (const paddle of data.obj3D.paddles) {
     paddle.update(data);
   }
@@ -70,4 +72,27 @@ function updateGameObjects(
   magicBallsController(data);
   updateEnvironment(data);
   updateMusic(data);
+
+  // ... código anterior ...
+  handleKeyboardEvents(data); // Isto atualiza data.input.left_paddle_mov baseado nas teclas
+
+  if (data.socket && data.mySide) {
+      // Determinar qual o comando que devo enviar baseado no meu lado
+      let myCommand : Mov = mov.null;
+
+      // Se eu sou LEFT, leio as teclas associadas ao Left (WASD) ou Setas (se preferires)
+      // Nota: O handleKeyboardEvents atual lê WASD para left e SETAS para right.
+      // Podes querer unificar isso depois (usar setas para ambos), mas para já:
+      
+      if (data.mySide === 'left') {
+          myCommand = data.input.left_paddle_mov; 
+      } else if (data.mySide === 'right') {
+          myCommand = data.input.right_paddle_mov;
+      }
+
+      // Enviar apenas se eu for um jogador ativo
+      if (data.mySide !== 'spectator') {
+          data.socket.emit('input', { side: data.mySide, cmd: myCommand });
+      }
+  }
 }
