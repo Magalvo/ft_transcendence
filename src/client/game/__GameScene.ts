@@ -12,6 +12,7 @@ import {
   createInitialObjects3D,
   type GameData,
   closeMainMenu,
+  pauseScreen,
 } from "../index.js";
 import { io, Socket } from "socket.io-client";
 
@@ -39,6 +40,10 @@ export class GameScene {
     // destroy old scene (if any)
     if (this.scene)
       this.scene.dispose();
+
+    if (this.socket) {
+        this.socket.disconnect();
+    }
 
     // create new scene
     this.scene = new BABYLON.Scene(this.engine);
@@ -108,6 +113,37 @@ export class GameScene {
       }
     });
 
+    // OUVIR EVENTOS DE PAUSA DO SERVIDOR
+    this.socket.on('gamePaused', () => {
+        console.log("Jogo Pausado pelo Servidor");
+        // Precisamos de importar a função 'pauseScreen' neste ficheiro se não estiver
+        import("../index.js").then(({ pauseScreen }) => {
+             // Forçamos a flag para true para a função pauseScreen criar a UI
+             this.data.flags.game_running = true; // Truque para o pauseScreen aceitar criar menu
+             pauseScreen(this.data);
+             this.data.flags.game_running = false; // Estado real
+        });
+    });
+
+    this.socket.on('gameResumed', () => {
+        console.log("Jogo Retomado");
+        // Removemos o menu de pausa manualmente se necessário, 
+        // ou chamamos uma função de resume.
+        // O jeito mais fácil é manipular os objetos diretamente ou usar o resumeGame se o exportares.
+        
+        if (this.data.obj2D.guiPauseMenu) {
+            this.data.obj2D.guiPauseMenu.dispose();
+            this.data.obj2D.guiPauseMenu = undefined;
+        }
+        this.data.env.camera.detachControl();
+        this.data.flags.game_running = true;
+        this.data.flags.pause_screen = false;
+        
+        // Retomar música
+        this.data.env.hellMusic.play();
+        this.data.env.heavenMusic.play();
+    });
+
     // OUVIR O ESTADO DO JOGO (60 vezes por segundo)
     this.socket.on("gameState", (serverState: any) => {
       const ball = this.data.obj3D.balls[0];
@@ -138,12 +174,14 @@ export class GameScene {
 
       if (serverState.isHell) {
         this.data.mods.devilElapsed = serverState.hellTimer;
+        this.data.mods.goodElapsed = 0;
       } else {
         this.data.mods.goodElapsed = serverState.hellTimer;
+        this.data.mods.devilElapsed = 0;
       }
 
       if (serverState.status === 1 && !this.data.flags.game_running) {
-        // este código nunca chega a ser executado
+        console.log("JOGO COMEÇOU! Fechando menu...");
         closeMainMenu(this.data);
         this.data.flags.game_running = true;
       }

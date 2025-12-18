@@ -9,15 +9,18 @@ import type { Environment3D, GameData } from "../../index.js";
  * @param data - The global game state
  */
 export function pauseScreen(data: GameData) {
+  if (data.obj2D.guiPauseMenu) {
+    return;
+  }
   if (data.flags.game_running === true) {
     data.obj2D.guiPauseMenu = createPauseScreen(data);
   }
-
   // Allow resuming the game with the 'O' key
   if (data.input.keysPressed[keyCode.O]) {
-    if (data.obj2D.guiPauseMenu) {
-      resumeGame(data);
-      data.obj2D.guiPauseMenu = undefined;
+    if (data.socket) {
+      data.socket.emit('pauseGame');
+      // Limpar input para não enviar multiplos
+      data.input.keysPressed[keyCode.O] = false;
     }
   }
 }
@@ -28,7 +31,7 @@ export function pauseScreen(data: GameData) {
  * @param parts3D - 3D elements of the scene
  * @param guiTexture - The GUI instance to remove
  */
-function resumeGame(data: GameData) {
+export function resumeGame(data: GameData) {
   // Remove overlay
   if (data.obj2D.guiPauseMenu)
     data.obj2D.guiPauseMenu.dispose();
@@ -103,7 +106,9 @@ function createButtons(data: GameData, guiTexture: AdvancedDynamicTexture) {
   resumeBtn.left = "-10%";
   resumeBtn.fontSize = 32;
   resumeBtn.onPointerUpObservable.add(() => {
-    resumeGame(data);
+    if (data.socket) {
+      data.socket.emit('pauseGame');
+    }
   });
   guiTexture.addControl(resumeBtn);
 

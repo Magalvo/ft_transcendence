@@ -19,12 +19,15 @@ const io = new Server(httpServer, {
 const PORT = 3000;
 
 // --- ESTADO DO JOGO ---
-let status:GameStatus = GameStatus.WAITING;
+let status: GameStatus = GameStatus.WAITING;
 
 const ball = new ServerBall(0, 0);
 const paddleLeft = new ServerPaddle('left', -68);
 const paddleRight = new ServerPaddle('right', 68);
 const score = { left: 0, right: 0 };
+
+let lastPauseToggle = 0; 
+const PAUSE_COOLDOWN = 500;
 
 const inputs = {
     left: mov.null,
@@ -63,7 +66,7 @@ io.on('connection', (socket) => {
 
     socket.on('playerReady', () => {
         const side = (players.left === socket.id) ? 'left' : (players.right === socket.id) ? 'right' : null;
-        
+
         if (side) {
             playersReady[side] = true;
             console.log(`Jogador ${side} está pronto!`);
@@ -77,12 +80,21 @@ io.on('connection', (socket) => {
 
     // --- NOVO: Pausa (Qualquer jogador pode pausar) ---
     socket.on('pauseGame', () => {
+        const now = Date.now();
+        
+        if (now - lastPauseToggle < PAUSE_COOLDOWN) {
+            return; 
+        }
+        lastPauseToggle = now;
+
         if (status === GameStatus.RUNNING) {
             status = GameStatus.PAUSED;
-            io.emit('gamePaused'); // Avisa todos para mostrar menu
+            io.emit('gamePaused'); 
+            console.log("JOGO PAUSADO");
         } else if (status === GameStatus.PAUSED) {
             status = GameStatus.RUNNING;
             io.emit('gameResumed');
+            console.log("JOGO RETOMADO");
         }
     });
 
@@ -119,48 +131,48 @@ const TICK_RATE = 60;
 const TICK_MS = 1000 / TICK_RATE; // ~16.66 ms
 
 setInterval(() => {
-    if (status !== GameStatus.RUNNING) {
-        // Mesmo em pausa, enviamos o estado para o cliente não "perder" a conexão visual
-        // mas não atualizamos posições.
-        return; 
-    }
 
     const dt = TICK_MS / 1000;
-    gameTime += dt;
 
-    // --- LÓGICA DO INFERNO (SERVER SIDE) ---
-    phaseTimer += dt;
-    
-    if (!isHell && phaseTimer >= HEAVEN_DURATION) {
-        // Entrar no Inferno
-        isHell = true;
-        phaseTimer = 0;
-        // Escolher modo aleatório (exceto o null=0 e o end_list)
-        currentHellMode = randomInt(1, hellMode.end_list - 1); 
-        console.log("MODO INFERNO ATIVADO:", currentHellMode);
-    } 
-    else if (isHell && phaseTimer >= HELL_DURATION) {
-        // Voltar ao Céu
-        isHell = false;
-        phaseTimer = 0;
-        currentHellMode = hellMode.null;
-        console.log("VOLTÁMOS AO CÉU");
+    if (status === GameStatus.RUNNING) {
+
+        gameTime += dt;
+
+        // --- LÓGICA DO INFERNO (SERVER SIDE) ---
+        phaseTimer += dt;
+
+        if (!isHell && phaseTimer >= HEAVEN_DURATION) {
+            // Entrar no Inferno
+            isHell = true;
+            phaseTimer = 0;
+            // Escolher modo aleatório (exceto o null=0 e o end_list)
+            currentHellMode = randomInt(1, hellMode.end_list - 1);
+            console.log("MODO INFERNO ATIVADO:", currentHellMode);
+        }
+        else if (isHell && phaseTimer >= HELL_DURATION) {
+            // Voltar ao Céu
+            isHell = false;
+            phaseTimer = 0;
+            currentHellMode = hellMode.null;
+            console.log("VOLTÁMOS AO CÉU");
+        }
+
+        // 1. Atualizar física
+        const paddles = [paddleLeft, paddleRight];
+        const updateResult = ball.update(dt, paddles);
+
+        if (updateResult === 'left')
+            score.left++;
+        else if (updateResult === 'right')
+            score.right++;
+
+        paddleLeft.update(dt, inputs.left);
+        paddleRight.update(dt, inputs.right);
     }
-
-    // 1. Atualizar física
-    const paddles = [paddleLeft, paddleRight];
-    const updateResult = ball.update(dt, paddles);
-
-    if (updateResult === 'left')
-        score.left++;
-    else if (updateResult === 'right')
-        score.right++;
-
-    paddleLeft.update(dt, inputs.left);
-    paddleRight.update(dt, inputs.right);
 
     // 2. Snapshot
     const gameState = {
+        status: status,
         ball: ball.pos.asArray(),
         paddles: [
             { side: 'left', pos: paddleLeft.pos.asArray() },
@@ -168,7 +180,7 @@ setInterval(() => {
         ],
         score: score,
         time: gameTime,
-        hellTimer: phaseTimer, // Envia o timer da fase atual para a UI
+        hellTimer: phaseTimer,
         isHell: isHell,
         activeHellMode: currentHellMode
     };

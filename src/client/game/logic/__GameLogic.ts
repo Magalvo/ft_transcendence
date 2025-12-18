@@ -26,7 +26,12 @@ export function gameUpdate(
   data: GameData
 ) {
   // handle pause screen
-  if (data.flags.pause_screen) pauseScreen(data);
+  if (data.flags.pause_screen) {
+    if (data.socket) {
+        data.socket.emit('pauseGame');
+    }
+    data.flags.pause_screen = false;
+  }
 
   // If the game is not running, hide UI and exit update
   if (!data.flags.game_running) {
