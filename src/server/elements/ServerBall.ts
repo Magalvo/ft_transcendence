@@ -1,6 +1,6 @@
-import { Vector3 } from "../../shared/Vector3.js";
-import { randomInt, normalizeAngle180 } from "../../shared/utils.js";
-import { ServerPaddle } from "./ServerPaddle.js";
+import { Vector3 } from "../../shared/Vector3.ts";
+import { randomInt, normalizeAngle180 } from "../../shared/utils.ts";
+import { ServerPaddle } from "./ServerPaddle.ts";
 
 export class ServerBall {
     public pos: Vector3;

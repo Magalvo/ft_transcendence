@@ -1,5 +1,5 @@
-import { Vector3 } from "../../shared/Vector3.js";
-import { mov, type Mov } from "../../shared/strings.js";
+import { Vector3 } from "../../shared/Vector3.ts";
+import { mov, type Mov } from "../../shared/strings.ts";
 
 export class ServerPaddle {
     public pos: Vector3;

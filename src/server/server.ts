@@ -1,11 +1,11 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { ServerBall } from './elements/ServerBall.js';
-import { ServerPaddle } from './elements/ServerPaddle.js';
-import { hellMode, mov } from '../shared/strings.js';
-import { GameStatus } from '../shared/types.js';
-import { randomInt } from '../shared/utils.js';
+import { ServerBall } from './elements/ServerBall.ts';
+import { ServerPaddle } from './elements/ServerPaddle.ts';
+import { hellMode, mov } from '../shared/strings.ts';
+import { GameStatus } from '../shared/types.ts';
+import { randomInt } from '../shared/utils.ts';
 
 const app = express();
 const httpServer = createServer(app);
