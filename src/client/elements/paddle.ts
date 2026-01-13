@@ -28,11 +28,11 @@ export class Paddle extends GameObject {
 
   // Main update: movement, collision, appearance
   public update(data: GameData) {
-    this.human = this.isHuman(data);
-    this.human ? this.handleHuman(data) : this.handleBot(data);
+    // this.human = this.isHuman(data);
+    // this.human ? this.handleHuman(data) : this.handleBot(data);
     this.keepWithinTable(data.obj3D.table);
     this.updateAppearance(data);
-    this.applyEffects(data);
+    // this.applyEffects(data);
   }
 
   // Check if this paddle is human-controlled

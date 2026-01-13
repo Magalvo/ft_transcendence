@@ -117,10 +117,12 @@ export class Table extends GameObject {
   /**
    * Updates the table color theme based on camp side.
    */
-  public update(data: GameData) {
-    if (!data.is_hell)
+  public update(data: GameData) { }
+
+  public updateColor(status: "heaven" | "hell") {
+    if (status == "heaven")
       this.changeTableColors(this.good_color);
-    if (data.is_hell)
+    if (status == "hell")
       this.changeTableColors(this.bad_color);
   }
 

@@ -7,21 +7,27 @@ export class ServerBall {
     public velocity: number = 0; // Velocidade escalar
     public angle: number = 0;    // Ângulo em graus
     public radius: number = 2;
-    private speedBase: number = 50; // Velocidade base
+    private readonly BASE_RADIUS = 2;
+    private readonly BASE_SPEED = 50;
+    private speedMultiplier: number = 1;
+    private tableLimits = { x: 170, z: 90 };
 
-    private tableLimits = { x: 170, z: 90 }; 
 
     constructor(x: number, z: number) {
         this.pos = new Vector3(x, 2, z);
         this.throwBall();
+        this.resetStats();
     }
 
     // O update agora recebe as raquetes
     public update(deltaTime: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
+
+        const currentSpeed = this.velocity * this.speedMultiplier;
+
         const a = this.angle * Math.PI / 180;
-        
+
         // Calcular vetor de movimento
-        const moveStep = this.velocity * deltaTime; 
+        const moveStep = this.velocity * deltaTime;
         const vx = moveStep * Math.cos(a);
         const vz = moveStep * Math.sin(a);
 
@@ -30,7 +36,7 @@ export class ServerBall {
         this.pos.z += vz;
 
         // Verificar colisões
-        this.checkPaddleCollisions(paddles); // <--- NOVO
+        this.checkPaddleCollisions(paddles);
         return this.checkWallCollisions();
     }
 
@@ -40,48 +46,37 @@ export class ServerBall {
 
             // Lógica AABB (Axis-Aligned Bounding Box)
             // Verifica se a bola (ponto + raio) sobrepõe a caixa da raquete
-            const collisionX = 
-                (this.pos.x + this.radius >= pBox.left) && 
+            const collisionX =
+                (this.pos.x + this.radius >= pBox.left) &&
                 (this.pos.x - this.radius <= pBox.right);
-            
-            const collisionZ = 
-                (this.pos.z + this.radius >= pBox.near) && 
+
+            const collisionZ =
+                (this.pos.z + this.radius >= pBox.near) &&
                 (this.pos.z - this.radius <= pBox.far);
 
             if (collisionX && collisionZ) {
                 // HOUVE COLISÃO!
-                
-                // 1. Determinar direção do ressalto
-                // Se bateu na raquete Esquerda (side='left'), a bola tem de ir para a Direita (X positivo)
-                // Se bateu na Direita, tem de ir para a Esquerda.
-                
-                // Correção simples para evitar que a bola "cole" dentro da raquete:
-                // Forçamos a posição da bola para fora da raquete imediatamente.
                 if (paddle.side === 'left') {
                     this.pos.x = pBox.right + this.radius + 0.1;
-                    // Ângulos que vão para a direita: -90 a 90. 
-                    // Vamos inverter o X mantendo o componente Z.
-                    if (Math.abs(this.angle) > 90) { // Se estava a ir para a esquerda
-                         this.angle = 180 - this.angle; 
+                    if (Math.abs(this.angle) > 90) {
+                        this.angle = 180 - this.angle;
                     }
                 } else {
                     this.pos.x = pBox.left - this.radius - 0.1;
-                    if (Math.abs(this.angle) < 90) { // Se estava a ir para a direita
+                    if (Math.abs(this.angle) < 90) {
                         this.angle = 180 - this.angle;
                     }
                 }
 
-                // 2. Adicionar "Efeito" (English) dependendo de onde bateu na raquete (Z)
-                // Se bater nas pontas, o ângulo abre mais.
-                const hitOffset = this.pos.z - paddle.pos.z;
-                // Ex: hitOffset é -10 (bateu em baixo). Alteramos ligeiramente o ângulo.
-                this.angle += hitOffset * 0.5; 
+                if (this.radius > 2.5) {
+                    paddle.applyImpact();
+                }
 
-                // 3. Normalizar ângulo e aumentar velocidade (Gameplay)
+                const hitOffset = this.pos.z - paddle.pos.z;
+                this.angle += hitOffset * 0.5;
+
                 this.angle = normalizeAngle180(this.angle);
-                this.velocity = Math.min(this.velocity * 1.05, this.speedBase * 2); // Acelera 5% até ao dobro
-                
-                console.log(`SERVER: Ping! Paddle ${paddle.side}`);
+                this.velocity = Math.min(this.velocity * 1.05, this.BASE_SPEED * 2);
             }
         }
     }
@@ -89,8 +84,8 @@ export class ServerBall {
     private checkWallCollisions(): 'left' | 'right' | null {
         // ... (Mantém o código igual ao passo anterior) ...
         // Apenas certifica-te que quando fazes this.throwBall(), resetas a velocidade:
-        // this.velocity = this.speedBase; 
-        
+        // this.velocity = this.BASE_SPEED; 
+
         // Copia a tua função checkWallCollisions do Passo 7, 
         // mas garante que dentro dela usas o throwBall correto.
         const halfWidth = this.tableLimits.x / 2;
@@ -112,12 +107,34 @@ export class ServerBall {
         return null;
     }
 
+    public setBigBall(active: boolean) {
+        if (active) {
+            this.radius = 5; // Bola Gigante (2.5x maior)
+        } else {
+            this.radius = this.BASE_RADIUS;
+        }
+    }
+
+    public setFastBall(active: boolean) {
+        if (active) {
+            this.speedMultiplier = 2.0; // Dobro da velocidade
+        } else {
+            this.speedMultiplier = 1.0;
+        }
+    }
+
+    public resetStats() {
+        this.radius = this.BASE_RADIUS;
+        this.speedMultiplier = 1.0;
+        this.velocity = this.BASE_SPEED;
+    }
+
     public throwBall() {
         this.pos.x = 0;
         this.pos.z = 0;
-        this.velocity = this.speedBase; // Reset velocidade
-        this.angle = randomInt(0, 1) === 0 ? 0 : 180; 
-        this.angle += randomInt(-45, 45);
+        this.velocity = this.BASE_SPEED;
+        this.angle = Math.random() < 0.5 ? 0 : 180; // ?
+        this.angle += (Math.random() * 90) - 45; // ?
         this.angle = normalizeAngle180(this.angle);
     }
 }

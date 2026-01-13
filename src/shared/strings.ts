@@ -26,8 +26,8 @@ export const hellMode = {
   multipleBalls: 6,
   infinite_balls: 7,
   twisted_view: 8,
-
-  end_list: 8
+  drunk_view: 9,
+  end_list: 10
 } as const;
 
 export type HellMode = typeof hellMode[keyof typeof hellMode];
@@ -37,7 +37,7 @@ export const magicEffect = {
   null: 0,
   big: 1,
   small: 2,
-  slow: 3, 
+  slow: 3,
   normal_speed: 4,
   crazy_fast: 5,
   freeze: 6,
