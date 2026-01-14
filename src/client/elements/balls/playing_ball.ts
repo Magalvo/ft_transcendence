@@ -48,7 +48,7 @@ export class PlayingBall extends Ball {
       if (effect === magicEffect.small) size = new Vec3(0.5, 0.5, 0.5);
       if (effect === magicEffect.slow) speed = 0.5;
       if (effect === magicEffect.normal_speed) speed = 1;
-      if (effect === magicEffect.crazy_fast) speed = 4;
+      if (effect === magicEffect.fast) speed = 4;
     }
     this.changeSize(size);
     this.speed_modifier = speed;

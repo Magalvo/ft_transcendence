@@ -11,9 +11,9 @@ import type { GameData } from "../../index.js";
 export function handleKeyboardEvents(data: GameData) {
     cameraMov(data);
     gamePause(data);
-    if (data.mods.hell_mode == hellMode.inverted_keys)
-        invertedPlayersMove(data);
-    else
+    // if (data.mods.hell_mode == hellMode.inverted_keys)
+    //     invertedPlayersMove(data);
+    // else
         normalPlayersMove(data);
 }
 

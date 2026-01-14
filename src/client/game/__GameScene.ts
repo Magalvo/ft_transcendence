@@ -204,7 +204,7 @@ export class GameScene {
         this.data.obj3D.table.updateColor("heaven");
       }
 
-      
+
       if (serverState.status === 1 && !this.data.flags.game_running) {
         console.log("JOGO COMEÇOU! Fechando menu...");
         closeMainMenu(this.data);
@@ -260,20 +260,15 @@ export class GameScene {
         newMesh.position.set(sb.x, sb.y, sb.z);
 
         const mat = new BABYLON.StandardMaterial("mbMat", this.scene);
-        // Cores baseadas no tipo de efeito
-        if (sb.type === 1) mat.emissiveColor = BABYLON.Color3.Red();
-        if (sb.type === 2) mat.emissiveColor = BABYLON.Color3.Blue();
-        if (sb.type === 3) mat.emissiveColor = BABYLON.Color3.Green();
+
+        const ballCollor = BABYLON.Color3.Random();
+        mat.emissiveColor = ballCollor;
         newMesh.material = mat;
 
         // IMPORTANTE: Definir o ID
         newMesh.metadata = { id: sb.id };
 
-        let fireColor = new BABYLON.Color3(1, 1, 1);
-        if (sb.type === 1) fireColor = new BABYLON.Color3(1, 0, 0); // Red
-        if (sb.type === 2) fireColor = new BABYLON.Color3(0, 0, 1); // Blue
-        if (sb.type === 3) fireColor = new BABYLON.Color3(0, 1, 0); // Green
-
+        let fireColor = ballCollor;
         this.addFireEffect(newMesh, fireColor, true);
 
         localBalls.push(newMesh);
@@ -281,88 +276,105 @@ export class GameScene {
     });
   }
 
+  // Versão reforçada que impede criar múltiplos fogos na mesma bola
   private addFireEffect(mesh: BABYLON.AbstractMesh, color: BABYLON.Color3, isMagic: boolean) {
-    // Se já tiver sistema de partículas, não cria outro
+    // 1. Verificação Rápida via Metadata
     if (mesh.metadata && mesh.metadata.particleSystem) return;
+
+    // 2. Verificação Robusta (Brute Force): Procura na cena se já existe fogo neste mesh
+    // Isto impede a acumulação "infinita" se o metadata for perdido
+    const existingSystem = this.scene.particleSystems.find(ps => ps.emitter === mesh && ps.name === "fire");
+    if (existingSystem) {
+      if (!mesh.metadata) mesh.metadata = {};
+      mesh.metadata.particleSystem = existingSystem;
+      return;
+    }
 
     // Cria o sistema
     const particleSystem = new BABYLON.ParticleSystem("fire", 2000, this.scene);
     particleSystem.particleTexture = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/flare.png", this.scene);
 
-    particleSystem.emitter = mesh; // O fogo segue a bola
+    particleSystem.emitter = mesh;
 
-    // Cores
     particleSystem.color1 = new BABYLON.Color4(color.r, color.g, color.b, 1.0);
-    particleSystem.color2 = new BABYLON.Color4(1, 0, 0, 1.0); // Vermelho no fim
+    particleSystem.color2 = new BABYLON.Color4(1, 0, 0, 1.0);
     particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
 
-    // Tamanho e Vida (Ajusta a gosto)
     particleSystem.minSize = isMagic ? 0.5 : 1.0;
     particleSystem.maxSize = isMagic ? 1.5 : 3.0;
     particleSystem.minLifeTime = 0.2;
     particleSystem.maxLifeTime = 0.5;
     particleSystem.emitRate = 300;
-
-    // Velocidade de emissão (fogo fica para trás quando a bola anda)
     particleSystem.minEmitPower = 1;
     particleSystem.maxEmitPower = 3;
     particleSystem.updateSpeed = 0.005;
 
     particleSystem.start();
 
-    // Guardar referência no metadata para podermos apagar depois!
     if (!mesh.metadata) mesh.metadata = {};
     mesh.metadata.particleSystem = particleSystem;
   }
 
+  // Versão reforçada que limpa TUDO quando a bola morre
   private syncPlayingBalls(serverBalls: any[], isHell: boolean) {
     const localBalls = this.data.obj3D.balls;
 
-    // 1. Criar novas bolas se necessário (Bolas Multiplas)
+    // 1. Criar bolas
     while (localBalls.length < serverBalls.length) {
-      // Cria a bola imediatamente
+      // Importante: createPlayingBall deve estar importado no topo do ficheiro
       const newBall = createPlayingBall(this.scene, 0, 0);
       localBalls.push(newBall);
     }
 
-    // 2. Sincronizar Posição e FOGO
+    // 2. Sincronizar
     serverBalls.forEach((sb: any, index: number) => {
       if (localBalls[index]) {
         const ball = localBalls[index];
         const [bx, by, bz] = sb.pos;
         ball.mesh.position.set(bx, by, bz);
 
-        // Escala
         const radius = sb.radius || 2;
         const scale = radius / 2;
         ball.mesh.scaling.set(scale, scale, scale);
 
-        // --- LÓGICA DE FOGO CORRIGIDA ---
+        // Lógica de Fogo
         if (isHell) {
-          // Se estamos no inferno, ADICIONA fogo a TODAS (principal e extras)
           this.addFireEffect(ball.mesh, new BABYLON.Color3(1, 0.5, 0), false);
         } else {
-          // Se NÃO estamos no inferno, REMOVE fogo de TODAS
-          if (ball.mesh.metadata && ball.mesh.metadata.particleSystem) {
-            ball.mesh.metadata.particleSystem.stop();
-            ball.mesh.metadata.particleSystem.dispose();
-            ball.mesh.metadata.particleSystem = undefined;
-          }
+          // Remover fogo da bola principal quando o inferno acaba
+          this.removeFireFromMesh(ball.mesh);
         }
       }
     });
 
-    // 3. Remover bolas extra e limpar partículas
+    // 3. Remover bolas extra (Limpeza Profunda)
     while (localBalls.length > serverBalls.length) {
       const removedBall = localBalls.pop();
       if (removedBall) {
-        if (removedBall.mesh.metadata && removedBall.mesh.metadata.particleSystem) {
-          removedBall.mesh.metadata.particleSystem.stop();
-          removedBall.mesh.metadata.particleSystem.dispose();
-        }
-        removedBall.mesh.dispose();
+        // Remove qualquer fogo agarrado a esta bola antes de a destruir
+        this.removeFireFromMesh(removedBall.mesh);
+        removedBall.dispose();
       }
     }
+  }
+
+  // Novo método auxiliar para garantir limpeza
+  private removeFireFromMesh(mesh: BABYLON.AbstractMesh) {
+    // 1. Tenta via Metadata
+    if (mesh.metadata && mesh.metadata.particleSystem) {
+      mesh.metadata.particleSystem.stop();
+      mesh.metadata.particleSystem.dispose();
+      mesh.metadata.particleSystem = undefined;
+    }
+
+    // 2. Tenta via Busca na Cena (Caso o metadata tenha falhado)
+    // Percorre todos os sistemas e apaga os que pertencem a este mesh
+    this.scene.particleSystems.forEach(ps => {
+      if (ps.emitter === mesh) {
+        ps.stop();
+        ps.dispose();
+      }
+    });
   }
 
   public startGame(): void {
@@ -383,16 +395,14 @@ export class GameScene {
       if (!this.data.flags.return_main_menu) {
         const deltaTime = (now - lastTime) / 1000;
         lastTime = now;
-
         gameUpdate(deltaTime, this.data);
       }
 
-      const tableMesh = this.data.obj3D.table.mesh;
       const isHell = this.data.mods.is_hell;
 
-      if (tableMesh) {
-        const targetRot = isHell ? Math.PI : 0;
-        tableMesh.rotation.z = BABYLON.Scalar.Lerp(tableMesh.rotation.z, targetRot, 0.05);
+      // 2. COR DA MESA (MANTIDO)
+      if (this.data.obj3D.table) {
+         this.data.obj3D.table.updateColor(isHell ? "hell" : "heaven");
       }
 
       this.scene.render();

@@ -95,7 +95,7 @@ export class Paddle extends GameObject {
       if (effect === magicEffect.thick) size_x = 5;
       if (effect === magicEffect.slow) speed = this.speed.original * 0.5;
       if (effect === magicEffect.normal_speed) speed = this.speed.original * 1;
-      if (effect === magicEffect.crazy_fast) speed = this.speed.original * 4;
+      if (effect === magicEffect.fast) speed = this.speed.original * 4;
       if (effect === magicEffect.freeze) speed = this.speed.original * 0;
     }
     this.changeSize(new Vec3(size_x, size_y, size_z));

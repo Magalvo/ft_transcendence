@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { ServerBall } from './elements/ServerBall.js';
 import { ServerPaddle } from './elements/ServerPaddle.js';
-import { hellMode, mov, type Mov } from '../shared/strings.js';
+import { hellMode, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
 import { GameStatus } from '../shared/types.js';
 import { randomInt } from '../shared/utils.js';
 import { ServerMagicBall } from './elements/ServerMagicBall.js';
@@ -40,8 +40,8 @@ const players: { [side: string]: string | null } = { left: null, right: null };
 const playersReady: { [side: string]: boolean } = { left: false, right: false };
 
 // Timers Globais
-const HEAVEN_DURATION = 10;
-const HELL_DURATION = 10;
+const HEAVEN_DURATION = 30;
+const HELL_DURATION = 15;
 let gameTime = 0;
 let phaseTimer = 0;
 let isHell = false;
@@ -51,7 +51,8 @@ let currentHellMode: number = hellMode.null;
 let magicBalls: ServerMagicBall[] = [];
 let nextMagicBallId = 1;
 let magicBallTimer = 0;
-const MAGIC_BALL_INTERVAL = 5;
+const MAGIC_BALL_INTERVAL = 3;
+const MAGIC_BALL_MAX = 5;
 
 // --- SOCKET.IO EVENTOS ---
 io.on('connection', (socket) => {
@@ -158,23 +159,19 @@ setInterval(() => {
             paddleRight.resetEffects();
             magicBalls = [];
 
-            currentHellMode = hellMode.multipleBalls;//randomInt(1, hellMode.end_list - 1);
+
+            /* SLOW PADDLES ARE NOT DONE */
+            currentHellMode = hellMode.slow_paddles;// randomInt(1, hellMode.end_list);
             console.log("MODO INFERNO ATIVADO:", currentHellMode);
 
             switch (currentHellMode) {
                 case hellMode.big_balls:
-                    // CORREÇÃO: Aplicar a todas as bolas do array
                     balls.forEach(b => b.setBigBall(true));
                     break;
 
                 case hellMode.small_paddles:
                     paddleLeft.applyPowerUp(2);
                     paddleRight.applyPowerUp(2);
-                    break;
-
-                case hellMode.fast_balls:
-                    // CORREÇÃO: Aplicar a todas as bolas
-                    balls.forEach(b => b.setFastBall(true));
                     break;
 
                 case hellMode.multipleBalls:
@@ -206,17 +203,14 @@ setInterval(() => {
             magicBallTimer += dt;
             if (magicBallTimer >= MAGIC_BALL_INTERVAL) {
                 magicBallTimer = 0;
-                // Limitar máximo de bolas (ex: 3)
-                if (magicBalls.length < 3) {
-                    // Efeito aleatório (ex: 1 a 3)
-                    const effect = randomInt(1, 5);
+                if (magicBalls.length < MAGIC_BALL_MAX) {
+                    const effect = randomInt(1, magicEffect.end_list) as MagicEffect;
                     const mb = new ServerMagicBall(nextMagicBallId++, effect);
                     magicBalls.push(mb);
                     console.log("Spawn Magic Ball:", mb.id);
                 }
             }
         } else {
-            // Se entrámos no inferno, removemos todas as bolas mágicas
             magicBalls = [];
         }
 
@@ -248,22 +242,37 @@ setInterval(() => {
             }
         }
 
+
+
         let leftCmd: Mov = inputs.left as Mov;
         let rightCmd: Mov = inputs.right as Mov;
 
-        // APLICAR INVERTED KEYS (ID: 1)
         if (currentHellMode === hellMode.inverted_keys) {
-            leftCmd = invertInput(leftCmd);
-            rightCmd = invertInput(rightCmd);
+            if (leftCmd === mov.far)
+                leftCmd = mov.near;
+            else if (leftCmd === mov.near)
+                leftCmd = mov.far;
+            //
+            if (rightCmd === mov.far)
+                rightCmd = mov.near;
+            else if (rightCmd === mov.near)
+                rightCmd = mov.far;
         }
 
-        // Passamos o comando (já invertido ou não) para a raquete
         paddleLeft.update(dt, leftCmd);
         paddleRight.update(dt, rightCmd);
 
         // 1. Atualizar física
         const paddles = [paddleLeft, paddleRight];
         balls.forEach(ball => {
+            if (isHell) {
+                const speedMod =
+                    (currentHellMode === hellMode.fast_balls)
+                        ? 4
+                        : 2;
+                ball.setSpeedModifier(speedMod);
+            }
+
             const updateResult = ball.update(dt, paddles);
 
             if (updateResult === 'left') {
@@ -277,8 +286,8 @@ setInterval(() => {
             }
 
             // Aplicar modos de Inferno ativos às bolas novas também
-            if (currentHellMode === hellMode.big_balls) ball.setBigBall(true);
-            if (currentHellMode === hellMode.fast_balls) ball.setFastBall(true);
+            // if (currentHellMode === hellMode.big_balls) ball.setBigBall(true);
+            // if (currentHellMode === hellMode.fast_balls) ball.setSpeedModifier(true);
         });
     }
 
@@ -310,9 +319,3 @@ setInterval(() => {
 httpServer.listen(PORT, () => {
     console.log(`🚀 server running on http://localhost:${PORT}`);
 });
-
-function invertInput(cmd: Mov): Mov {
-    if (cmd === mov.far) return mov.near;
-    if (cmd === mov.near) return mov.far;
-    return mov.null;
-}

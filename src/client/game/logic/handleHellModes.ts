@@ -16,7 +16,7 @@ export function handleHellModes(data: GameData) {
         case hellMode.big_balls:
             obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.big)); break;
         case hellMode.fast_balls:
-            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.crazy_fast)); break;
+            obj3D.balls.forEach(ball => ball.hellEffects.push(magicEffect.fast)); break;
         case hellMode.small_paddles:
             obj3D.paddles.forEach(paddle => paddle.hellEffects.push(magicEffect.small)); break;
         case hellMode.slow_paddles:

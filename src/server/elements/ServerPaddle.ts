@@ -1,5 +1,5 @@
 import { Vector3 } from "../../shared/Vector3.js";
-import { mov, type Mov } from "../../shared/strings.js";
+import { magicEffect, mov, type MagicEffect, type Mov } from "../../shared/strings.js";
 
 export class ServerPaddle {
     public pos: Vector3;
@@ -17,6 +17,7 @@ export class ServerPaddle {
 
     // Timer do Efeito (em segundos de jogo)
     private effectTimer: number = 0;
+    public currentEffect: MagicEffect = magicEffect.null;
 
     private tableLimits = { z: 90 };
 
@@ -79,32 +80,31 @@ export class ServerPaddle {
         };
     }
 
-    public applyPowerUp(type: number) {
+    public applyPowerUp(effect: MagicEffect) {
         this.resetEffects();
-        this.effectTimer = 10; // Duração: 10 segundos de tempo de jogo
+        this.effectTimer = 10;
+        this.currentEffect = effect;
 
-        console.log(`Applying Effect ${type} to ${this.side}`);
-
-        // Mapeamento baseado no teu código antigo (MagicEffects)
-        // Vamos assumir IDs: 1=Big, 2=Small, 3=Thick, 4=Fast, 5=Slow
-        switch (type) {
-            case 1: // BIG (Tamanho Z)
+        switch (effect) {
+            case magicEffect.big: // BIG (Z)
                 this.depth = this.BASE_DEPTH * 2;
                 break;
-            case 2: // SMALL (Tamanho Z)
+            case magicEffect.small: // SMALL (Z)
                 this.depth = this.BASE_DEPTH * 0.4;
                 break;
-            case 3: // THICK (Tamanho X - Espessura)
+            case magicEffect.thick: // THICK (X - THICKNESS)
                 this.width = this.BASE_WIDTH * 5;
                 break;
-            case 4: // CRAZY FAST
+            case magicEffect.fast:
                 this.speed = this.BASE_SPEED * 4;
                 break;
-            case 5: // SLOW
+            case magicEffect.slow:
                 this.speed = this.BASE_SPEED * 0.5;
                 break;
+            case magicEffect.freeze:
+                this.speed = this.BASE_SPEED * 0.1;
+                break;
             default:
-                console.log("Efeito desconhecido, ignorando.");
                 break;
         }
     }
@@ -114,5 +114,6 @@ export class ServerPaddle {
         this.depth = this.BASE_DEPTH;
         this.speed = this.BASE_SPEED;
         this.effectTimer = 0;
+        this.currentEffect = magicEffect.null;
     }
 }   

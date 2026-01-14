@@ -72,7 +72,7 @@ export class MagicBall extends Ball {
       [magicEffect.small]: [new Color4(0.0, 1.0, 0.4, 1), new Color4(0.01, 0.44, 0.19, 1)],
       [magicEffect.slow]: [new Color4(0.09, 0.18, 0.84, 1), new Color4(0.09, 0.61, 0.84, 1)],
       [magicEffect.normal_speed]: [new Color4(1, 1, 1, 1), new Color4(0.8, 0.8, 0.8, 1)],
-      [magicEffect.crazy_fast]: [new Color4(1, 1, 0.2, 1), new Color4(1, 0.9, 0.1, 1)],
+      [magicEffect.fast]: [new Color4(1, 1, 0.2, 1), new Color4(1, 0.9, 0.1, 1)],
       [magicEffect.freeze]: [new Color4(0.3, 0.8, 1, 1), new Color4(0.6, 0.9, 1, 1)],
       [magicEffect.thick]: [new Color4(0.7, 0.2, 1, 1), new Color4(0.5, 0.1, 0.7, 1)],
     };
@@ -86,7 +86,7 @@ export class MagicBall extends Ball {
       [magicEffect.small]: "Your paddle shrunk!",
       [magicEffect.slow]: "Your paddle is slowed!",
       [magicEffect.normal_speed]: "You have got no effect!",
-      [magicEffect.crazy_fast]: "Super speed!",
+      [magicEffect.fast]: "Super speed!",
       [magicEffect.freeze]: "Frozen paddle!",
       [magicEffect.thick]: "Your paddle is THICK!",
     };

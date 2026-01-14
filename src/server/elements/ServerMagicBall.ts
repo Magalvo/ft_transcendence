@@ -1,31 +1,30 @@
+import type { MagicBall, MagicEffect } from "../../client/index.js";
 import { Vector3 } from "../../shared/Vector3.js";
 import { randomInt, randomFloat2 } from "../../shared/utils.js";
 
 export class ServerMagicBall {
     public id: number;
     public pos: Vector3;
-    public radius: number = 1.5; // Tamanho para colisão
+    public radius: number = 1.5;
     public active: boolean = true;
-    public effectType: number; // ID do efeito (1 a 4, por exemplo)
+    public effectType: MagicEffect;
 
     // Movimento
     private velocity: Vector3;
     private tableLimits = { x: 170, z: 90 };
 
-    constructor(id: number, effectType: number) {
+    constructor(id: number, effectType: MagicEffect) {
         this.id = id;
         this.effectType = effectType;
         
-        // Spawn numa posição aleatória (mas não muito perto das pontas)
         const x = randomInt(-50, 50);
         const z = randomInt(-30, 30);
         this.pos = new Vector3(x, 2, z);
 
-        // Velocidade aleatória lenta para flutuar pela mesa
         this.velocity = new Vector3(
-            randomFloat2(-15, 15), 
+            randomFloat2(20, 50), 
             0, 
-            randomFloat2(-15, 15)
+            randomFloat2(20, 50)
         );
     }
 

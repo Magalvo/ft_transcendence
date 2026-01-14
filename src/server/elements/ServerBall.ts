@@ -1,4 +1,6 @@
+import type { BlockList } from "node:net";
 import { Vector3 } from "../../shared/Vector3.js";
+import { magicEffect } from "../../shared/strings.js";
 import { randomInt, normalizeAngle180 } from "../../shared/utils.js";
 import { ServerPaddle } from "./ServerPaddle.js";
 
@@ -9,7 +11,8 @@ export class ServerBall {
     public radius: number = 2;
     private readonly BASE_RADIUS = 2;
     private readonly BASE_SPEED = 50;
-    private speedMultiplier: number = 1;
+    private speedModifier: number = 1;
+    private thickPaddleSpeedModifier: boolean = false;
     private tableLimits = { x: 170, z: 90 };
 
 
@@ -22,12 +25,14 @@ export class ServerBall {
     // O update agora recebe as raquetes
     public update(deltaTime: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
 
-        const currentSpeed = this.velocity * this.speedMultiplier;
-
         const a = this.angle * Math.PI / 180;
+        const finalSpeedMod =
+            this.thickPaddleSpeedModifier == true
+                ? 2.5
+                : this.speedModifier;
 
         // Calcular vetor de movimento
-        const moveStep = this.velocity * deltaTime;
+        const moveStep = this.velocity * deltaTime * finalSpeedMod;
         const vx = moveStep * Math.cos(a);
         const vz = moveStep * Math.sin(a);
 
@@ -72,6 +77,11 @@ export class ServerBall {
                     paddle.applyImpact();
                 }
 
+                this.thickPaddleSpeedModifier =
+                    (paddle.currentEffect == magicEffect.thick)
+                        ? true
+                        : false;
+
                 const hitOffset = this.pos.z - paddle.pos.z;
                 this.angle += hitOffset * 0.5;
 
@@ -109,32 +119,31 @@ export class ServerBall {
 
     public setBigBall(active: boolean) {
         if (active) {
-            this.radius = 5; // Bola Gigante (2.5x maior)
+            this.radius = 5;
         } else {
             this.radius = this.BASE_RADIUS;
         }
     }
 
-    public setFastBall(active: boolean) {
-        if (active) {
-            this.speedMultiplier = 2.0; // Dobro da velocidade
-        } else {
-            this.speedMultiplier = 1.0;
-        }
+    public setSpeedModifier(modifier: number) {
+        this.speedModifier = modifier;
     }
 
     public resetStats() {
         this.radius = this.BASE_RADIUS;
-        this.speedMultiplier = 1.0;
+        this.speedModifier = 1.0;
         this.velocity = this.BASE_SPEED;
     }
 
     public throwBall() {
-        this.pos.x = 0;
-        this.pos.z = 0;
+        if (this.pos.x && this.pos.y) {
+            this.pos.x = randomInt(-10, 10);
+            this.pos.z = randomInt(-10, 10);
+        }
         this.velocity = this.BASE_SPEED;
-        this.angle = Math.random() < 0.5 ? 0 : 180; // ?
-        this.angle += (Math.random() * 90) - 45; // ?
+        this.angle = Math.random() < 0.5 ? 0 : 180;
+        this.angle += (Math.random() * 90) - 45;
         this.angle = normalizeAngle180(this.angle);
+        this.thickPaddleSpeedModifier = false;
     }
 }

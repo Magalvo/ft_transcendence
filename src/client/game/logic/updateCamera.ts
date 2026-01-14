@@ -11,31 +11,22 @@ function lerp(start: number, end: number, amt: number) {
 export function updateCamera(data: GameData) {
     const camera = data.env.camera;
     const mode = data.mods.hell_mode;
-    // const isHell = data.mods.is_hell; // Já não precisamos desta flag genérica para decidir a posição base
+    const isHell = data.mods.is_hell;
 
-    // --- 1. DEFINIR VALORES PADRÃO (NORMAL / CÉU) ---
-    // Estes são os valores para quando o jogo está normal OU
-    // quando estamos num modo de inferno que não afeta a câmara (ex: Big Balls)
-    let targetAlpha = -Math.PI / 2; // Posição normal (Lado do Player 1)
-    let targetBeta = 1.0;           // Altura normal
-    let targetRadius = 180;         // Zoom normal
+    let targetAlpha = -Math.PI / 2;
+    let targetBeta = 1.0;
+    let targetRadius = 180;
 
-    // --- 2. OVERRIDES ESPECÍFICOS ---
+    if (isHell)
+        targetBeta += Math.PI * 4;
 
-    if (mode === hellMode.twisted_view) {
-        // MODO 8: TWISTED -> Vira 180 graus (Vê do lado do adversário)
-        targetAlpha = Math.PI / 2;
-        // targetBeta = 0.1; // Descomenta se quiseres também virar de cabeça para baixo
-    }
-    else if (mode === hellMode.drunk_view) {
-        // MODO 9: DRUNK -> O efeito de oscilação que gostaste
+    if (mode === hellMode.drunk_view) {
         const time = Date.now() * 0.001;
-        targetAlpha = -Math.PI / 2 + Math.sin(time) * 0.5; // Balança esquerda/direita
-        targetBeta = 1.0 + Math.cos(time * 1.5) * 0.3;     // Balança cima/baixo
-        targetRadius = 180 + Math.sin(time * 2) * 20;      // Zoom in/out ligeiro
+        targetAlpha = -Math.PI / 2 + Math.sin(time) * 0.6; // mov left/right
+        targetBeta = 1.0 + Math.cos(time * 1.5) * 0.4;     // mov up/down
+        targetRadius = 180 + Math.sin(time * 2) * 20;      // zoom in/out
     }
 
-    // --- 3. APLICAR SUAVIZAÇÃO ---
     camera.alpha = lerp(camera.alpha, targetAlpha, 0.05);
     camera.beta = lerp(camera.beta, targetBeta, 0.05);
     camera.radius = lerp(camera.radius, targetRadius, 0.05);
