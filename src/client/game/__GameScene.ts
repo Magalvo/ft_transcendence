@@ -97,7 +97,6 @@ export class GameScene {
   }
 
   private connectToServer() {
-    // Conecta ao servidor que criámos no passo anterior
     this.socket = io("http://localhost:3000");
 
     this.socket.on("connect", () => {
@@ -108,7 +107,6 @@ export class GameScene {
       console.log("Eu sou o jogador:", data.side);
       this.data.mySide = data.side;
 
-      // Atualizar UI ou avisar o utilizador (opcional por agora)
       if (data.side === 'spectator') {
         console.log("A observar o jogo...");
       }

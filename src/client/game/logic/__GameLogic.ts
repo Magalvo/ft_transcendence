@@ -1,5 +1,4 @@
 import {
-  pauseScreen,
   handleKeyboardEvents,
   updateCamera,
   updateScoreLabels,

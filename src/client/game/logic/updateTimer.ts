@@ -7,7 +7,7 @@ import { type GameData } from "../../index.js";
  */
 export function updateTimer(data: GameData) {
     // advance timer
-    data.mods.time += data.mods.step;
+    // data.mods.time += data.mods.step;
     updateTimerLabel(data);
 }
 

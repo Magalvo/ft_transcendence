@@ -1,3 +1,6 @@
+export const HELL_DURATION = 20; // 20
+export const HEAVEN_DURATION = 30; // 30
+
 /* possible movements list */
 export const mov = {
   null: "null",

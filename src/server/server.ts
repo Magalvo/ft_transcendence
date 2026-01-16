@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { ServerBall } from './elements/ServerBall.js';
 import { ServerPaddle } from './elements/ServerPaddle.js';
-import { hellMode, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
+import { HEAVEN_DURATION, HELL_DURATION, hellMode, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
 import { GameStatus } from '../shared/types.js';
 import { randomInt } from '../shared/utils.js';
 import { ServerMagicBall } from './elements/ServerMagicBall.js';
@@ -40,8 +40,6 @@ const players: { [side: string]: string | null } = { left: null, right: null };
 const playersReady: { [side: string]: boolean } = { left: false, right: false };
 
 // Timers Globais
-const HEAVEN_DURATION = 30;
-const HELL_DURATION = 15;
 let gameTime = 0;
 let phaseTimer = 0;
 let isHell = false;
