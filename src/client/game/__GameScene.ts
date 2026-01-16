@@ -14,14 +14,29 @@ import {
   closeMainMenu,
   createPlayingBall,
   showWarningMessage,
-  updateWarningMessages,
-  MAGIC_EFFECT_DURATION,
   clearMagicNotifications,
+  pauseScreen,
 } from "../index.js";
 import { io, Socket } from "socket.io-client";
 
+// --- CONFIGURATION ---
+const SCENE_CONFIG = {
+  SERVER_URL: "http://localhost:3000",
+  LERP_SPEED: 0.05,
+  PADDLE_BASE_DEPTH: 30,
+  PADDLE_BASE_WIDTH: 0.5,
+  FIRE_PARTICLE: {
+    TEXTURE_URL: "https://www.babylonjs-playground.com/textures/flare.png",
+    CAPACITY: 2000,
+    MIN_SIZE_MAGIC: 0.5,
+    MAX_SIZE_MAGIC: 1.5,
+    MIN_SIZE_NORMAL: 1.0,
+    MAX_SIZE_NORMAL: 3.0,
+  }
+};
+
 /**
- * Main class handling the game scene and loop.
+ * Main class handling the game scene, socket connections, and the render loop.
  */
 export class GameScene {
   private canvas: HTMLCanvasElement;
@@ -38,27 +53,19 @@ export class GameScene {
     this.data = {} as GameData;
   }
 
+  // --- SCENE MANAGEMENT ---
+
   private resetScene(): void {
-    // clear listeners
     undefineKeyEvents();
 
-    // destroy old scene (if any)
-    if (this.scene)
-      this.scene.dispose();
+    if (this.scene) this.scene.dispose();
+    if (this.socket) this.socket.disconnect();
 
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-
-    // create new scene
     this.scene = new BABYLON.Scene(this.engine);
-
-    // initialize game data
     this.initializeGameData();
   }
 
   private initializeGameData(): void {
-    // initialize data
     this.data.scene = this.scene;
     this.data.mods = {
       score: { left: 0, right: 0 },
@@ -93,41 +100,29 @@ export class GameScene {
     this.data.env = createEnvironment3D(this.data.obj3D, this.data.scene);
     this.data.obj2D = create2DParts();
 
-    // define listeners
     defineKeyEvents(this.data);
-
     this.connectToServer();
     this.data.socket = this.socket;
   }
 
+  // --- NETWORKING ---
+
   private connectToServer() {
-    this.socket = io("http://localhost:3000");
+    this.socket = io(SCENE_CONFIG.SERVER_URL);
+    this.setupSocketListeners();
+  }
 
-    this.socket.on("connect", () => {
-      console.log("CLIENTE: Conectado ao servidor!");
-    });
-
+  private setupSocketListeners() {
+    this.socket.on("connect", () => console.log("CLIENT: Connected to server!"));
+    
     this.socket.on("init", (data: { side: string }) => {
-      console.log("Eu sou o jogador:", data.side);
+      console.log("Player Side assigned:", data.side);
       this.data.mySide = data.side;
-
-      if (data.side === 'spectator') {
-        console.log("A observar o jogo...");
-      }
     });
 
-    // OUVIR EVENTOS DE PAUSA DO SERVIDOR
-    this.socket.on('gamePaused', () => {
-      console.log("Jogo Pausado pelo Servidor");
-      // Precisamos de importar a função 'pauseScreen' neste ficheiro se não estiver
-      import("../index.js").then(({ pauseScreen }) => {
-        // Forçamos a flag para true para a função pauseScreen criar a UI
-        this.data.flags.game_running = true; // Truque para o pauseScreen aceitar criar menu
-        pauseScreen(this.data);
-        this.data.flags.game_running = false; // Estado real
-      });
-    });
-
+    this.socket.on("gamePaused", () => this.handleGamePaused());
+    this.socket.on("gameResumed", () => this.handleGameResumed());
+    
     this.socket.on("gameMessage", (data: any) => {
       showWarningMessage({
         scene: this.scene,
@@ -137,163 +132,197 @@ export class GameScene {
         duration: data.duration
       });
     });
-    this.socket.on('gameResumed', () => {
-      console.log("Jogo Retomado");
-      // Removemos o menu de pausa manualmente se necessário, 
-      // ou chamamos uma função de resume.
-      // O jeito mais fácil é manipular os objetos diretamente ou usar o resumeGame se o exportares.
 
-      if (this.data.obj2D.guiPauseMenu) {
-        this.data.obj2D.guiPauseMenu.dispose();
-        this.data.obj2D.guiPauseMenu = undefined;
-      }
-      this.data.env.camera.detachControl();
-      this.data.flags.game_running = true;
-      this.data.flags.pause_screen = false;
+    // Main Game State Update (60 FPS)
+    this.socket.on("gameState", (serverState: any) => this.handleGameState(serverState));
+  }
 
-      // Retomar música
-      this.data.env.hellMusic.play();
-      this.data.env.heavenMusic.play();
-    });
+  private handleGamePaused() {
+    console.log("Game Paused by Server");
+    // Force flag to true briefly so pauseScreen function allows creation
+    this.data.flags.game_running = true; 
+    pauseScreen(this.data);
+    this.data.flags.game_running = false; 
+  }
 
-    // OUVIR O ESTADO DO JOGO (60 vezes por segundo)
-    this.socket.on("gameState", (serverState: any) => {
-      if (serverState.paddles) {
-        serverState.paddles.forEach((pData: any) => {
-          const paddle = this.data.obj3D.paddles.find(p => p.side === pData.side);
-          if (paddle) {
-            const [px, py, pz] = pData.pos;
-            paddle.mesh.position.set(px, py, pz);
+  private handleGameResumed() {
+    console.log("Game Resumed");
+    if (this.data.obj2D.guiPauseMenu) {
+      this.data.obj2D.guiPauseMenu.dispose();
+      this.data.obj2D.guiPauseMenu = undefined;
+    }
+    this.data.env.camera.detachControl();
+    this.data.flags.game_running = true;
+    this.data.flags.pause_screen = false;
 
-            // --- ATUALIZAÇÃO DE TAMANHO (X e Z) ---
-            const baseDepth = 30;
-            const baseWidth = 0.5;
+    // Resume Music
+    this.data.env.hellMusic.play();
+    this.data.env.heavenMusic.play();
+  }
 
-            // Se o servidor enviar sizeZ (Comprimento/Depth)
-            // Nota: Verifica se renomeaste no servidor para sizeZ ou mantiveste size.
-            // Vou assumir que usaste sizeZ como sugeri acima.
-            const serverZ = pData.sizeZ || pData.size; // fallback
-            const serverX = pData.sizeX || baseWidth;
+  // --- GAME STATE SYNC LOGIC ---
 
-            if (serverZ) {
-              paddle.mesh.scaling.z = serverZ / baseDepth;
-              // Atualizar memória interna
-              if (paddle.dimensions?.value) paddle.dimensions.value.z = serverZ;
-              if (paddle.dimensions?.original) paddle.dimensions.original.z = serverZ;
-            }
+  private handleGameState(serverState: any) {
+    if (serverState.paddles) this.syncPaddles(serverState.paddles);
+    if (serverState.balls) this.syncPlayingBalls(serverState.balls, serverState.isHell);
+    if (serverState.magicBalls) this.syncMagicBalls(serverState.magicBalls);
+    
+    this.syncGameStats(serverState);
+    this.handleGameStartTrigger(serverState.status);
+    this.updateHellVisuals(serverState);
+  }
 
-            if (serverX) {
-              paddle.mesh.scaling.x = serverX / baseWidth;
-              // Atualizar memória interna
-              if (paddle.dimensions?.value) paddle.dimensions.value.x = serverX;
-              if (paddle.dimensions?.original) paddle.dimensions.original.x = serverX;
-            }
-          }
-        });
-      }
+  private syncPaddles(serverPaddles: any[]) {
+    serverPaddles.forEach((pData: any) => {
+      const paddle = this.data.obj3D.paddles.find(p => p.side === pData.side);
+      if (!paddle) return;
 
-      if (serverState.score) {
-        this.data.mods.score.left = serverState.score.left;
-        this.data.mods.score.right = serverState.score.right;
-      }
+      const [px, py, pz] = pData.pos;
+      paddle.mesh.position.set(px, py, pz);
 
-      this.data.mods.time = serverState.time;
-      this.data.mods.is_hell = serverState.isHell;
-      this.data.mods.hell_mode = serverState.activeHellMode;
+      // Handle Paddle Resizing
+      // 'sizeZ' represents depth (length of paddle)
+      // 'sizeX' represents width (thickness of paddle)
+      const serverZ = pData.sizeZ || pData.size; 
+      const serverX = pData.sizeX || SCENE_CONFIG.PADDLE_BASE_WIDTH;
 
-      if (serverState.balls) {
-        this.syncPlayingBalls(serverState.balls, serverState.isHell);
+      if (serverZ) {
+        paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
+        if (paddle.dimensions?.value) paddle.dimensions.value.z = serverZ;
+        if (paddle.dimensions?.original) paddle.dimensions.original.z = serverZ;
       }
 
-      if (serverState.isHell) {
-        this.data.mods.devilElapsed = serverState.hellTimer;
-        this.data.mods.goodElapsed = 0;
-        this.data.obj3D.table.updateColor("hell");
-      } else {
-        this.data.mods.goodElapsed = serverState.hellTimer;
-        this.data.mods.devilElapsed = 0;
-        this.data.obj3D.table.updateColor("heaven");
-      }
-
-
-      if (serverState.status === 1 && !this.data.flags.game_running) {
-        console.log("JOGO COMEÇOU! Fechando menu...");
-        closeMainMenu(this.data);
-        this.data.flags.game_running = true;
-      }
-
-      if (serverState.magicBalls) {
-        this.syncMagicBalls(serverState.magicBalls);
+      if (serverX) {
+        paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
+        if (paddle.dimensions?.value) paddle.dimensions.value.x = serverX;
+        if (paddle.dimensions?.original) paddle.dimensions.original.x = serverX;
       }
     });
   }
 
-  // Versão segura que não crasha se faltar metadata
+  private syncGameStats(serverState: any) {
+    if (serverState.score) {
+      this.data.mods.score.left = serverState.score.left;
+      this.data.mods.score.right = serverState.score.right;
+    }
+    this.data.mods.time = serverState.time;
+    this.data.mods.is_hell = serverState.isHell;
+    this.data.mods.hell_mode = serverState.activeHellMode;
+  }
+
+  private updateHellVisuals(serverState: any) {
+    if (serverState.isHell) {
+      this.data.mods.devilElapsed = serverState.hellTimer;
+      this.data.mods.goodElapsed = 0;
+    } else {
+      this.data.mods.goodElapsed = serverState.hellTimer;
+      this.data.mods.devilElapsed = 0;
+    }
+    
+    // Update Table Colors
+    this.data.obj3D.table.updateColor(serverState.isHell);
+  }
+
+  private handleGameStartTrigger(status: number) {
+    // Status 1 = RUNNING
+    if (status === 1 && !this.data.flags.game_running) {
+      console.log("GAME STARTED! Closing menu...");
+      closeMainMenu(this.data);
+      this.data.flags.game_running = true;
+    }
+  }
+
+  // --- ENTITY SYNC: BALLS ---
+
   private syncMagicBalls(serverBalls: any[]) {
-    // Forçamos o cast para any[] para o TypeScript aceitar os Meshes
+    // Cast to any[] to allow metadata access
     const localBalls = this.data.magicBalls.magic_balls_ref as any[];
 
-    // 1. Remover bolas que já não existem no servidor
+    // 1. Remove stale balls
     for (let i = localBalls.length - 1; i >= 0; i--) {
       const local = localBalls[i];
-
-      // VERIFICAÇÃO DE SEGURANÇA: Se o objeto ou metadata não existir, removemos logo (é lixo)
       if (!local || !local.metadata) {
         if (local) local.dispose();
         localBalls.splice(i, 1);
         continue;
       }
 
-      // Procura se esta bola local ainda existe no servidor
       const existsInServer = serverBalls.find((sb: any) => sb.id === local.metadata.id);
-
       if (!existsInServer) {
-        if (local.metadata && local.metadata.particleSystem) {
-          local.metadata.particleSystem.stop();
-          local.metadata.particleSystem.dispose();
-        }
+        this.removeFireFromMesh(local);
         local.dispose();
         localBalls.splice(i, 1);
       }
     }
 
-    // 2. Atualizar ou Criar bolas novas
+    // 2. Update or Create balls
     serverBalls.forEach((sb: any) => {
-      // VERIFICAÇÃO DE SEGURANÇA: Só compara se lb.metadata existir
       const local = localBalls.find((lb: any) => lb.metadata && lb.metadata.id === sb.id);
 
       if (local) {
-        // Já existe, ATUALIZA a posição (Isto é que faz a bola mexer!)
         local.position.set(sb.x, sb.y, sb.z);
       } else {
-        // É nova! Criar Mesh.
         const newMesh = BABYLON.MeshBuilder.CreateSphere("mb", { diameter: 3 }, this.scene);
         newMesh.position.set(sb.x, sb.y, sb.z);
 
         const mat = new BABYLON.StandardMaterial("mbMat", this.scene);
-
-        const ballCollor = BABYLON.Color3.Random();
-        mat.emissiveColor = ballCollor;
+        const ballColor = BABYLON.Color3.Random();
+        mat.emissiveColor = ballColor;
         newMesh.material = mat;
-
-        // IMPORTANTE: Definir o ID
         newMesh.metadata = { id: sb.id };
 
-        let fireColor = ballCollor;
-        this.addFireEffect(newMesh, fireColor, true);
-
+        this.addFireEffect(newMesh, ballColor, true);
         localBalls.push(newMesh);
       }
     });
   }
 
-  // Versão reforçada que impede criar múltiplos fogos na mesma bola
+  private syncPlayingBalls(serverBalls: any[], isHell: boolean) {
+    const localBalls = this.data.obj3D.balls;
+
+    // 1. Create missing balls
+    while (localBalls.length < serverBalls.length) {
+      const newBall = createPlayingBall(this.scene, 0, 0);
+      localBalls.push(newBall);
+    }
+
+    // 2. Sync properties
+    serverBalls.forEach((sb: any, index: number) => {
+      if (!localBalls[index]) return;
+      
+      const ball = localBalls[index];
+      const [bx, by, bz] = sb.pos;
+      ball.mesh.position.set(bx, by, bz);
+
+      const radius = sb.radius || 2;
+      const scale = radius / 2;
+      ball.mesh.scaling.set(scale, scale, scale);
+
+      // Fire Logic
+      if (isHell) {
+        this.addFireEffect(ball.mesh, new BABYLON.Color3(1, 0.5, 0), false);
+      } else {
+        this.removeFireFromMesh(ball.mesh);
+      }
+    });
+
+    // 3. Remove excess balls
+    while (localBalls.length > serverBalls.length) {
+      const removedBall = localBalls.pop();
+      if (removedBall) {
+        this.removeFireFromMesh(removedBall.mesh);
+        removedBall.dispose();
+      }
+    }
+  }
+
+  // --- PARTICLE SYSTEMS ---
+
   private addFireEffect(mesh: BABYLON.AbstractMesh, color: BABYLON.Color3, isMagic: boolean) {
-    // 1. Verificação Rápida via Metadata
+    // Check Metadata first
     if (mesh.metadata && mesh.metadata.particleSystem) return;
 
-    // 2. Verificação Robusta (Brute Force): Procura na cena se já existe fogo neste mesh
-    // Isto impede a acumulação "infinita" se o metadata for perdido
+    // Check Scene Registry (Brute Force prevention)
     const existingSystem = this.scene.particleSystems.find(ps => ps.emitter === mesh && ps.name === "fire");
     if (existingSystem) {
       if (!mesh.metadata) mesh.metadata = {};
@@ -301,18 +330,16 @@ export class GameScene {
       return;
     }
 
-    // Cria o sistema
-    const particleSystem = new BABYLON.ParticleSystem("fire", 2000, this.scene);
-    particleSystem.particleTexture = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/flare.png", this.scene);
-
+    const particleSystem = new BABYLON.ParticleSystem("fire", SCENE_CONFIG.FIRE_PARTICLE.CAPACITY, this.scene);
+    particleSystem.particleTexture = new BABYLON.Texture(SCENE_CONFIG.FIRE_PARTICLE.TEXTURE_URL, this.scene);
     particleSystem.emitter = mesh;
 
     particleSystem.color1 = new BABYLON.Color4(color.r, color.g, color.b, 1.0);
     particleSystem.color2 = new BABYLON.Color4(1, 0, 0, 1.0);
     particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
 
-    particleSystem.minSize = isMagic ? 0.5 : 1.0;
-    particleSystem.maxSize = isMagic ? 1.5 : 3.0;
+    particleSystem.minSize = isMagic ? SCENE_CONFIG.FIRE_PARTICLE.MIN_SIZE_MAGIC : SCENE_CONFIG.FIRE_PARTICLE.MIN_SIZE_NORMAL;
+    particleSystem.maxSize = isMagic ? SCENE_CONFIG.FIRE_PARTICLE.MAX_SIZE_MAGIC : SCENE_CONFIG.FIRE_PARTICLE.MAX_SIZE_NORMAL;
     particleSystem.minLifeTime = 0.2;
     particleSystem.maxLifeTime = 0.5;
     particleSystem.emitRate = 300;
@@ -326,60 +353,15 @@ export class GameScene {
     mesh.metadata.particleSystem = particleSystem;
   }
 
-  // Versão reforçada que limpa TUDO quando a bola morre
-  private syncPlayingBalls(serverBalls: any[], isHell: boolean) {
-    const localBalls = this.data.obj3D.balls;
-
-    // 1. Criar bolas
-    while (localBalls.length < serverBalls.length) {
-      // Importante: createPlayingBall deve estar importado no topo do ficheiro
-      const newBall = createPlayingBall(this.scene, 0, 0);
-      localBalls.push(newBall);
-    }
-
-    // 2. Sincronizar
-    serverBalls.forEach((sb: any, index: number) => {
-      if (localBalls[index]) {
-        const ball = localBalls[index];
-        const [bx, by, bz] = sb.pos;
-        ball.mesh.position.set(bx, by, bz);
-
-        const radius = sb.radius || 2;
-        const scale = radius / 2;
-        ball.mesh.scaling.set(scale, scale, scale);
-
-        // Lógica de Fogo
-        if (isHell) {
-          this.addFireEffect(ball.mesh, new BABYLON.Color3(1, 0.5, 0), false);
-        } else {
-          // Remover fogo da bola principal quando o inferno acaba
-          this.removeFireFromMesh(ball.mesh);
-        }
-      }
-    });
-
-    // 3. Remover bolas extra (Limpeza Profunda)
-    while (localBalls.length > serverBalls.length) {
-      const removedBall = localBalls.pop();
-      if (removedBall) {
-        // Remove qualquer fogo agarrado a esta bola antes de a destruir
-        this.removeFireFromMesh(removedBall.mesh);
-        removedBall.dispose();
-      }
-    }
-  }
-
-  // Novo método auxiliar para garantir limpeza
   private removeFireFromMesh(mesh: BABYLON.AbstractMesh) {
-    // 1. Tenta via Metadata
+    // 1. Metadata Check
     if (mesh.metadata && mesh.metadata.particleSystem) {
       mesh.metadata.particleSystem.stop();
       mesh.metadata.particleSystem.dispose();
       mesh.metadata.particleSystem = undefined;
     }
 
-    // 2. Tenta via Busca na Cena (Caso o metadata tenha falhado)
-    // Percorre todos os sistemas e apaga os que pertencem a este mesh
+    // 2. Scene Registry Check (Cleanup orphan particles)
     this.scene.particleSystems.forEach(ps => {
       if (ps.emitter === mesh) {
         ps.stop();
@@ -388,14 +370,14 @@ export class GameScene {
     });
   }
 
+  // --- MAIN LOOP ---
+
   public startGame(): void {
     this.resetScene();
 
     createMainMenu();
     startMainMenu(this.data, () => {
-      if (this.socket) {
-        this.socket.emit('playerReady');
-      }
+      if (this.socket) this.socket.emit('playerReady');
     });
 
     let lastTime = performance.now();
@@ -411,14 +393,9 @@ export class GameScene {
 
       const isHell = this.data.mods.is_hell;
 
-      // 2. COR DA MESA (MANTIDO)
-      if (this.data.obj3D.table) {
-        this.data.obj3D.table.updateColor(isHell ? "hell" : "heaven");
-      }
-
+      // Handle Hell Transition Effects
       if (isHell !== this.wasHell) {
-        if (isHell)
-          clearMagicNotifications();
+        if (isHell) clearMagicNotifications();
         this.wasHell = isHell;
       }
 
@@ -432,4 +409,3 @@ export class GameScene {
     });
   }
 }
-
