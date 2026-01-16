@@ -1,5 +1,8 @@
 export const HELL_DURATION = 20; // 20
 export const HEAVEN_DURATION = 30; // 30
+export const MAGIC_EFFECT_DURATION = 10; // 10
+export const MAGIC_BALL_INTERVAL = 5; // 5
+export const MAGIC_BALL_MAX = 5; // 5
 
 /* possible movements list */
 export const mov = {
@@ -27,7 +30,7 @@ export const hellMode = {
   fast_balls: 4,
   big_balls: 5,
   multipleBalls: 6,
-  infinite_balls: 7,
+  infinite_balls: 7,//
   twisted_view: 8,
   drunk_view: 9,
   end_list: 9
@@ -41,11 +44,10 @@ export const magicEffect = {
   big: 1,
   small: 2,
   slow: 3,
-  normal_speed: 4,
-  fast: 5,
-  freeze: 6,
-  thick: 7,
-  end_list: 7
+  fast: 4,
+  freeze: 5,
+  thick: 6,
+  end_list: 6
 } as const;
 
 export type MagicEffect = typeof magicEffect[keyof typeof magicEffect];

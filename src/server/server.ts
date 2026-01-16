@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { ServerBall } from './elements/ServerBall.js';
 import { ServerPaddle } from './elements/ServerPaddle.js';
-import { HEAVEN_DURATION, HELL_DURATION, hellMode, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
+import { HEAVEN_DURATION, HELL_DURATION, hellMode, MAGIC_BALL_INTERVAL, MAGIC_BALL_MAX, MAGIC_EFFECT_DURATION, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
 import { GameStatus } from '../shared/types.js';
 import { randomInt } from '../shared/utils.js';
 import { ServerMagicBall } from './elements/ServerMagicBall.js';
@@ -49,8 +49,6 @@ let currentHellMode: number = hellMode.null;
 let magicBalls: ServerMagicBall[] = [];
 let nextMagicBallId = 1;
 let magicBallTimer = 0;
-const MAGIC_BALL_INTERVAL = 3;
-const MAGIC_BALL_MAX = 5;
 
 // --- SOCKET.IO EVENTOS ---
 io.on('connection', (socket) => {
@@ -159,8 +157,14 @@ setInterval(() => {
 
 
             /* SLOW PADDLES ARE NOT DONE */
-            currentHellMode = hellMode.slow_paddles;// randomInt(1, hellMode.end_list);
-            console.log("MODO INFERNO ATIVADO:", currentHellMode);
+            currentHellMode = randomInt(1, hellMode.end_list);
+
+            io.emit('gameMessage', {
+                message: getHellModeName(currentHellMode),
+                side: "center",
+                color: "red",
+                duration: HELL_DURATION
+            });
 
             switch (currentHellMode) {
                 case hellMode.big_balls:
@@ -168,8 +172,13 @@ setInterval(() => {
                     break;
 
                 case hellMode.small_paddles:
-                    paddleLeft.applyPowerUp(2);
-                    paddleRight.applyPowerUp(2);
+                    paddleLeft.applyPowerUp(magicEffect.small);
+                    paddleRight.applyPowerUp(magicEffect.small);
+                    break;
+
+                case hellMode.slow_paddles:
+                    paddleLeft.applyPowerUp(magicEffect.slow);
+                    paddleRight.applyPowerUp(magicEffect.slow);
                     break;
 
                 case hellMode.multipleBalls:
@@ -231,6 +240,14 @@ setInterval(() => {
                 if (collisionX && collisionZ) {
                     paddle.applyPowerUp(mb.effectType);
                     collected = true;
+
+                    io.emit('gameMessage', {
+                        message: getMagicEffectName(mb.effectType),
+                        side: paddle.side,
+                        color: "green",
+                        duration: MAGIC_EFFECT_DURATION
+                    });
+
                     break;
                 }
             }
@@ -317,3 +334,31 @@ setInterval(() => {
 httpServer.listen(PORT, () => {
     console.log(`🚀 server running on http://localhost:${PORT}`);
 });
+
+// --- HELPERS PARA NOTIFICAÇÕES ---
+
+function getHellModeName(id: number): string {
+    switch (id) {
+        case hellMode.inverted_keys: return "INVERTED KEYS";
+        case hellMode.small_paddles: return "SMALL PADDLES";
+        case hellMode.slow_paddles: return "SLOW PADDLES";
+        case hellMode.fast_balls: return "FAST BALLS";
+        case hellMode.big_balls: return "BIG BALLS";
+        case hellMode.multipleBalls: return "MULTIBALL CHAOS";
+        case hellMode.twisted_view: return "TWISTED VIEW";
+        case hellMode.drunk_view: return "DRUNK VIEW";
+        default: return "HELL MODE";
+    }
+}
+
+function getMagicEffectName(id: number): string {
+    switch (id) {
+        case magicEffect.big: return "BIG PADDLE";
+        case magicEffect.small: return "SMALL PADDLE";
+        case magicEffect.slow: return "SLOW MOTION";
+        case magicEffect.fast: return "SPEED BOOST";
+        case magicEffect.freeze: return "FREEZED PADDLE";
+        case magicEffect.thick: return "STRONG PADDLE";
+        default: return "MYSTERY EFFECT";
+    }
+}

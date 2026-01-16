@@ -13,7 +13,10 @@ import {
   type GameData,
   closeMainMenu,
   createPlayingBall,
-  pauseScreen,
+  showWarningMessage,
+  updateWarningMessages,
+  MAGIC_EFFECT_DURATION,
+  clearMagicNotifications,
 } from "../index.js";
 import { io, Socket } from "socket.io-client";
 
@@ -26,6 +29,7 @@ export class GameScene {
   private data: GameData;
   private scene!: BABYLON.Scene;
   private socket!: Socket;
+  private wasHell: boolean = false;
 
   constructor() {
     this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -124,6 +128,15 @@ export class GameScene {
       });
     });
 
+    this.socket.on("gameMessage", (data: any) => {
+      showWarningMessage({
+        scene: this.scene,
+        message: data.message,
+        side: data.side,
+        color: data.color,
+        duration: data.duration
+      });
+    });
     this.socket.on('gameResumed', () => {
       console.log("Jogo Retomado");
       // Removemos o menu de pausa manualmente se necessário, 
@@ -400,7 +413,13 @@ export class GameScene {
 
       // 2. COR DA MESA (MANTIDO)
       if (this.data.obj3D.table) {
-         this.data.obj3D.table.updateColor(isHell ? "hell" : "heaven");
+        this.data.obj3D.table.updateColor(isHell ? "hell" : "heaven");
+      }
+
+      if (isHell !== this.wasHell) {
+        if (isHell)
+          clearMagicNotifications();
+        this.wasHell = isHell;
       }
 
       this.scene.render();

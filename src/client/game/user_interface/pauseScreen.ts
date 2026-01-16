@@ -102,7 +102,7 @@ function createButtons(data: GameData, guiTexture: AdvancedDynamicTexture) {
   resumeBtn.height = "60px";
   resumeBtn.color = "white";
   resumeBtn.background = "rgba(40, 71, 117, 1)";
-  resumeBtn.top = "30%";
+  resumeBtn.top = "20%";
   resumeBtn.left = "-10%";
   resumeBtn.fontSize = 32;
   resumeBtn.onPointerUpObservable.add(() => {
@@ -118,7 +118,7 @@ function createButtons(data: GameData, guiTexture: AdvancedDynamicTexture) {
   returnBtn.height = "60px";
   returnBtn.color = "white";
   returnBtn.background = "rgba(40, 71, 117, 1)";
-  returnBtn.top = "30%";
+  returnBtn.top = "20%";
   returnBtn.left = "10%";
   returnBtn.fontSize = 32;
   returnBtn.onPointerUpObservable.add(() => {

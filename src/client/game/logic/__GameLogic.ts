@@ -10,7 +10,8 @@ import {
   magicBallsController,
   type GameData,
   mov,
-  type Mov
+  type Mov,
+  updateWarningMessages
 } from "../../index.js";
 
 /**
@@ -76,6 +77,7 @@ function updateGameObjects(
   magicBallsController(data);
   updateEnvironment(data);
   updateMusic(data);
+  updateWarningMessages(data.mods.step);
 
   // ... código anterior ...
   handleKeyboardEvents(data); // Isto atualiza data.input.left_paddle_mov baseado nas teclas

@@ -1,5 +1,5 @@
 import { Vector3 } from "../../shared/Vector3.js";
-import { magicEffect, mov, type MagicEffect, type Mov } from "../../shared/strings.js";
+import { MAGIC_EFFECT_DURATION, magicEffect, mov, type MagicEffect, type Mov } from "../../shared/strings.js";
 
 export class ServerPaddle {
     public pos: Vector3;
@@ -32,13 +32,10 @@ export class ServerPaddle {
 
     public update(deltaTime: number, moveCommand: Mov) {
         // 1. Gerir o Timer do Efeito
-        // Se o jogo estiver em pausa, o deltaTime é 0 (ou o update não corre), 
-        // logo o timer pára automaticamente!
         if (this.effectTimer > 0) {
             this.effectTimer -= deltaTime;
             if (this.effectTimer <= 0) {
                 this.resetEffects();
-                console.log(`Efeito em ${this.side} expirou.`);
             }
         }
 
@@ -82,7 +79,7 @@ export class ServerPaddle {
 
     public applyPowerUp(effect: MagicEffect) {
         this.resetEffects();
-        this.effectTimer = 10;
+        this.effectTimer = MAGIC_EFFECT_DURATION;
         this.currentEffect = effect;
 
         switch (effect) {
