@@ -1,4 +1,4 @@
-import type { MagicBall, MagicEffect } from "../../client/index.js";
+import type { MagicEffect } from "../../client/index.js";
 import { Vector3 } from "../../shared/Vector3.js";
 import { randomInt, randomFloat2 } from "../../shared/utils.js";
 
@@ -17,14 +17,14 @@ export class ServerMagicBall {
         this.id = id;
         this.effectType = effectType;
         
-        const x = randomInt(-50, 50);
+        const x = randomInt(-30, 30);
         const z = randomInt(-30, 30);
         this.pos = new Vector3(x, 2, z);
 
         this.velocity = new Vector3(
-            randomFloat2(-50, 50), 
+            randomFloat2(30, 50) * (randomInt(0, 1) ? 1 : -1), 
             0, 
-            randomFloat2(-50, 50)
+            randomFloat2(-20, 20)
         );
     }
 

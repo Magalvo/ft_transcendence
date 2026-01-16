@@ -1,312 +1,283 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { ServerBall } from './elements/ServerBall.js';
-import { ServerPaddle } from './elements/ServerPaddle.js';
-import { HEAVEN_DURATION, HELL_DURATION, hellMode, MAGIC_BALL_INTERVAL, MAGIC_BALL_MAX, MAGIC_EFFECT_DURATION, magicEffect, mov, type MagicEffect, type Mov } from '../shared/strings.js';
-import { GameStatus } from '../shared/types.js';
-import { randomInt } from '../shared/utils.js';
-import { ServerMagicBall } from './elements/ServerMagicBall.js';
+import {
+    ServerBall,
+    ServerPaddle,
+    ServerMagicBall,
+    GameStatus,
+    randomInt,
+    HEAVEN_DURATION,
+    HELL_DURATION,
+    hellMode,
+    MAGIC_BALL_INTERVAL,
+    MAGIC_BALL_MAX,
+    MAGIC_EFFECT_DURATION,
+    magicEffect,
+    mov,
+    type MagicEffect,
+    type Mov
+} from './index.js';
 
+// --- CONFIGURATION ---
+const CONFIG = {
+    PORT: 3000,
+    TICK_RATE: 60,
+    PAUSE_COOLDOWN_MS: 500,
+    PADDLE_X_LEFT: -68,
+    PADDLE_X_RIGHT: 68,
+    SPEED_MOD_FAST: 4,
+    SPEED_MOD_NORMAL: 2
+};
+
+const TICK_MS = 1000 / CONFIG.TICK_RATE;
+
+// --- SERVER SETUP ---
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // Em produção, muda isto para o URL do teu site
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
-const PORT = 3000;
-
-// --- ESTADO DO JOGO ---
+// --- GAME STATE ---
 let status: GameStatus = GameStatus.WAITING;
-
 let balls: ServerBall[] = [];
-balls.push(new ServerBall(0, 0));
-const paddleLeft = new ServerPaddle('left', -68);
-const paddleRight = new ServerPaddle('right', 68);
+let magicBalls: ServerMagicBall[] = [];
+const paddleLeft = new ServerPaddle('left', CONFIG.PADDLE_X_LEFT);
+const paddleRight = new ServerPaddle('right', CONFIG.PADDLE_X_RIGHT);
 const score = { left: 0, right: 0 };
 
+// Logic Control
 let lastPauseToggle = 0;
-const PAUSE_COOLDOWN = 500;
-
-const inputs = {
-    left: mov.null,
-    right: mov.null
-};
-
-const players: { [side: string]: string | null } = { left: null, right: null };
-const playersReady: { [side: string]: boolean } = { left: false, right: false };
-
-// Timers Globais
 let gameTime = 0;
 let phaseTimer = 0;
 let isHell = false;
 let currentHellMode: number = hellMode.null;
-
-// Magic Balls
-let magicBalls: ServerMagicBall[] = [];
-let nextMagicBallId = 1;
 let magicBallTimer = 0;
+let nextMagicBallId = 1;
 
-// --- SOCKET.IO EVENTOS ---
-io.on('connection', (socket) => {
-    console.log(`Cliente conectado: ${socket.id}`);
+// Inputs & Players
+const inputs = { left: mov.null, right: mov.null };
+const players: { [side: string]: string | null } = { left: null, right: null };
+const playersReady: { [side: string]: boolean } = { left: false, right: false };
 
-    // 1. Atribuir um lado ao novo jogador
-    let side = 'spectator';
+// --- HELPER FUNCTIONS ---
 
-    if (players.left === null) {
-        players.left = socket.id;
-        side = 'left';
-    } else if (players.right === null) {
-        players.right = socket.id;
-        side = 'right';
-    }
-
-    // 2. Avisar o cliente qual é o papel dele
-    socket.emit('init', { side: side });
-    console.log(`Jogador ${socket.id} atribuído a: ${side}`);
-
-    socket.on('playerReady', () => {
-        const side = (players.left === socket.id) ? 'left' : (players.right === socket.id) ? 'right' : null;
-
-        if (side) {
-            playersReady[side] = true;
-            console.log(`Jogador ${side} está pronto!`);
-
-            // Se ambos estiverem prontos, arranca o jogo!
-            if (playersReady.left && playersReady.right) {
-                startGame();
-            }
-        }
-    });
-
-    // --- NOVO: Pausa (Qualquer jogador pode pausar) ---
-    socket.on('pauseGame', () => {
-        const now = Date.now();
-
-        if (now - lastPauseToggle < PAUSE_COOLDOWN) {
-            return;
-        }
-        lastPauseToggle = now;
-
-        if (status === GameStatus.RUNNING) {
-            status = GameStatus.PAUSED;
-            io.emit('gamePaused');
-            console.log("JOGO PAUSADO");
-        } else if (status === GameStatus.PAUSED) {
-            status = GameStatus.RUNNING;
-            io.emit('gameResumed');
-            console.log("JOGO RETOMADO");
-        }
-    });
-
-    // 3. Receber Input (Só aceita se for do dono da raquete)
-    socket.on('input', (data) => {
-        // Segurança básica: só aceita input se o socket for o dono desse lado
-        if (side === 'left' && data.side === 'left') inputs.left = data.cmd;
-        if (side === 'right' && data.side === 'right') inputs.right = data.cmd;
-    });
-
-    // 4. Lidar com desconexão
-    socket.on('disconnect', () => {
-        console.log(`Cliente desconectado: ${socket.id}`);
-        if (players.left === socket.id) players.left = null;
-        if (players.right === socket.id) players.right = null;
-    });
-});
-
-function startGame() {
-    console.log("AMBOS PRONTOS -> INICIAR JOGO!");
+/**
+ * Resets the game state to the initial values.
+ */
+function resetGame() {
+    console.log("Starting new game...");
     status = GameStatus.RUNNING;
-    // Resetar variáveis se necessário (score, tempo)
     gameTime = 0;
     phaseTimer = 0;
     isHell = false;
     currentHellMode = hellMode.null;
     score.left = 0;
     score.right = 0;
+
+    // Reset entities
     balls = [new ServerBall(0, 0)];
     balls[0].throwBall();
+    paddleLeft.resetEffects();
+    paddleRight.resetEffects();
+    magicBalls = [];
 }
 
-// --- GAME LOOP (60 FPS) ---
-const TICK_RATE = 60;
-const TICK_MS = 1000 / TICK_RATE; // ~16.66 ms
+/**
+ * Activates Hell Mode and applies its specific initial effects.
+ */
+function enterHellMode() {
+    isHell = true;
+    phaseTimer = 0;
 
-setInterval(() => {
+    // Clear previous effects
+    paddleLeft.resetEffects();
+    paddleRight.resetEffects();
+    magicBalls = []; // Clear magic balls in Hell
 
-    const dt = TICK_MS / 1000;
+    currentHellMode = randomInt(1, hellMode.end_list);
 
-    if (status === GameStatus.RUNNING) {
+    // Notify clients
+    io.emit('gameMessage', {
+        message: getHellModeName(currentHellMode),
+        side: "center",
+        color: "red",
+        duration: HELL_DURATION
+    });
 
-        gameTime += dt;
-
-        // --- LÓGICA DO INFERNO (SERVER SIDE) ---
-        phaseTimer += dt;
-
-        if (!isHell && phaseTimer >= HEAVEN_DURATION) {
-            isHell = true;
-            phaseTimer = 0;
-
-            paddleLeft.resetEffects();
-            paddleRight.resetEffects();
-            magicBalls = [];
-
-
-            /* SLOW PADDLES ARE NOT DONE */
-            currentHellMode = randomInt(1, hellMode.end_list);
-
-            io.emit('gameMessage', {
-                message: getHellModeName(currentHellMode),
-                side: "center",
-                color: "red",
-                duration: HELL_DURATION
+    // Apply specific mode logic
+    switch (currentHellMode) {
+        case hellMode.big_balls:
+            balls.forEach(b => b.setBigBall(true));
+            break;
+        case hellMode.small_paddles:
+            paddleLeft.applyPowerUp(magicEffect.small);
+            paddleRight.applyPowerUp(magicEffect.small);
+            break;
+        case hellMode.slow_paddles:
+            paddleLeft.applyPowerUp(magicEffect.slow);
+            paddleRight.applyPowerUp(magicEffect.slow);
+            break;
+        case hellMode.multipleBalls:
+            while (balls.length < 4)
+                balls.push(new ServerBall(0, 0));
+            balls.forEach(b => {
+                if (b.velocity === 0) b.throwBall();
             });
+            break;
+    }
+}
 
-            switch (currentHellMode) {
-                case hellMode.big_balls:
-                    balls.forEach(b => b.setBigBall(true));
-                    break;
+/**
+ * Deactivates Hell Mode and resets temporary effects.
+ */
+function exitHellMode() {
+    isHell = false;
+    phaseTimer = 0;
+    currentHellMode = hellMode.null;
 
-                case hellMode.small_paddles:
-                    paddleLeft.applyPowerUp(magicEffect.small);
-                    paddleRight.applyPowerUp(magicEffect.small);
-                    break;
+    // Reset to single ball
+    balls = [new ServerBall(0, 0)];
+    balls[0].throwBall();
 
-                case hellMode.slow_paddles:
-                    paddleLeft.applyPowerUp(magicEffect.slow);
-                    paddleRight.applyPowerUp(magicEffect.slow);
-                    break;
+    // Reset Paddles
+    paddleLeft.resetEffects();
+    paddleRight.resetEffects();
+}
 
-                case hellMode.multipleBalls:
-                    balls.push(new ServerBall(0, 0));
-                    balls.push(new ServerBall(0, 0));
-                    balls.forEach(b => {
-                        if (b.velocity === 0) b.throwBall();
-                    });
-                    break;
+/**
+ * Manages the transition between Heaven and Hell phases.
+ */
+function updateGamePhases(dt: number) {
+    phaseTimer += dt;
+
+    if (!isHell && phaseTimer >= HEAVEN_DURATION) {
+        enterHellMode();
+    } else if (isHell && phaseTimer >= HELL_DURATION) {
+        exitHellMode();
+    }
+}
+
+/**
+ * Manages spawning and collision detection for Magic Balls.
+ */
+function updateMagicBalls(dt: number) {
+    // 1. Spawning (Only in Heaven)
+    if (!isHell) {
+        magicBallTimer += dt;
+        if (magicBallTimer >= MAGIC_BALL_INTERVAL) {
+            magicBallTimer = 0;
+            if (magicBalls.length < MAGIC_BALL_MAX) {
+                const effect = randomInt(1, magicEffect.end_list) as MagicEffect;
+                const mb = new ServerMagicBall(nextMagicBallId++, effect);
+                magicBalls.push(mb);
             }
         }
-        else if (isHell && phaseTimer >= HELL_DURATION) {
-            // Voltar ao Céu
-            isHell = false;
-            phaseTimer = 0;
-            currentHellMode = hellMode.null;
-
-            // Resetar para apenas 1 bola
-            balls = [new ServerBall(0, 0)];
-            balls[0].throwBall();
-
-            // CORREÇÃO: Remover 'ball.resetStats()', pois a nova bola já vem limpa
-            // E remover efeitos dos paddles
-            paddleLeft.resetEffects();
-            paddleRight.resetEffects();
-        }
-
-        if (!isHell) {
-            magicBallTimer += dt;
-            if (magicBallTimer >= MAGIC_BALL_INTERVAL) {
-                magicBallTimer = 0;
-                if (magicBalls.length < MAGIC_BALL_MAX) {
-                    const effect = randomInt(1, magicEffect.end_list) as MagicEffect;
-                    const mb = new ServerMagicBall(nextMagicBallId++, effect);
-                    magicBalls.push(mb);
-                }
-            }
-        } else {
-            magicBalls = [];
-        }
-
-        // ATUALIZAR E COLIDIR BOLAS MÁGICAS
-        // Percorrer ao contrário para poder remover elementos seguramente
-        for (let i = magicBalls.length - 1; i >= 0; i--) {
-            const mb = magicBalls[i];
-            mb.update(dt);
-
-            // Verificar colisão com Raquetes
-            // Usamos uma lógica simples de distância ou AABB
-            let collected = false;
-
-            for (const paddle of [paddleLeft, paddleRight]) {
-                const pBox = paddle.getBoundingBox();
-                // Colisão simples AABB (reaproveitando a lógica mental da bola principal)
-                const collisionX = (mb.pos.x + mb.radius >= pBox.left) && (mb.pos.x - mb.radius <= pBox.right);
-                const collisionZ = (mb.pos.z + mb.radius >= pBox.near) && (mb.pos.z - mb.radius <= pBox.far);
-
-                if (collisionX && collisionZ) {
-                    paddle.applyPowerUp(mb.effectType);
-                    collected = true;
-
-                    io.emit('gameMessage', {
-                        message: getMagicEffectName(mb.effectType),
-                        side: paddle.side,
-                        color: "green",
-                        duration: MAGIC_EFFECT_DURATION
-                    });
-
-                    break;
-                }
-            }
-
-            if (collected) {
-                magicBalls.splice(i, 1); // Remove da lista
-            }
-        }
-
-
-
-        let leftCmd: Mov = inputs.left as Mov;
-        let rightCmd: Mov = inputs.right as Mov;
-
-        if (currentHellMode === hellMode.inverted_keys) {
-            if (leftCmd === mov.far)
-                leftCmd = mov.near;
-            else if (leftCmd === mov.near)
-                leftCmd = mov.far;
-            //
-            if (rightCmd === mov.far)
-                rightCmd = mov.near;
-            else if (rightCmd === mov.near)
-                rightCmd = mov.far;
-        }
-
-        paddleLeft.update(dt, leftCmd);
-        paddleRight.update(dt, rightCmd);
-
-        // 1. Atualizar física
-        const paddles = [paddleLeft, paddleRight];
-        balls.forEach(ball => {
-            if (isHell) {
-                const speedMod =
-                    (currentHellMode === hellMode.fast_balls)
-                        ? 4
-                        : 2;
-                ball.setSpeedModifier(speedMod);
-            }
-
-            const updateResult = ball.update(dt, paddles);
-
-            if (updateResult === 'left') {
-                score.left++;
-                // Opcional: Se uma bola marca golo, fazemos reset a essa bola específica
-                ball.throwBall();
-            }
-            else if (updateResult === 'right') {
-                score.right++;
-                ball.throwBall();
-            }
-
-            // Aplicar modos de Inferno ativos às bolas novas também
-            // if (currentHellMode === hellMode.big_balls) ball.setBigBall(true);
-            // if (currentHellMode === hellMode.fast_balls) ball.setSpeedModifier(true);
-        });
+    } else {
+        // Ensure list is empty in Hell
+        if (magicBalls.length > 0) magicBalls = [];
     }
 
-    // 2. Snapshot
-    const gameState = {
+    // 2. Physics & Collision
+    // Iterate backwards to allow safe removal
+    for (let i = magicBalls.length - 1; i >= 0; i--) {
+        const mb = magicBalls[i];
+        mb.update(dt);
+
+        let collected = false;
+        const paddles = [paddleLeft, paddleRight];
+
+        for (const paddle of paddles) {
+            const pBox = paddle.getBoundingBox();
+
+            // Simple AABB Collision
+            const collisionX = (mb.pos.x + mb.radius >= pBox.left) && (mb.pos.x - mb.radius <= pBox.right);
+            const collisionZ = (mb.pos.z + mb.radius >= pBox.near) && (mb.pos.z - mb.radius <= pBox.far);
+
+            if (collisionX && collisionZ) {
+                paddle.applyPowerUp(mb.effectType);
+                collected = true;
+
+                io.emit('gameMessage', {
+                    message: getMagicEffectName(mb.effectType),
+                    side: paddle.side,
+                    color: "green",
+                    duration: MAGIC_EFFECT_DURATION
+                });
+                break;
+            }
+        }
+
+        if (collected) {
+            magicBalls.splice(i, 1);
+        }
+    }
+}
+
+/**
+ * Inverts input command (Up becomes Down).
+ */
+function invertInput(cmd: Mov): Mov {
+    if (cmd === mov.far) return mov.near;
+    if (cmd === mov.near) return mov.far;
+    return mov.null;
+}
+
+/**
+ * Processes player inputs and applies movement to paddles.
+ */
+function updatePaddles(dt: number) {
+    let leftCmd: Mov = inputs.left as Mov;
+    let rightCmd: Mov = inputs.right as Mov;
+
+    // Handle 'Inverted Keys' Hell Mode
+    if (currentHellMode === hellMode.inverted_keys) {
+        leftCmd = invertInput(leftCmd);
+        rightCmd = invertInput(rightCmd);
+    }
+
+    paddleLeft.update(dt, leftCmd);
+    paddleRight.update(dt, rightCmd);
+}
+
+/**
+ * Updates ball physics and handling scoring.
+ */
+function updateBalls(dt: number) {
+    const paddles = [paddleLeft, paddleRight];
+
+    balls.forEach(ball => {
+        // Apply speed modifiers for Hell Mode
+        if (isHell) {
+            const mod = (currentHellMode === hellMode.fast_balls) ? CONFIG.SPEED_MOD_FAST : CONFIG.SPEED_MOD_NORMAL;
+            ball.setSpeedModifier(mod);
+        }
+
+        const result = ball.update(dt, paddles);
+
+        if (result === 'left') {
+            score.left++;
+            ball.throwBall();
+        } else if (result === 'right') {
+            score.right++;
+            ball.throwBall();
+        }
+
+        // Apply dynamic hell effects to new balls (redundancy check can be added inside setBigBall)
+        // if (currentHellMode === hellMode.big_balls) ball.setBigBall(true);
+        // if (currentHellMode === hellMode.fast_balls) ball.setFastBall(true);
+    });
+}
+
+/**
+ * Creates the snapshot object to be sent to clients.
+ */
+function createSnapshot() {
+    return {
         status: status,
         balls: balls.map(b => ({
             pos: b.pos.asArray(),
@@ -323,18 +294,99 @@ setInterval(() => {
         isHell: isHell,
         activeHellMode: currentHellMode
     };
+}
 
-    // 3. Enviar
-    io.emit('gameState', gameState);
+// --- SOCKET EVENT HANDLERS ---
+
+io.on('connection', (socket) => {
+    console.log(`Client connected: ${socket.id}`);
+
+    // Assign Role
+    let side = 'spectator';
+    if (players.left === null) {
+        players.left = socket.id;
+        side = 'left';
+    } else if (players.right === null) {
+        players.right = socket.id;
+        side = 'right';
+    }
+
+    socket.emit('init', { side });
+    console.log(`Player ${socket.id} assigned to: ${side}`);
+
+    // Player Ready
+    socket.on('playerReady', () => {
+        const pSide = (players.left === socket.id) ? 'left' : (players.right === socket.id) ? 'right' : null;
+        if (pSide) {
+            playersReady[pSide] = true;
+            console.log(`Player ${pSide} is ready.`);
+
+            if (playersReady.left && playersReady.right) {
+                resetGame();
+            }
+        }
+    });
+
+    // Pause Game
+    socket.on('pauseGame', () => {
+        const now = Date.now();
+        if (now - lastPauseToggle < CONFIG.PAUSE_COOLDOWN_MS) return;
+
+        lastPauseToggle = now;
+        if (status === GameStatus.RUNNING) {
+            status = GameStatus.PAUSED;
+            io.emit('gamePaused');
+            console.log("GAME PAUSED");
+        } else if (status === GameStatus.PAUSED) {
+            status = GameStatus.RUNNING;
+            io.emit('gameResumed');
+            console.log("GAME RESUMED");
+        }
+    });
+
+    // Input Handling
+    socket.on('input', (data) => {
+        if (side === 'left' && data.side === 'left') inputs.left = data.cmd;
+        if (side === 'right' && data.side === 'right') inputs.right = data.cmd;
+    });
+
+    // Disconnect
+    socket.on('disconnect', () => {
+        console.log(`Client disconnected: ${socket.id}`);
+        if (players.left === socket.id) players.left = null;
+        if (players.right === socket.id) players.right = null;
+    });
+});
+
+// --- MAIN GAME LOOP ---
+
+setInterval(() => {
+    if (status !== GameStatus.RUNNING) {
+        // Broadcast state even when paused so clients can render UI
+        io.emit('gameState', createSnapshot());
+        return;
+    }
+
+    const dt = TICK_MS / 1000;
+    gameTime += dt;
+
+    // Execution Order
+    updateGamePhases(dt);
+    updateMagicBalls(dt);
+    updatePaddles(dt);
+    updateBalls(dt);
+
+    // Broadcast State
+    io.emit('gameState', createSnapshot());
 
 }, TICK_MS);
 
-// --- INICIAR SERVIDOR ---
-httpServer.listen(PORT, () => {
-    console.log(`🚀 server running on http://localhost:${PORT}`);
+// --- START SERVER ---
+httpServer.listen(CONFIG.PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
 });
 
-// --- HELPERS PARA NOTIFICAÇÕES ---
+// --- HELPER STRINGS ---
 
 function getHellModeName(id: number): string {
     switch (id) {
@@ -346,7 +398,7 @@ function getHellModeName(id: number): string {
         case hellMode.multipleBalls: return "MULTIBALL CHAOS";
         case hellMode.twisted_view: return "TWISTED VIEW";
         case hellMode.drunk_view: return "DRUNK VIEW";
-        default: return "HELL MODE";
+        default: return "MYSTERY HELL MODE";
     }
 }
 
@@ -356,8 +408,8 @@ function getMagicEffectName(id: number): string {
         case magicEffect.small: return "SMALL PADDLE";
         case magicEffect.slow: return "SLOW MOTION";
         case magicEffect.fast: return "SPEED BOOST";
-        case magicEffect.freeze: return "FREEZED PADDLE";
-        case magicEffect.thick: return "STRONG PADDLE";
+        case magicEffect.freeze: return "FROZEN PADDLE";
+        case magicEffect.thick: return "THICK PADDLE";
         default: return "MYSTERY EFFECT";
     }
 }
