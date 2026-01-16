@@ -214,7 +214,6 @@ setInterval(() => {
                     const effect = randomInt(1, magicEffect.end_list) as MagicEffect;
                     const mb = new ServerMagicBall(nextMagicBallId++, effect);
                     magicBalls.push(mb);
-                    console.log("Spawn Magic Ball:", mb.id);
                 }
             }
         } else {

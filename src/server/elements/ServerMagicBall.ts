@@ -22,9 +22,9 @@ export class ServerMagicBall {
         this.pos = new Vector3(x, 2, z);
 
         this.velocity = new Vector3(
-            randomFloat2(20, 50), 
+            randomFloat2(-50, 50), 
             0, 
-            randomFloat2(20, 50)
+            randomFloat2(-50, 50)
         );
     }
 
