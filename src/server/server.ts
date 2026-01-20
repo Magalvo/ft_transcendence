@@ -16,7 +16,8 @@ import {
     magicEffect,
     mov,
     type MagicEffect,
-    type Mov
+    type Mov,
+    GAME_DURATION
 } from './index.js';
 
 // --- CONFIGURATION ---
@@ -40,6 +41,11 @@ const io = new Server(httpServer, {
         origin: "*",
         methods: ["GET", "POST"]
     }
+});
+
+// --- START SERVER ---
+httpServer.listen(CONFIG.PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
 });
 
 // --- GAME STATE ---
@@ -249,12 +255,12 @@ function handleBot(paddle: ServerPaddle): Mov {
 
     if ((paddle.side == "left" && vx < 0) ||
         (paddle.side == "right" && vx > 0)) {
-        
+
         if (Math.abs(paddle.pos.z - closest.pos.z) > 2) {
             moveCommand = paddle.pos.z < closest.pos.z ? mov.far : mov.near;
         }
     }
-    
+
     return moveCommand;
 }
 
@@ -421,7 +427,6 @@ io.on('connection', (socket) => {
 
 setInterval(() => {
     if (status === GameStatus.WAITING || status === GameStatus.PAUSED) {
-        // Broadcast state even when paused so clients can render UI
         io.emit('gameState', createSnapshot());
         return;
     }
@@ -430,14 +435,25 @@ setInterval(() => {
 
     if (status === GameStatus.COUNTDOWN) {
         countdownTimer -= dt;
-
         if (countdownTimer <= 0) {
             console.log("Countdown finished! FIGHT!");
             status = GameStatus.RUNNING;
             balls[0].throwBall();
         }
-
         io.emit('gameState', createSnapshot());
+        return;
+    }
+
+    if (gameTime >= GAME_DURATION)
+        status = GameStatus.ENDGAME;
+
+    if (status === GameStatus.ENDGAME) {
+        io.emit('gameMessage', {
+            message: "TIME'S UP",
+            side: 'big',
+            color: "green",
+            duration: 5
+        });
         return;
     }
 
@@ -451,11 +467,6 @@ setInterval(() => {
     io.emit('gameState', createSnapshot());
 
 }, TICK_MS);
-
-// --- START SERVER ---
-httpServer.listen(CONFIG.PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
-});
 
 // --- HELPER STRINGS ---
 
