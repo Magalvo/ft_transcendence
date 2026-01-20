@@ -114,7 +114,7 @@ export class GameScene {
 
   private setupSocketListeners() {
     this.socket.on("connect", () => console.log("CLIENT: Connected to server!"));
-    
+
     this.socket.on("init", (data: { side: string }) => {
       console.log("Player Side assigned:", data.side);
       this.data.mySide = data.side;
@@ -122,7 +122,7 @@ export class GameScene {
 
     this.socket.on("gamePaused", () => this.handleGamePaused());
     this.socket.on("gameResumed", () => this.handleGameResumed());
-    
+
     this.socket.on("gameMessage", (data: any) => {
       showWarningMessage({
         scene: this.scene,
@@ -140,9 +140,9 @@ export class GameScene {
   private handleGamePaused() {
     console.log("Game Paused by Server");
     // Force flag to true briefly so pauseScreen function allows creation
-    this.data.flags.game_running = true; 
+    this.data.flags.game_running = true;
     pauseScreen(this.data);
-    this.data.flags.game_running = false; 
+    this.data.flags.game_running = false;
   }
 
   private handleGameResumed() {
@@ -166,7 +166,7 @@ export class GameScene {
     if (serverState.paddles) this.syncPaddles(serverState.paddles);
     if (serverState.balls) this.syncPlayingBalls(serverState.balls, serverState.isHell);
     if (serverState.magicBalls) this.syncMagicBalls(serverState.magicBalls);
-    
+
     this.syncGameStats(serverState);
     this.handleGameStartTrigger(serverState.status);
     this.updateHellVisuals(serverState);
@@ -183,7 +183,7 @@ export class GameScene {
       // Handle Paddle Resizing
       // 'sizeZ' represents depth (length of paddle)
       // 'sizeX' represents width (thickness of paddle)
-      const serverZ = pData.sizeZ || pData.size; 
+      const serverZ = pData.sizeZ || pData.size;
       const serverX = pData.sizeX || SCENE_CONFIG.PADDLE_BASE_WIDTH;
 
       if (serverZ) {
@@ -218,7 +218,7 @@ export class GameScene {
       this.data.mods.goodElapsed = serverState.hellTimer;
       this.data.mods.devilElapsed = 0;
     }
-    
+
     // Update Table Colors
     this.data.obj3D.table.updateColor(serverState.isHell);
   }
@@ -289,7 +289,7 @@ export class GameScene {
     // 2. Sync properties
     serverBalls.forEach((sb: any, index: number) => {
       if (!localBalls[index]) return;
-      
+
       const ball = localBalls[index];
       const [bx, by, bz] = sb.pos;
       ball.mesh.position.set(bx, by, bz);
@@ -374,10 +374,16 @@ export class GameScene {
 
   public startGame(): void {
     this.resetScene();
-
+    
     createMainMenu();
-    startMainMenu(this.data, () => {
-      if (this.socket) this.socket.emit('playerReady');
+    startMainMenu(this.data, (mode) => {
+      if (this.socket) {
+        if (mode === 'online') {
+          this.socket.emit('onlinePlayerReady');
+        } else {
+          this.socket.emit('offlinePlayerReady');
+        }
+      }
     });
 
     let lastTime = performance.now();

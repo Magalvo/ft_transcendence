@@ -46,8 +46,11 @@ const io = new Server(httpServer, {
 let status: GameStatus = GameStatus.WAITING;
 let balls: ServerBall[] = [];
 let magicBalls: ServerMagicBall[] = [];
-const paddleLeft = new ServerPaddle('left', CONFIG.PADDLE_X_LEFT);
-const paddleRight = new ServerPaddle('right', CONFIG.PADDLE_X_RIGHT);
+
+// Initialize paddles immediately
+let paddleLeft: ServerPaddle = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
+let paddleRight: ServerPaddle = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
+
 const score = { left: 0, right: 0 };
 
 // Logic Control
@@ -129,6 +132,9 @@ function enterHellMode() {
                 if (b.velocity === 0) b.throwBall();
             });
             break;
+        case hellMode.fast_balls:
+             balls.forEach(b => b.setFastBall(true));
+             break;
     }
 }
 
@@ -193,7 +199,7 @@ function updateMagicBalls(dt: number) {
 
         for (const paddle of paddles) {
             const pBox = paddle.getBoundingBox();
-
+            
             // Simple AABB Collision
             const collisionX = (mb.pos.x + mb.radius >= pBox.left) && (mb.pos.x - mb.radius <= pBox.right);
             const collisionZ = (mb.pos.z + mb.radius >= pBox.near) && (mb.pos.z - mb.radius <= pBox.far);
@@ -227,12 +233,24 @@ function invertInput(cmd: Mov): Mov {
     return mov.null;
 }
 
+function handleBot(paddle: ServerPaddle): Mov {
+    let moveCommand: Mov = mov.null;
+    const closest = balls.reduce((prev, b) =>
+        Math.abs(b.pos.x - paddle.pos.x) < Math.abs(prev.pos.x - paddle.pos.x) ? b : prev
+    );
+    if ((paddle.side == "left" && closest.velocity < 0) ||
+        (paddle.side == "right" && closest.velocity > 0)) {
+        moveCommand = paddle.pos.z < closest.pos.z ? mov.far : mov.near;
+    }
+    return moveCommand;
+}
+
 /**
  * Processes player inputs and applies movement to paddles.
  */
 function updatePaddles(dt: number) {
-    let leftCmd: Mov = inputs.left as Mov;
-    let rightCmd: Mov = inputs.right as Mov;
+    let leftCmd = getPaddleMoveCmd(paddleLeft);
+    let rightCmd = getPaddleMoveCmd(paddleRight);
 
     // Handle 'Inverted Keys' Hell Mode
     if (currentHellMode === hellMode.inverted_keys) {
@@ -245,11 +263,22 @@ function updatePaddles(dt: number) {
 }
 
 /**
+ * Determines the move command for a paddle based on whether it is Human or Bot.
+ */
+function getPaddleMoveCmd(paddle: ServerPaddle): Mov {
+    if (paddle.player === 'human') {
+        // CORREÇÃO: Verificar qual o lado da raquete para atribuir o input correto
+        return (paddle.side === 'left') ? inputs.left as Mov : inputs.right as Mov;
+    }
+    return handleBot(paddle);
+}
+
+/**
  * Updates ball physics and handling scoring.
  */
 function updateBalls(dt: number) {
     const paddles = [paddleLeft, paddleRight];
-
+    
     balls.forEach(ball => {
         // Apply speed modifiers for Hell Mode
         if (isHell) {
@@ -266,10 +295,6 @@ function updateBalls(dt: number) {
             score.right++;
             ball.throwBall();
         }
-
-        // Apply dynamic hell effects to new balls (redundancy check can be added inside setBigBall)
-        // if (currentHellMode === hellMode.big_balls) ball.setBigBall(true);
-        // if (currentHellMode === hellMode.fast_balls) ball.setFastBall(true);
     });
 }
 
@@ -314,24 +339,35 @@ io.on('connection', (socket) => {
     socket.emit('init', { side });
     console.log(`Player ${socket.id} assigned to: ${side}`);
 
-    // Player Ready
-    socket.on('playerReady', () => {
+    // Player Ready (ONLINE)
+    socket.on('onlinePlayerReady', () => {
         const pSide = (players.left === socket.id) ? 'left' : (players.right === socket.id) ? 'right' : null;
         if (pSide) {
             playersReady[pSide] = true;
             console.log(`Player ${pSide} is ready.`);
-
+            
             if (playersReady.left && playersReady.right) {
+                // Both are HUMAN
+                paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
+                paddleRight = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
                 resetGame();
             }
         }
+    });
+
+    // Player Ready (BOT MATCH)
+    socket.on('offlinePlayerReady', () => {
+        // Human vs Bot
+        paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
+        paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
+        resetGame();
     });
 
     // Pause Game
     socket.on('pauseGame', () => {
         const now = Date.now();
         if (now - lastPauseToggle < CONFIG.PAUSE_COOLDOWN_MS) return;
-
+        
         lastPauseToggle = now;
         if (status === GameStatus.RUNNING) {
             status = GameStatus.PAUSED;
@@ -398,7 +434,7 @@ function getHellModeName(id: number): string {
         case hellMode.multipleBalls: return "MULTIBALL CHAOS";
         case hellMode.twisted_view: return "TWISTED VIEW";
         case hellMode.drunk_view: return "DRUNK VIEW";
-        default: return "MYSTERY HELL MODE";
+        default: return "HELL MODE";
     }
 }
 

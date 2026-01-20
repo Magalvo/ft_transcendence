@@ -1,9 +1,11 @@
 import { Vector3 } from "../../shared/Vector3.js";
 import { MAGIC_EFFECT_DURATION, magicEffect, mov, type MagicEffect, type Mov } from "../../shared/strings.js";
+import type { ServerBall } from "../index.js";
 
 export class ServerPaddle {
     public pos: Vector3;
     public side: 'left' | 'right';
+    public player: 'human' | 'bot';
 
     // Dimensões Físicas Atuais
     public width: number = 0.5;   // Eixo X (Espessura)
@@ -24,13 +26,14 @@ export class ServerPaddle {
     private baseX: number;
     private knockback: number = 0;
 
-    constructor(side: 'left' | 'right', x: number) {
+    constructor(side: 'left' | 'right', player: 'human' | 'bot', x: number) {
         this.side = side;
+        this.player = player;
         this.baseX = x;
         this.pos = new Vector3(x, 3, 0);
     }
 
-    public update(deltaTime: number, moveCommand: Mov) {
+    public update(deltaTime: number, playerInput: Mov) {
         // 1. Gerir o Timer do Efeito
         if (this.effectTimer > 0) {
             this.effectTimer -= deltaTime;
@@ -40,6 +43,15 @@ export class ServerPaddle {
         }
 
         // 2. Movimento
+        this.move(deltaTime, playerInput);
+
+        // 3. Limites (Clamping)
+        const limit = (this.tableLimits.z / 2) - (this.depth / 2);
+        if (this.pos.z > limit) this.pos.z = limit;
+        if (this.pos.z < -limit) this.pos.z = -limit;
+    }
+
+    private move(deltaTime: number, moveCommand: Mov) {
         let dir = 0;
         if (moveCommand === mov.far) dir = 1;
         if (moveCommand === mov.near) dir = -1;
@@ -55,15 +67,9 @@ export class ServerPaddle {
 
         const direction = this.side === 'left' ? -1 : 1;
         this.pos.x = this.baseX + (direction * this.knockback);
-
-        // 3. Limites (Clamping)
-        const limit = (this.tableLimits.z / 2) - (this.depth / 2);
-        if (this.pos.z > limit) this.pos.z = limit;
-        if (this.pos.z < -limit) this.pos.z = -limit;
     }
 
     public applyImpact() {
-        // Empurra 5 unidades para trás a cada batida
         this.knockback += 5;
         console.log(`${this.side} pushed back! New X: ${this.pos.x}`);
     }
