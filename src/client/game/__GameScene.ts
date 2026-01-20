@@ -78,8 +78,7 @@ export class GameScene {
     };
     this.data.input = {
       keysPressed: [],
-      left_paddle_mov: mov.null,
-      right_paddle_mov: mov.null,
+      paddle_mov: mov.null,
       left_player_human: true,
       right_player_human: false,
     };
@@ -124,10 +123,20 @@ export class GameScene {
     this.socket.on("gameResumed", () => this.handleGameResumed());
 
     this.socket.on("gameMessage", (data: any) => {
+      // if message on center: keep on center
+      // if this is 'right' player: invert message location
+      const side =
+        (data.side !== 'center')
+          ? (this.data.mySide === 'right')
+            ? (data.side === 'left')
+              ? 'right'
+              : 'left'
+            : data.side
+          : data.side;
       showWarningMessage({
         scene: this.scene,
         message: data.message,
-        side: data.side,
+        side: side,
         color: data.color,
         duration: data.duration
       });
@@ -173,37 +182,56 @@ export class GameScene {
   }
 
   private syncPaddles(serverPaddles: any[]) {
+    // 1. Determinar se precisamos de espelhar o mundo
+    const amIRight = (this.data.mySide === 'right');
+    const invertX = amIRight ? -1 : 1;
+
     serverPaddles.forEach((pData: any) => {
-      const paddle = this.data.obj3D.paddles.find(p => p.side === pData.side);
+
+      // LÓGICA DE VISUALIZAÇÃO:
+      // Se eu sou o Player Right:
+      // - Os dados do servidor 'right' (eu) devem controlar a raquete visual 'left'.
+      // - Os dados do servidor 'left' (inimigo) devem controlar a raquete visual 'right'.
+      let visualSide = pData.side;
+
+      if (amIRight) {
+        visualSide = (pData.side === 'right') ? 'left' : 'right';
+      }
+
+      // Encontrar a malha visual correspondente
+      const paddle = this.data.obj3D.paddles.find(p => p.side === visualSide);
       if (!paddle) return;
 
       const [px, py, pz] = pData.pos;
-      paddle.mesh.position.set(px, py, pz);
 
-      // Handle Paddle Resizing
-      // 'sizeZ' represents depth (length of paddle)
-      // 'sizeX' represents width (thickness of paddle)
+      // APLICAR ESPELHAMENTO NA POSIÇÃO X
+      // Se eu for Right, a posição 68 vira -68 (o meu lado visual esquerdo)
+      paddle.mesh.position.set(px * invertX, py, pz);
+
+      // Sincronizar Tamanhos
       const serverZ = pData.sizeZ || pData.size;
       const serverX = pData.sizeX || SCENE_CONFIG.PADDLE_BASE_WIDTH;
 
       if (serverZ) {
         paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
-        if (paddle.dimensions?.value) paddle.dimensions.value.z = serverZ;
-        if (paddle.dimensions?.original) paddle.dimensions.original.z = serverZ;
       }
 
       if (serverX) {
         paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
-        if (paddle.dimensions?.value) paddle.dimensions.value.x = serverX;
-        if (paddle.dimensions?.original) paddle.dimensions.original.x = serverX;
       }
     });
   }
 
   private syncGameStats(serverState: any) {
+    const amIRight = (this.data.mySide === 'right');
     if (serverState.score) {
-      this.data.mods.score.left = serverState.score.left;
-      this.data.mods.score.right = serverState.score.right;
+      if (amIRight) {
+        this.data.mods.score.left = serverState.score.right;
+        this.data.mods.score.right = serverState.score.left;
+      } else {
+        this.data.mods.score.left = serverState.score.left;
+        this.data.mods.score.right = serverState.score.right;
+      }
     }
     this.data.mods.time = serverState.time;
     this.data.mods.is_hell = serverState.isHell;
@@ -237,6 +265,8 @@ export class GameScene {
   private syncMagicBalls(serverBalls: any[]) {
     // Cast to any[] to allow metadata access
     const localBalls = this.data.magicBalls.magic_balls_ref as any[];
+    const amIRight = (this.data.mySide === 'right');
+    const invertX = amIRight ? -1 : 1;
 
     // 1. Remove stale balls
     for (let i = localBalls.length - 1; i >= 0; i--) {
@@ -258,12 +288,13 @@ export class GameScene {
     // 2. Update or Create balls
     serverBalls.forEach((sb: any) => {
       const local = localBalls.find((lb: any) => lb.metadata && lb.metadata.id === sb.id);
+      const visualX = sb.x * invertX;
 
       if (local) {
-        local.position.set(sb.x, sb.y, sb.z);
+        local.position.set(visualX, sb.y, sb.z);
       } else {
         const newMesh = BABYLON.MeshBuilder.CreateSphere("mb", { diameter: 3 }, this.scene);
-        newMesh.position.set(sb.x, sb.y, sb.z);
+        newMesh.position.set(visualX, sb.y, sb.z);
 
         const mat = new BABYLON.StandardMaterial("mbMat", this.scene);
         const ballColor = BABYLON.Color3.Random();
@@ -279,6 +310,8 @@ export class GameScene {
 
   private syncPlayingBalls(serverBalls: any[], isHell: boolean) {
     const localBalls = this.data.obj3D.balls;
+    const amIRight = (this.data.mySide === 'right');
+    const invertX = amIRight ? -1 : 1;
 
     // 1. Create missing balls
     while (localBalls.length < serverBalls.length) {
@@ -292,7 +325,8 @@ export class GameScene {
 
       const ball = localBalls[index];
       const [bx, by, bz] = sb.pos;
-      ball.mesh.position.set(bx, by, bz);
+
+      ball.mesh.position.set(bx * invertX, by, bz);
 
       const radius = sb.radius || 2;
       const scale = radius / 2;
@@ -374,7 +408,7 @@ export class GameScene {
 
   public startGame(): void {
     this.resetScene();
-    
+
     createMainMenu();
     startMainMenu(this.data, (mode) => {
       if (this.socket) {

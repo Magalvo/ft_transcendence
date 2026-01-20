@@ -133,7 +133,7 @@ function enterHellMode() {
             });
             break;
         case hellMode.fast_balls:
-             balls.forEach(b => b.setFastBall(true));
+            //  balls.forEach(b => b.setFastBall(true));
              break;
     }
 }

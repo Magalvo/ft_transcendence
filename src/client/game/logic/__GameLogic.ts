@@ -83,22 +83,9 @@ function updateGameObjects(
   handleKeyboardEvents(data); // Isto atualiza data.input.left_paddle_mov baseado nas teclas
 
   if (data.socket && data.mySide) {
-      // Determinar qual o comando que devo enviar baseado no meu lado
-      let myCommand : Mov = mov.null;
-
-      // Se eu sou LEFT, leio as teclas associadas ao Left (WASD) ou Setas (se preferires)
-      // Nota: O handleKeyboardEvents atual lê WASD para left e SETAS para right.
-      // Podes querer unificar isso depois (usar setas para ambos), mas para já:
-      
-      if (data.mySide === 'left') {
-          myCommand = data.input.left_paddle_mov; 
-      } else if (data.mySide === 'right') {
-          myCommand = data.input.right_paddle_mov;
-      }
-
       // Enviar apenas se eu for um jogador ativo
       if (data.mySide !== 'spectator') {
-          data.socket.emit('input', { side: data.mySide, cmd: myCommand });
+          data.socket.emit('input', { side: data.mySide, cmd: data.input.paddle_mov });
       }
   }
 }

@@ -34,8 +34,7 @@ export interface GameModifiers {
 export interface GameInput {
     // Controls
     keysPressed: boolean[];
-    left_paddle_mov: Mov;
-    right_paddle_mov: Mov;
+    paddle_mov: Mov;
     // Players
     left_player_human: boolean;
     right_player_human: boolean;
