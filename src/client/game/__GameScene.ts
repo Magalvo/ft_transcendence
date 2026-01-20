@@ -463,8 +463,10 @@ export class GameScene {
       if (this.socket) {
         if (mode === 'online') {
           this.socket.emit('onlinePlayerReady');
-        } else {
+        } else if (mode === 'bot') {
           this.socket.emit('offlinePlayerReady');
+        } else if (mode === 'demo') {
+          this.socket.emit('demo');
         }
       }
     });

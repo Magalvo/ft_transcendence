@@ -31,13 +31,13 @@ export function createMainMenu() {
  * @param data Game data object
  * @param onOptionSelected Callback function receiving the selected mode ('online' | 'bot')
  */
-export function startMainMenu(data: GameData, onOptionSelected: (mode: 'online' | 'bot') => void) {
+export function startMainMenu(data: GameData, onOptionSelected: (mode: 'online' | 'bot' | 'demo') => void) {
     positionCamera(data.env);
     createTitle();
 
     // Show loading overlay, then reveal buttons
     const hideLoading = showLoadingOverlay({ minDuration: 2000 });
-    
+
     Promise.all([
         waitForScene(data.scene)
     ]).then(() => {
@@ -66,20 +66,20 @@ export function closeMainMenu(data: GameData) {
 /**
  * Creates the main interaction buttons (Online vs Bot).
  */
-function createButtons(onOptionSelected: (mode: 'online' | 'bot') => void) {
-    
+function createButtons(onOptionSelected: (mode: 'online' | 'bot' | 'demo') => void) {
+
     // 1. ONLINE MATCH BUTTON
     const btnOnline = GUI.Button.CreateSimpleButton("btnOnline", "ONLINE MATCH");
     styleButton(btnOnline);
     btnOnline.top = "30%";
     btnOnline.left = "-15%";
-    
+
     btnOnline.onPointerUpObservable.add(() => {
         btnOnline.textBlock!.text = "SEARCHING...";
         // Disable buttons to prevent double click
         btnOnline.isEnabled = false;
         if (guiTexture.getControlByName("btnBot")) guiTexture.getControlByName("btnBot")!.isEnabled = false;
-        
+
         onOptionSelected('online');
     });
     guiTexture.addControl(btnOnline);
@@ -89,13 +89,15 @@ function createButtons(onOptionSelected: (mode: 'online' | 'bot') => void) {
     styleButton(btnBot);
     btnBot.top = "30%";
     btnBot.left = "15%";
-    
-    btnBot.onPointerUpObservable.add(() => {
+
+    btnBot.onPointerUpObservable.add((info) => {
         btnBot.textBlock!.text = "LOADING...";
         btnBot.isEnabled = false;
         if (guiTexture.getControlByName("btnOnline")) guiTexture.getControlByName("btnOnline")!.isEnabled = false;
-
-        onOptionSelected('bot');
+        if (info.buttonIndex === 2)
+            onOptionSelected('demo');
+        else
+            onOptionSelected('bot');
     });
     guiTexture.addControl(btnBot);
 }

@@ -140,7 +140,7 @@ function enterHellMode() {
             break;
         case hellMode.fast_balls:
             //  balls.forEach(b => b.setFastBall(true));
-             break;
+            break;
     }
 }
 
@@ -205,7 +205,7 @@ function updateMagicBalls(dt: number) {
 
         for (const paddle of paddles) {
             const pBox = paddle.getBoundingBox();
-            
+
             // Simple AABB Collision
             const collisionX = (mb.pos.x + mb.radius >= pBox.left) && (mb.pos.x - mb.radius <= pBox.right);
             const collisionZ = (mb.pos.z + mb.radius >= pBox.near) && (mb.pos.z - mb.radius <= pBox.far);
@@ -241,13 +241,20 @@ function invertInput(cmd: Mov): Mov {
 
 function handleBot(paddle: ServerPaddle): Mov {
     let moveCommand: Mov = mov.null;
+
     const closest = balls.reduce((prev, b) =>
         Math.abs(b.pos.x - paddle.pos.x) < Math.abs(prev.pos.x - paddle.pos.x) ? b : prev
     );
-    if ((paddle.side == "left" && closest.velocity < 0) ||
-        (paddle.side == "right" && closest.velocity > 0)) {
-        moveCommand = paddle.pos.z < closest.pos.z ? mov.far : mov.near;
+    const vx = closest.velocity * Math.cos(closest.angle * Math.PI / 180);
+
+    if ((paddle.side == "left" && vx < 0) ||
+        (paddle.side == "right" && vx > 0)) {
+        
+        if (Math.abs(paddle.pos.z - closest.pos.z) > 2) {
+            moveCommand = paddle.pos.z < closest.pos.z ? mov.far : mov.near;
+        }
     }
+    
     return moveCommand;
 }
 
@@ -284,7 +291,7 @@ function getPaddleMoveCmd(paddle: ServerPaddle): Mov {
  */
 function updateBalls(dt: number) {
     const paddles = [paddleLeft, paddleRight];
-    
+
     balls.forEach(ball => {
         // Apply speed modifiers for Hell Mode
         if (isHell) {
@@ -352,7 +359,7 @@ io.on('connection', (socket) => {
         if (pSide) {
             playersReady[pSide] = true;
             console.log(`Player ${pSide} is ready.`);
-            
+
             if (playersReady.left && playersReady.right) {
                 // Both are HUMAN
                 paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
@@ -370,11 +377,20 @@ io.on('connection', (socket) => {
         resetGame();
     });
 
+    socket.on('demo', () => {
+        // Bot vs Bot
+        console.log(`Bot vs Bot demo`);
+        paddleLeft = new ServerPaddle('left', 'bot', CONFIG.PADDLE_X_LEFT);
+        paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
+        resetGame();
+    });
+
+
     // Pause Game
     socket.on('pauseGame', () => {
         const now = Date.now();
         if (now - lastPauseToggle < CONFIG.PAUSE_COOLDOWN_MS) return;
-        
+
         lastPauseToggle = now;
         if (status === GameStatus.RUNNING) {
             status = GameStatus.PAUSED;
@@ -418,7 +434,6 @@ setInterval(() => {
         if (countdownTimer <= 0) {
             console.log("Countdown finished! FIGHT!");
             status = GameStatus.RUNNING;
-            // Agora sim, lançamos a bola!
             balls[0].throwBall();
         }
 
