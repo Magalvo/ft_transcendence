@@ -40,34 +40,10 @@ function normalPlayersMove(data: GameData) {
         input.paddle_mov = mov.null;
 }
 
-// function invertedPlayersMove(data: GameData) {
-//     const input = data.input;
-//     // LEFT PLAYER 
-//     // move far 'A' 'W'
-//     // move near 'S' 'D'
-//     if (input.keysPressed[keyCode.W] || input.keysPressed[keyCode.A])
-//         input.left_paddle_mov = mov.near;
-//     else if (input.keysPressed[keyCode.S] || input.keysPressed[keyCode.D])
-//         input.left_paddle_mov = mov.far;
-//     else
-//         input.left_paddle_mov = mov.null;
-
-//     // RIGHT PLAYER 
-//     // move far '←' '↑'
-//     // move near '→' '↓'
-//     if (input.keysPressed[keyCode.LEFT_ARROW] || input.keysPressed[keyCode.UP_ARROW])
-//         input.right_paddle_mov = mov.near;
-//     else if (input.keysPressed[keyCode.RIGHT_ARROW] || input.keysPressed[keyCode.DOWN_ARROW])
-//         input.right_paddle_mov = mov.far;
-//     else
-//         input.right_paddle_mov = mov.null;
-// }
-
 function cameraMov(data: GameData) {
     // Switch camera presets with 'Z', 'X', 'C'
     if (data.input.keysPressed[keyCode.Z]) data.flags.camera_pos = 2;
     if (data.input.keysPressed[keyCode.X]) data.flags.camera_pos = 1;
-    if (data.input.keysPressed[keyCode.C]) data.flags.camera_pos = 3;
 }
 
 function gamePause(data: GameData) {
