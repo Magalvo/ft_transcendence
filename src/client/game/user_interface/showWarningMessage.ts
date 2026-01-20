@@ -9,10 +9,10 @@ interface ActiveMessage {
 }
 
 // Estado global do módulo (uma mensagem por lado)
-const activeMessages: { [side: string]: ActiveMessage | null } = { 
-    left: null, 
-    right: null, 
-    center: null 
+const activeMessages: { [side: string]: ActiveMessage | null } = {
+    left: null,
+    right: null,
+    center: null
 };
 
 /**
@@ -22,27 +22,27 @@ export function showWarningMessage(
     {
         scene,
         message,
-        side,
+        pos,
         duration = 10, // Duração em SEGUNDOS agora (não ms)
         color = "red",
     }: {
         scene: BABYLON.Scene,
         message: string,
-        side: "left" | "right" | "center",
+        pos: "left" | "right" | "center" | "big",
         duration?: number,
-        color?: "red" | "green",
+        color?: "red" | "green" | "blue",
     }
 ) {
     // 1. Limpar mensagem anterior nesse lado (Sem acumular!)
-    if (activeMessages[side]) {
-        const oldMsg = activeMessages[side]!;
+    if (activeMessages[pos]) {
+        const oldMsg = activeMessages[pos]!;
         oldMsg.guiTexture.dispose(); // Apaga a UI antiga
-        activeMessages[side] = null;
+        activeMessages[pos] = null;
     }
 
     // 2. Criar nova UI
     const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Message", true, scene);
-    
+
     const rect = new GUI.Rectangle();
     rect.width = "320px";
     rect.height = "80px";
@@ -51,27 +51,6 @@ export function showWarningMessage(
     rect.thickness = 2;
     rect.alpha = 1; // Começa totalmente visível
 
-    if (color == "red")
-        rect.background = "rgba(255,0,0,0.5)"; // Um pouco mais opaco para leitura
-    else if (color == "green")
-        rect.background = "rgba(0, 255, 76, 0.5)";
-
-    // Posicionamento Fixo (Sem offsets dinâmicos)
-    rect.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-    rect.top = "-100px"; // Distância fixa do fundo
-
-    if (side === "left") {
-        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-        rect.left = "40px";
-    } else if (side === "right") {
-        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
-        rect.left = "-40px";
-    } else {
-        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-        rect.left = "0px";
-        rect.top = "-150px"; // O centro fica um pouco mais acima
-    }
-
     const textBlock = new GUI.TextBlock();
     textBlock.text = message;
     textBlock.color = "#fff";
@@ -79,11 +58,41 @@ export function showWarningMessage(
     textBlock.fontWeight = "bold";
     textBlock.textWrapping = true;
     textBlock.resizeToFit = true;
+
+    if (color == "red")
+        rect.background = "rgba(255,0,0,0.5)"; // Um pouco mais opaco para leitura
+    else if (color == "green")
+        rect.background = "rgba(0, 255, 76, 0.5)";
+    else if (color == "blue")
+        rect.background = "rgba(29, 109, 230, 0.5)";
+
+    // Posicionamento Fixo (Sem offsets dinâmicos)
+    rect.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+    rect.top = "-100px"; // Distância fixa do fundo
+
+    if (pos === "left") {
+        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        rect.left = "40px";
+    } else if (pos === "right") {
+        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        rect.left = "-40px";
+    } else if (pos === "center") {
+        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        rect.left = "0px";
+        rect.top = "-150px"; // O centro fica um pouco mais acima
+    } else if (pos === "big") {
+        rect.width = "500px";
+        rect.height = "250px";
+        textBlock.fontSize = 50;
+        rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        rect.left = "0px";
+        rect.top = "-40%";
+    }
     rect.addControl(textBlock);
     gui.addControl(rect);
 
     // 3. Guardar no estado
-    activeMessages[side] = {
+    activeMessages[pos] = {
         rect: rect,
         guiTexture: gui,
         timer: duration, // Ex: 10 segundos
@@ -96,7 +105,7 @@ export function showWarningMessage(
  * @param dt Delta Time em segundos
  */
 export function updateWarningMessages(dt: number) {
-    const sides = ["left", "right", "center"];
+    const sides = ["left", "right", "center", "big"];
 
     sides.forEach(side => {
         const msg = activeMessages[side];
@@ -108,8 +117,8 @@ export function updateWarningMessages(dt: number) {
             if (msg.timer <= 0.5 && !msg.fading) {
                 msg.fading = true;
                 const fadeAnim = new BABYLON.Animation(
-                    "fadeOut", "alpha", 60, 
-                    BABYLON.Animation.ANIMATIONTYPE_FLOAT, 
+                    "fadeOut", "alpha", 60,
+                    BABYLON.Animation.ANIMATIONTYPE_FLOAT,
                     BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
                 );
                 fadeAnim.setKeys([{ frame: 0, value: 1 }, { frame: 30, value: 0 }]);
@@ -121,7 +130,7 @@ export function updateWarningMessages(dt: number) {
 
             // Animação manual de fade (mais seguro contra pausas)
             if (msg.fading) {
-                msg.rect.alpha = Math.max(0, msg.rect.alpha - (dt * 2)); 
+                msg.rect.alpha = Math.max(0, msg.rect.alpha - (dt * 2));
             }
 
             // Destruir quando o tempo acaba
@@ -135,7 +144,7 @@ export function updateWarningMessages(dt: number) {
 
 export function clearMagicNotifications() {
     const sides = ["left", "right"];
-    
+
     sides.forEach(side => {
         const msg = activeMessages[side];
         if (msg) {

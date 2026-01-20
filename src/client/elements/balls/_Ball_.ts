@@ -133,7 +133,7 @@ export abstract class Ball extends GameObject {
         data.mods.score.right++;
         flashZone(data, "left", table);
         this.throwBall(true, table);
-        showWarningMessage({ scene: data.scene, message: "Score +1", side: "right", color: "green", duration: 2000 });
+        showWarningMessage({ scene: data.scene, message: "Score +1", pos: "right", color: "green", duration: 2000 });
         if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
           const index = data.obj3D.balls.indexOf(this);
           this.dispose();
@@ -150,7 +150,7 @@ export abstract class Ball extends GameObject {
         data.mods.score.left++;
         flashZone(data, "right", table);
         this.throwBall(true, table);
-        showWarningMessage({ scene: data.scene, message: "Score +1", side: "left", color: "green" });
+        showWarningMessage({ scene: data.scene, message: "Score +1", pos: "left", color: "green" });
         if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
           const index = data.obj3D.balls.indexOf(this);
           this.dispose();

@@ -52,6 +52,7 @@ let paddleLeft: ServerPaddle = new ServerPaddle('left', 'human', CONFIG.PADDLE_X
 let paddleRight: ServerPaddle = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
 
 const score = { left: 0, right: 0 };
+let countdownTimer = 3;
 
 // Logic Control
 let lastPauseToggle = 0;
@@ -73,8 +74,10 @@ const playersReady: { [side: string]: boolean } = { left: false, right: false };
  * Resets the game state to the initial values.
  */
 function resetGame() {
-    console.log("Starting new game...");
-    status = GameStatus.RUNNING;
+    console.log("Starting countdown...");
+    status = GameStatus.COUNTDOWN;
+    countdownTimer = 3;
+
     gameTime = 0;
     phaseTimer = 0;
     isHell = false;
@@ -84,7 +87,10 @@ function resetGame() {
 
     // Reset entities
     balls = [new ServerBall(0, 0)];
-    balls[0].throwBall();
+    // balls[0].pos.x = 0; 
+    // balls[0].pos.z = 0;
+    // balls[0].velocity = 0;
+
     paddleLeft.resetEffects();
     paddleRight.resetEffects();
     magicBalls = [];
@@ -317,7 +323,8 @@ function createSnapshot() {
         time: gameTime,
         hellTimer: phaseTimer,
         isHell: isHell,
-        activeHellMode: currentHellMode
+        activeHellMode: currentHellMode,
+        countdown: Math.ceil(countdownTimer)
     };
 }
 
@@ -397,16 +404,29 @@ io.on('connection', (socket) => {
 // --- MAIN GAME LOOP ---
 
 setInterval(() => {
-    if (status !== GameStatus.RUNNING) {
+    if (status === GameStatus.WAITING || status === GameStatus.PAUSED) {
         // Broadcast state even when paused so clients can render UI
         io.emit('gameState', createSnapshot());
         return;
     }
 
     const dt = TICK_MS / 1000;
-    gameTime += dt;
 
-    // Execution Order
+    if (status === GameStatus.COUNTDOWN) {
+        countdownTimer -= dt;
+
+        if (countdownTimer <= 0) {
+            console.log("Countdown finished! FIGHT!");
+            status = GameStatus.RUNNING;
+            // Agora sim, lançamos a bola!
+            balls[0].throwBall();
+        }
+
+        io.emit('gameState', createSnapshot());
+        return;
+    }
+
+    gameTime += dt;
     updateGamePhases(dt);
     updateMagicBalls(dt);
     updatePaddles(dt);

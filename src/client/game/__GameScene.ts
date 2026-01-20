@@ -16,6 +16,7 @@ import {
   showWarningMessage,
   clearMagicNotifications,
   pauseScreen,
+  GameStatus,
 } from "../index.js";
 import { io, Socket } from "socket.io-client";
 
@@ -45,6 +46,7 @@ export class GameScene {
   private scene!: BABYLON.Scene;
   private socket!: Socket;
   private wasHell: boolean = false;
+  private lastCountdownValue: number = -1;
 
   constructor() {
     this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -126,7 +128,7 @@ export class GameScene {
       // if message on center: keep on center
       // if this is 'right' player: invert message location
       const side =
-        (data.side !== 'center')
+        (data.side === 'left' || data.side === 'right')
           ? (this.data.mySide === 'right')
             ? (data.side === 'left')
               ? 'right'
@@ -136,7 +138,7 @@ export class GameScene {
       showWarningMessage({
         scene: this.scene,
         message: data.message,
-        side: side,
+        pos: side,
         color: data.color,
         duration: data.duration
       });
@@ -179,6 +181,54 @@ export class GameScene {
     this.syncGameStats(serverState);
     this.handleGameStartTrigger(serverState.status);
     this.updateHellVisuals(serverState);
+    if (serverState.status === GameStatus.COUNTDOWN) {
+      closeMainMenu(this.data);
+      const count = serverState.countdown;
+
+      // Só executa se o número mudou (ex: passou de 3 para 2)
+      if (count !== this.lastCountdownValue) {
+        this.showCountdownMessage(count);
+        this.lastCountdownValue = count;
+      }
+    }
+    else if (serverState.status === GameStatus.RUNNING && this.lastCountdownValue !== 0) {
+      // Se o jogo começou (RUNNING) e ainda não mostrámos o "GO!"
+      this.showCountdownMessage(0);
+      this.lastCountdownValue = 0;
+    }
+  }
+
+  private showCountdownMessage(count: number) {
+    let text = "";
+    let color: "red" | "green" | "blue" = "red";
+
+    switch (count) {
+      case 3:
+        text = "FATE AWAITS";
+        color = "blue";
+        break;
+      case 2:
+        text = "HELL RISES";
+        color = "red";
+        break;
+      case 1:
+        text = "PREPARE";
+        color = "green";
+        break;
+      case 0:
+        text = "CLASH !!!";
+        color = "red";
+        break;
+    }
+
+    // Usa a tua função de mensagens existente
+    showWarningMessage({
+      scene: this.scene,
+      message: text,
+      pos: "big",
+      color: color,
+      duration: 1
+    });
   }
 
   private syncPaddles(serverPaddles: any[]) {
@@ -253,9 +303,8 @@ export class GameScene {
 
   private handleGameStartTrigger(status: number) {
     // Status 1 = RUNNING
-    if (status === 1 && !this.data.flags.game_running) {
-      console.log("GAME STARTED! Closing menu...");
-      closeMainMenu(this.data);
+    if (status === GameStatus.RUNNING && !this.data.flags.game_running) {
+      console.log("GAME STARTED!");
       this.data.flags.game_running = true;
     }
   }

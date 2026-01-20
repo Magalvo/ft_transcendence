@@ -91,6 +91,6 @@ export class MagicBall extends Ball {
       [magicEffect.thick]: "Your paddle is THICK!",
     };
     const msg = effectMessages[this.magic_effect];
-    if (msg) showWarningMessage({ scene: data.scene, message: msg, side: paddle.side, duration: this.effect_duration * 1000 });
+    if (msg) showWarningMessage({ scene: data.scene, message: msg, pos: paddle.side, duration: this.effect_duration * 1000 });
   }
 }

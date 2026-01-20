@@ -4,7 +4,7 @@ export const GameStatus = {
     WAITING: 0,
     RUNNING: 1,
     PAUSED: 2,
-    ENDED: 3
+    COUNTDOWN: 3
 } as const;
 
 export type GameStatus = typeof GameStatus[keyof typeof GameStatus];
