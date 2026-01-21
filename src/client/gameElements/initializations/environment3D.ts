@@ -1,8 +1,8 @@
-import { BABYLON, createFlame, createSkybox, Vec3 } from "../../index.js";
+import { BABYLON, createSkybox, createStaticFlame, Vec3 } from "../../index.js";
 import type { GameObjects } from "../../index.js";
 
 /* ------------------- *
- *  SCENE PARTS (3D)   *
+ * SCENE PARTS (3D)   *
  * ------------------- */
 
 /**
@@ -36,10 +36,11 @@ export function createEnvironment3D(
     camera: createCamera(scene),
     light: createLight(scene),
     environment: createEnvironment(scene),
-    flame_R1: createFlame({scene: scene, pos: { x: obj3D.table.limits.right * 1.1, y: 0, z: obj3D.table.limits.far }, size: 10}),
-    flame_R2: createFlame({scene: scene, pos: { x: obj3D.table.limits.right * 1.1, y: 0, z: obj3D.table.limits.near }, size: 10}),
-    flame_L1: createFlame({scene: scene, pos: { x: obj3D.table.limits.left * 1.1, y: 0, z: obj3D.table.limits.far }, size: 10}),
-    flame_L2: createFlame({scene: scene, pos: { x: obj3D.table.limits.left * 1.1, y: 0, z: obj3D.table.limits.near }, size: 10}),
+    // Use local helper for static torches
+    flame_R1: createStaticFlame(scene, { x: obj3D.table.limits.right, y: 0, z: obj3D.table.limits.far }, 60),
+    flame_R2: createStaticFlame(scene, { x: obj3D.table.limits.right, y: 0, z: obj3D.table.limits.near }, 60),
+    flame_L1: createStaticFlame(scene, { x: obj3D.table.limits.left, y: 0, z: obj3D.table.limits.far }, 60),
+    flame_L2: createStaticFlame(scene, { x: obj3D.table.limits.left, y: 0, z: obj3D.table.limits.near }, 60),
     sky_box: createSkybox(scene),
     hellMusic: createAudio(1),
     heavenMusic: createAudio(2),

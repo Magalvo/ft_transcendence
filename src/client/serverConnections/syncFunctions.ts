@@ -1,20 +1,15 @@
 import {
+    addFireEffect,
     BABYLON,
     createPlayingBall,
+    removeFireFromMesh,
     type GameData,
 } from "../index";
 
 const SCENE_CONFIG = {
     PADDLE_BASE_DEPTH: 30,
     PADDLE_BASE_WIDTH: 0.5,
-    FIRE_PARTICLE: {
-        TEXTURE_URL: "https://www.babylonjs-playground.com/textures/flare.png",
-        CAPACITY: 2000,
-        MIN_SIZE_MAGIC: 0.5,
-        MAX_SIZE_MAGIC: 1.5,
-        MIN_SIZE_NORMAL: 1.0,
-        MAX_SIZE_NORMAL: 3.0,
-    },
+    
 };
 
 export function syncPaddles(data: GameData, serverPaddles: any[]) {
@@ -137,54 +132,4 @@ export function syncGameStats(data: GameData, serverState: any) {
    */
 function getVisualX(data: GameData, x: number): number {
     return (data.mySide === 'right') ? -x : x;
-}
-
-
-// --- VISUAL EFFECTS ---
-
-function addFireEffect(data: GameData, mesh: BABYLON.AbstractMesh, color: BABYLON.Color3, isMagic: boolean) {
-    if (mesh.metadata?.particleSystem) return;
-
-    // Double check scene registry to prevent duplicates
-    const existing = data.scene.particleSystems.find(ps => ps.emitter === mesh && ps.name === "fire");
-    if (existing) {
-        if (!mesh.metadata) mesh.metadata = {};
-        mesh.metadata.particleSystem = existing;
-        return;
-    }
-
-    const ps = new BABYLON.ParticleSystem("fire", SCENE_CONFIG.FIRE_PARTICLE.CAPACITY, data.scene);
-    ps.particleTexture = new BABYLON.Texture(SCENE_CONFIG.FIRE_PARTICLE.TEXTURE_URL, data.scene);
-    ps.emitter = mesh;
-
-    ps.color1 = new BABYLON.Color4(color.r, color.g, color.b, 1.0);
-    ps.color2 = new BABYLON.Color4(1, 0, 0, 1.0);
-    ps.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
-
-    ps.minSize = isMagic ? SCENE_CONFIG.FIRE_PARTICLE.MIN_SIZE_MAGIC : SCENE_CONFIG.FIRE_PARTICLE.MIN_SIZE_NORMAL;
-    ps.maxSize = isMagic ? SCENE_CONFIG.FIRE_PARTICLE.MAX_SIZE_MAGIC : SCENE_CONFIG.FIRE_PARTICLE.MAX_SIZE_NORMAL;
-    ps.minLifeTime = 0.2;
-    ps.maxLifeTime = 0.5;
-    ps.emitRate = 300;
-    ps.minEmitPower = 1;
-    ps.maxEmitPower = 3;
-    ps.updateSpeed = 0.005;
-
-    ps.start();
-
-    if (!mesh.metadata) mesh.metadata = {};
-    mesh.metadata.particleSystem = ps;
-}
-
-function removeFireFromMesh(data: GameData, mesh: BABYLON.AbstractMesh) {
-    // 1. Clear via metadata
-    if (mesh.metadata?.particleSystem) {
-        mesh.metadata.particleSystem.stop();
-        mesh.metadata.particleSystem.dispose();
-        mesh.metadata.particleSystem = undefined;
-    }
-    // 2. Brute force cleanup
-    data.scene.particleSystems.forEach(ps => {
-        if (ps.emitter === mesh) { ps.stop(); ps.dispose(); }
-    });
 }

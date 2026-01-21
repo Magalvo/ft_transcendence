@@ -1,4 +1,4 @@
-import { BABYLON, Vec3, type MagicEffect } from "../index.js";
+import { BABYLON, Vec3, type MagicEffect } from "../../index.js";
 
 /**
  * Options required for GameObject construction.

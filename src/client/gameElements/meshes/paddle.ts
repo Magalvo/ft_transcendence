@@ -1,6 +1,6 @@
 
-import { BABYLON, Table, mov, hellMode, GameObject, Vec3, magicEffect, Color3, Color4, PlayingBall } from "../index.js";
-import type { Mov, GameObjects, GameData, GameObjectOptions, ObjectValue, Ball, Side } from "../index.js";
+import { BABYLON, Table, mov, hellMode, GameObject, Vec3, magicEffect, Color3, Color4, PlayingBall } from "../../index.js";
+import type { Mov, GameObjects, GameData, GameObjectOptions, ObjectValue, Ball, Side } from "../../index.js";
 
 // Paddle options
 type PaddleOptions = GameObjectOptions & {

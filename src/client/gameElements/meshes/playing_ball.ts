@@ -1,6 +1,5 @@
 
 import {
-  createFlame,
   Ball,
   type BallOptions,
   type GameData
@@ -13,12 +12,12 @@ export type PlayingBallOptions = BallOptions & {};
 export class PlayingBall extends Ball {
   constructor(options: PlayingBallOptions) {
     super(options);
-    this.flame_animation = createFlame({
-      scene: options.scene,
-      pos: this.pos.value,
-      size: 4,
-    });
-    this.flame_animation.emitter = this.pos.value;
+    // this.flame_animation = createFlame({
+    //   scene: options.scene,
+    //   pos: this.pos.value,
+    //   size: 4,
+    // });
+    // this.flame_animation.emitter = this.pos.value;
   }
 
   // Main update: move, check collisions, apply effects

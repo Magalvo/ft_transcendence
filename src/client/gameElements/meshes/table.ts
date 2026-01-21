@@ -1,5 +1,5 @@
-import { BABYLON, GameObject, Vec3 } from "../index.js";
-import { Color3, type GameObjectOptions, type GameData } from "../index.js";
+import { BABYLON, GameObject, Vec3 } from "../../index.js";
+import { Color3, type GameObjectOptions, type GameData } from "../../index.js";
 
 /**
  * Options for Table construction.

@@ -8,7 +8,7 @@ import {
     type Mov,
     type Objects2D,
     type Environment3D,
-} from "../index.js";
+} from "./index.js";
 
 // --- Main Objects (Meshes) ---
 export interface GameObjects {

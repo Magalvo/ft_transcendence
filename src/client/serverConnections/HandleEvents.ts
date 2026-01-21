@@ -23,7 +23,7 @@ export class HandleEvents {
     }
 
 
-    /* SET METHOD */
+    /* SET METHODS */
 
 
     public setData(data: GameData) {

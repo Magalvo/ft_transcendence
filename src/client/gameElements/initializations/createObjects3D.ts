@@ -7,7 +7,7 @@ import { MagicBall, type MagicEffect, type Side } from "../../index.js";
  * @param scene 
  * @returns 
  */
-export function createInitialObjects3D(scene: BABYLON.Scene): GameObjects {
+export function createObjects3D(scene: BABYLON.Scene): GameObjects {
   const table = createTable(scene);
   const balls = [
     createPlayingBall(scene, table.pos.value.x, table.pos.value.z),

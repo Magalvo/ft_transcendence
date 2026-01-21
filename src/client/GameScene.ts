@@ -9,35 +9,14 @@ import {
   hellMode,
   mov,
   undefineKeyEvents,
-  createInitialObjects3D,
-  type GameData,
+  createObjects3D,
   clearMagicNotifications,
   setupSocketListeners,
   HandleEvents,
+  type GameData,
+  SERVER_URL,
 } from "./index.js";
 import { io, Socket } from "socket.io-client";
-
-// --- CONFIGURATION ---
-const SCENE_CONFIG = {
-  SERVER_URL: "http://localhost:3000",
-  LERP_SPEED: 0.05,
-  PADDLE_BASE_DEPTH: 30,
-  PADDLE_BASE_WIDTH: 0.5,
-  FIRE_PARTICLE: {
-    TEXTURE_URL: "https://www.babylonjs-playground.com/textures/flare.png",
-    CAPACITY: 2000,
-    MIN_SIZE_MAGIC: 0.5,
-    MAX_SIZE_MAGIC: 1.5,
-    MIN_SIZE_NORMAL: 1.0,
-    MAX_SIZE_NORMAL: 3.0,
-  },
-  COUNTDOWN_MESSAGES: {
-    3: { text: "FATE AWAITS", color: "blue" },
-    2: { text: "HELL RISES", color: "red" },
-    1: { text: "PREPARE", color: "green" },
-    0: { text: "CLASH !!!", color: "red" }
-  }
-};
 
 /**
  * Main class handling the game scene, socket connections, and the render loop.
@@ -62,7 +41,7 @@ export class GameScene {
   }
 
   // --- MAIN LOOP ---
-  
+
   public startGame(): void {
     this.resetScene();
     this.handleEvents.setData(this.data);
@@ -148,7 +127,7 @@ export class GameScene {
       return_main_menu: false,
       camera_pos: 1,
     };
-    this.data.obj3D = createInitialObjects3D(this.scene);
+    this.data.obj3D = createObjects3D(this.scene);
     this.data.env = createEnvironment3D(this.data.obj3D, this.data.scene);
     this.data.obj2D = create2DParts();
 
@@ -160,7 +139,7 @@ export class GameScene {
   // --- NETWORKING ---
 
   private connectToServer() {
-    this.socket = io(SCENE_CONFIG.SERVER_URL);
+    this.socket = io(SERVER_URL);
     setupSocketListeners(this.socket, this.handleEvents);
   }
 }

@@ -1,4 +1,4 @@
-import { createFlame, Ball, magicEffect, Color4, showWarningMessage } from "../../index.js";
+import { Ball, magicEffect, Color4, showWarningMessage } from "../../index.js";
 import type { BallOptions, MagicEffect, Paddle, GameData } from "../../index.js";
 
 // Options for MagicBall
@@ -20,15 +20,15 @@ export class MagicBall extends Ball {
     // Set flame colors based on magic effect
     this.setEffectColor();
 
-    this.flame_animation = createFlame({
-      scene: options.scene,
-      pos: this.pos.value,
-      size: 4,
-      color1: this.color1,
-      color2: this.color2,
-    });
-    this.flame_animation.emitter = this.pos.value;
-    this.flame_animation.start();
+    // this.flame_animation = createFlame({
+    //   scene: options.scene,
+    //   pos: this.pos.value,
+    //   size: 4,
+    //   color1: this.color1,
+    //   color2: this.color2,
+    // });
+    // this.flame_animation.emitter = this.pos.value;
+    // this.flame_animation.start();
   }
 
   // Main update: move, check collisions
@@ -71,7 +71,7 @@ export class MagicBall extends Ball {
       [magicEffect.big]: [new Color4(1.0, 0.5, 0.1, 1), new Color4(1.0, 0.7, 0.2, 1)],
       [magicEffect.small]: [new Color4(0.0, 1.0, 0.4, 1), new Color4(0.01, 0.44, 0.19, 1)],
       [magicEffect.slow]: [new Color4(0.09, 0.18, 0.84, 1), new Color4(0.09, 0.61, 0.84, 1)],
-      [magicEffect.normal_speed]: [new Color4(1, 1, 1, 1), new Color4(0.8, 0.8, 0.8, 1)],
+      // [magicEffect.normal_speed]: [new Color4(1, 1, 1, 1), new Color4(0.8, 0.8, 0.8, 1)],
       [magicEffect.fast]: [new Color4(1, 1, 0.2, 1), new Color4(1, 0.9, 0.1, 1)],
       [magicEffect.freeze]: [new Color4(0.3, 0.8, 1, 1), new Color4(0.6, 0.9, 1, 1)],
       [magicEffect.thick]: [new Color4(0.7, 0.2, 1, 1), new Color4(0.5, 0.1, 0.7, 1)],
@@ -85,7 +85,7 @@ export class MagicBall extends Ball {
       [magicEffect.big]: "Your paddle is now BIG!",
       [magicEffect.small]: "Your paddle shrunk!",
       [magicEffect.slow]: "Your paddle is slowed!",
-      [magicEffect.normal_speed]: "You have got no effect!",
+      // [magicEffect.normal_speed]: "You have got no effect!",
       [magicEffect.fast]: "Super speed!",
       [magicEffect.freeze]: "Frozen paddle!",
       [magicEffect.thick]: "Your paddle is THICK!",

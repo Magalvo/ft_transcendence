@@ -1,4 +1,4 @@
-import type { GameData } from "../SceneData";
+import type { GameData } from "../../GameData";
 
 // functions reference
 let keyDownListener: ((e: KeyboardEvent) => void) | null = null;
