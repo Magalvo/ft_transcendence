@@ -4,11 +4,6 @@ import { GameScene } from "./index";
 const game = new GameScene();
 game.startGame();
 
-
-
-
-
-
 // fullscreen canvas - 100% optional
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 function resizeCanvas() {

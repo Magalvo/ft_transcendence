@@ -9,8 +9,6 @@ import {
   updateHellTimer,
   magicBallsController,
   type GameData,
-  mov,
-  type Mov,
   updateWarningMessages
 } from "../../index.js";
 
@@ -25,7 +23,7 @@ export function gameUpdate(
   dt: number,
   data: GameData
 ) {
-  // handle pause screen
+  // Handle pause screen logic
   if (data.flags.pause_screen) {
     if (data.socket) {
         data.socket.emit('pauseGame');
@@ -38,11 +36,11 @@ export function gameUpdate(
     rotateCamera(data);
     data.obj2D.guiGame.rootContainer.isVisible = false;
     return;
-  } else {
-    data.obj2D.guiGame.rootContainer.isVisible = true;
-  }
+  } 
+  
+  data.obj2D.guiGame.rootContainer.isVisible = true;
 
-  // To avoid physics bugs, split large dt into small steps
+  // To avoid physics bugs, split large dt into small steps (Fixed Time Step)
   const MAX_DT = 0.05;
   let dtLeft = dt;
   while (dtLeft > 0) {
@@ -59,17 +57,17 @@ export function gameUpdate(
 function updateGameObjects(
   data: GameData
 ) {
-  // Update the table, balls, and paddles
+  // 1. Update 3D Objects
   data.obj3D.table.update(data);
-  // for (const ball of data.obj3D.balls) {
-  //   ball.update(data);
-  // }
+  
   for (const paddle of data.obj3D.paddles) {
     paddle.update(data);
   }
 
-  // Handle user keyboard input and camera/environment updates
+  // 2. Handle Input
   handleKeyboardEvents(data);
+
+  // 3. Update Environment & UI
   updateCamera(data);
   updateScoreLabels(data);
   updateTimer(data);
@@ -79,13 +77,11 @@ function updateGameObjects(
   updateMusic(data);
   updateWarningMessages(data.mods.step);
 
-  // ... código anterior ...
-  handleKeyboardEvents(data); // Isto atualiza data.input.left_paddle_mov baseado nas teclas
-
-  if (data.socket && data.mySide) {
-      // Enviar apenas se eu for um jogador ativo
-      if (data.mySide !== 'spectator') {
-          data.socket.emit('input', { side: data.mySide, cmd: data.input.paddle_mov });
-      }
+  // 4. Send Input to Server
+  if (data.socket && data.mySide && data.mySide !== 'spectator') {
+    data.socket.emit('input', { 
+        side: data.mySide, 
+        cmd: data.input.paddle_mov 
+    });
   }
 }

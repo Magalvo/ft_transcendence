@@ -5,6 +5,13 @@ export const MAGIC_BALL_INTERVAL = 5; // 5
 export const MAGIC_BALL_MAX = 5; // 5
 export const GAME_DURATION = HELL_DURATION * 3 + HEAVEN_DURATION * 4;
 
+export const COUNTDOWN_MESSAGES = {
+  3: { text: "FATE AWAITS", color: "blue" },
+  2: { text: "HELL RISES", color: "red" },
+  1: { text: "PREPARE", color: "green" },
+  0: { text: "CLASH !!!", color: "red" }
+}
+
 /* possible movements list */
 export const mov = {
   null: "null",

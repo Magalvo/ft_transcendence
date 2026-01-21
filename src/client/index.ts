@@ -1,5 +1,8 @@
 // Export all main modules and elements for easy import elsewhere in the project
-export * from "./game/__GameScene.js";
+export * from "./GameScene.js";
+export * from "./serverConnections/socketListeners.ts";
+export * from "./serverConnections/HandleEvents.ts";
+export * from "./serverConnections/syncFunctions.ts";
 export * from "./game/SceneData.js";
 export * from "./game/initializations/createGameObjects.js";
 export * from "./game/logic/__GameLogic.js";
