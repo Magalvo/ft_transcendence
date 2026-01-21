@@ -1,4 +1,4 @@
-import { type GameData } from "../../index.js";
+import { GAME_DURATION, type GameData } from "../../index.js";
 
 /**
  * Updates time, timer label and time events.
@@ -13,7 +13,7 @@ export function updateTimer(data: GameData) {
 
 function updateTimerLabel(data: GameData) {
     // get total time rounded to to seconds
-    const total_seconds = Math.floor(data.mods.time);
+    const total_seconds = Math.max(0, Math.floor(GAME_DURATION - data.mods.time));
     // separate minutes and seconds
     const min = Math.floor(total_seconds / 60);
     const seconds = total_seconds % 60;
