@@ -3,7 +3,7 @@ export * from "./game/__GameScene.js";
 export * from "./game/SceneData.js";
 export * from "./game/initializations/createGameObjects.js";
 export * from "./game/logic/__GameLogic.js";
-export * from "./game/logic/updateLabels.js";
+export * from "./game/logic/updateScoreLabels.js";
 export * from "./game/logic/updateTimer.js";
 export * from "./game/logic/updateHellTimer.js";
 export * from "./game/logic/updateEnvironment.js";

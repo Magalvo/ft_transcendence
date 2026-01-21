@@ -6,12 +6,6 @@ import { GAME_DURATION, type GameData } from "../../index.js";
  * @param data - Scene/game state
  */
 export function updateTimer(data: GameData) {
-    // advance timer
-    // data.mods.time += data.mods.step;
-    updateTimerLabel(data);
-}
-
-function updateTimerLabel(data: GameData) {
     // get total time rounded to to seconds
     const total_seconds = Math.max(0, Math.floor(GAME_DURATION - data.mods.time));
     // separate minutes and seconds

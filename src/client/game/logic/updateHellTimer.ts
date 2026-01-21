@@ -6,17 +6,6 @@ import { type GameData, HEAVEN_DURATION, HELL_DURATION} from "../../index.js";
  * @param data - The current scene/game state
  */
 export function updateHellTimer(data: GameData) {
-    // Update which side is "good" if needed
-    // advanceAndSwitchSides(data);
-    // Update the timer label in the UI
-    updateTimerLabel(data);
-}
-
-/**
- * Updates the timer label to show remaining time and color for current side.
- * @param obj2D - UI objects for the scene
- */
-function updateTimerLabel(data: GameData) {
     // Determine which timer to show based on the current side
     const remaining =
         data.mods.devilElapsed > 0

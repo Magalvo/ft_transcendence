@@ -296,9 +296,6 @@ export class GameScene {
       this.data.mods.goodElapsed = serverState.hellTimer;
       this.data.mods.devilElapsed = 0;
     }
-
-    // Update Table Colors
-    this.data.obj3D.table.updateColor(serverState.isHell);
   }
 
   private handleGameStartTrigger(status: number) {
