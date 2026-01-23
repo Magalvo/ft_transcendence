@@ -79,7 +79,7 @@ export function showWarningMessage(
     } else if (pos === "center") {
         rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
         rect.left = "0px";
-        rect.top = "-150px"; // O centro fica um pouco mais acima
+        rect.top = "-100px"; // O centro fica um pouco mais acima
     } else if (pos === "big") {
         rect.width = "500px";
         rect.height = "250px";

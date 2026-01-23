@@ -19,7 +19,7 @@ import {
  * @param dt - Time delta since last frame (in seconds)
  * @param data - Scene/game state
  */
-export function gameUpdate(
+export function renderGame(
   dt: number,
   data: GameData
 ) {
@@ -59,10 +59,8 @@ function updateGameObjects(
 ) {
   // 1. Update 3D Objects
   data.obj3D.table.update(data);
-  
-  for (const paddle of data.obj3D.paddles) {
-    paddle.update(data);
-  }
+  // data.obj3D.balls.forEach(ball => {ball.update(data)});
+  data.obj3D.paddles.forEach(paddle => {paddle.update(data)});
 
   // 2. Handle Input
   handleKeyboardEvents(data);

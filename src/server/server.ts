@@ -59,6 +59,7 @@ let paddleRight: ServerPaddle = new ServerPaddle('right', 'human', CONFIG.PADDLE
 
 const score = { left: 0, right: 0 };
 let countdownTimer = 3;
+let scoreFlash: 'left' | 'right' | null = null;
 
 // Logic Control
 let lastPauseToggle = 0;
@@ -306,6 +307,7 @@ function updateBalls(dt: number) {
         }
 
         const result = ball.update(dt, paddles);
+        scoreFlash = result;
 
         if (result === 'left') {
             score.left++;
@@ -325,7 +327,8 @@ function createSnapshot() {
         status: status,
         balls: balls.map(b => ({
             pos: b.pos.asArray(),
-            radius: b.radius
+            radius: b.radius,
+            particles: b.isColliding,
         })),
         magicBalls: magicBalls.map(mb => mb.getData()),
         paddles: [
@@ -337,6 +340,7 @@ function createSnapshot() {
         hellTimer: phaseTimer,
         isHell: isHell,
         activeHellMode: currentHellMode,
+        scoreFlash: scoreFlash,
         countdown: Math.ceil(countdownTimer)
     };
 }

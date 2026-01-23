@@ -9,6 +9,7 @@ export class ServerBall {
     public velocity: number = 0; // Velocidade escalar
     public angle: number = 0;    // Ângulo em graus
     public radius: number = 2;
+    public isColliding: boolean = false;
     private readonly BASE_RADIUS = 2;
     private readonly BASE_SPEED = 50;
     private speedModifier: number = 1;
@@ -24,7 +25,7 @@ export class ServerBall {
 
     // O update agora recebe as raquetes
     public update(deltaTime: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
-
+        this.isColliding = false;
         const a = this.angle * Math.PI / 180;
         const finalSpeedMod =
             this.thickPaddleSpeedModifier == true
@@ -61,6 +62,7 @@ export class ServerBall {
 
             if (collisionX && collisionZ) {
                 // HOUVE COLISÃO!
+                this.isColliding = true;
                 if (paddle.side === 'left') {
                     this.pos.x = pBox.right + this.radius + 0.1;
                     if (Math.abs(this.angle) > 90) {
@@ -108,9 +110,11 @@ export class ServerBall {
         }
 
         if (this.pos.z > halfDepth - this.radius) {
+            this.isColliding = true;
             this.pos.z = halfDepth - this.radius;
             this.angle *= -1;
         } else if (this.pos.z < -halfDepth + this.radius) {
+            this.isColliding = true;
             this.pos.z = -halfDepth + this.radius;
             this.angle *= -1;
         }

@@ -1,6 +1,6 @@
-
 import {
   Ball,
+  spawnHitParticles,
   type BallOptions,
   type GameData
 } from "../../index.js";
@@ -10,17 +10,14 @@ export type PlayingBallOptions = BallOptions & {};
 
 // Main ball for gameplay
 export class PlayingBall extends Ball {
+
   constructor(options: PlayingBallOptions) {
     super(options);
-    // this.flame_animation = createFlame({
-    //   scene: options.scene,
-    //   pos: this.pos.value,
-    //   size: 4,
-    // });
-    // this.flame_animation.emitter = this.pos.value;
   }
 
-  // Main update: move, check collisions, apply effects
   public update(data: GameData) {
+    this.pos.value = this.mesh.position;
+    this.paddleCollisions(data);
+    this.wallCollisions(data);
   }
 }

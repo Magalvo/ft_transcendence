@@ -2,14 +2,16 @@ import {
     addFireEffect,
     BABYLON,
     createPlayingBall,
+    flashZone,
     removeFireFromMesh,
+    spawnHitParticles,
     type GameData,
 } from "../index";
 
 const SCENE_CONFIG = {
     PADDLE_BASE_DEPTH: 30,
     PADDLE_BASE_WIDTH: 0.5,
-    
+
 };
 
 export function syncPaddles(data: GameData, serverPaddles: any[]) {
@@ -33,6 +35,7 @@ export function syncPaddles(data: GameData, serverPaddles: any[]) {
 
         if (serverZ) paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
         if (serverX) paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
+        paddle.update(data);
     });
 }
 
@@ -60,6 +63,8 @@ export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boo
         } else {
             removeFireFromMesh(data, ball.mesh);
         }
+        if (sb.particles === true)
+            spawnHitParticles(data.scene, ball.mesh.position);
     });
 
     // 3. Cleanup excess
@@ -77,12 +82,12 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
 
     // 1. Remove stale
     for (let i = localBalls.length - 1; i >= 0; i--) {
-        const local = localBalls[i];
-        if (!local?.metadata) { local?.dispose(); localBalls.splice(i, 1); continue; }
+        const ball = localBalls[i];
+        if (!ball?.metadata) { ball?.dispose(); localBalls.splice(i, 1); continue; }
 
-        if (!serverBalls.find((sb: any) => sb.id === local.metadata.id)) {
-            removeFireFromMesh(data, local);
-            local.dispose();
+        if (!serverBalls.find((sb: any) => sb.id === ball.metadata.id)) {
+            removeFireFromMesh(data, ball);
+            ball.dispose();
             localBalls.splice(i, 1);
         }
     }
@@ -120,6 +125,15 @@ export function syncGameStats(data: GameData, serverState: any) {
             data.mods.score.left = serverState.score.left;
             data.mods.score.right = serverState.score.right;
         }
+    }
+    if (serverState.scoreFlash) {
+        const side =
+            (data.mySide === 'left')
+                ? (serverState.scoreFlash === 'right')
+                    ? 'left'
+                    : 'right'
+                : serverState.scoreFlash
+        flashZone(data, side, data.obj3D.table);
     }
     data.mods.time = serverState.time;
     data.mods.is_hell = serverState.isHell;

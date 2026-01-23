@@ -1,20 +1,15 @@
 import {
   BABYLON,
   Paddle,
-  Table,
-  mov,
-  randomInt,
-  normalizeAngle180,
   flashZone,
   spawnHitParticles,
-  hellMode,
-  infiniteBallsAdd,
   GameObject,
   Color3,
   PlayingBall,
-  showWarningMessage,
+  type GameObjectOptions,
+  type ObjectValue,
+  type GameData,
 } from "../../index.js";
-import type { GameObjectOptions, Mov, ObjectValue, GameData } from "../../index.js";
 
 
 // Ball options type
@@ -39,7 +34,6 @@ export abstract class Ball extends GameObject {
     this.radius = { value: options.radius, original: options.radius };
     this.speed = options.speed;
     this.mesh = this.createMesh(options.scene);
-    this.throwBall(false);
   }
 
   // Create Babylon mesh for the ball
@@ -66,11 +60,10 @@ export abstract class Ball extends GameObject {
   // Clean up mesh and particles
   public dispose() {
     this.mesh?.dispose();
-    this.flame_animation?.dispose();
   }
 
   // Paddle collision (AABB overlap)
-  protected paddleCollisionsCheck(data: GameData) {
+  protected paddleCollisions(data: GameData) {
     for (let paddle of data.obj3D.paddles) {
       const overlap =
         Math.abs(this.pos.value.x - paddle.pos.value.x) - paddle.dimensions.value.x / 2 - this.radius.value <= 0 &&
@@ -81,173 +74,35 @@ export abstract class Ball extends GameObject {
     }
   }
 
-  protected paddleCollisionAction(paddle: Paddle, data: GameData) {
+  private paddleCollisionAction(paddle: Paddle, data: GameData) {
     // Side collision (X axis)
-    if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far) {
-      let inverting = false;
-      if (this.pos.value.x < paddle.limits.left && paddle.side == "right") {
-        if (this.velocity > 0) inverting = true;
-        this.updateMovement(mov.left, true, true);
-      }
-      if (this.pos.value.x > paddle.limits.right && paddle.side == "left") {
-        if (this.velocity < 0) inverting = true;
-        this.updateMovement(mov.right, true, true);
-      }
+    if (this.pos.value.z > paddle.limits.near && this.pos.value.z < paddle.limits.far)
       spawnHitParticles(data.scene, this.pos.value);
-      // Hell mode effects
-      if (inverting) {
-        if (data.mods.hell_mode == hellMode.infinite_balls)
-          infiniteBallsAdd(data, this.pos.value.x, this.pos.value.z);
-        if (data.mods.hell_mode == hellMode.big_balls)
-          paddle.pos.value.x -= this.velocity / Math.abs(this.velocity) * 3;
-      }
-    }
     // Top/bottom collision (Z axis)
-    if (this.pos.value.x > paddle.limits.left && this.pos.value.x < paddle.limits.right) {
-      if (this.pos.value.z > paddle.limits.far)
-        this.updateMovement(mov.near, false, false);
-      if (this.pos.value.z < paddle.limits.near)
-        this.updateMovement(mov.far, false, false);
+    if (this.pos.value.x > paddle.limits.left && this.pos.value.x < paddle.limits.right)
       spawnHitParticles(data.scene, this.pos.value);
-    }
   }
 
   // Wall collision and scoring
   protected wallCollisions(data: GameData) {
     const table = data.obj3D.table;
     // Z+ far wall
-    if (this.limits.far >= table.limits.far) {
-      this.pos.value.z = table.limits.far - this.radius.value;
-      this.updateMovement(mov.invert_z, false, false);
+    if (this.limits.far >= table.limits.far)
       spawnHitParticles(data.scene, this.pos.value);
-    }
     // Z- near wall
-    if (this.limits.near <= table.limits.near) {
-      this.pos.value.z = table.limits.near + this.radius.value;
-      this.updateMovement(mov.invert_z, false, false);
+    if (this.limits.near <= table.limits.near)
       spawnHitParticles(data.scene, this.pos.value);
-    }
     // X- left wall: score for right
     if (this.limits.left <= table.limits.left) {
       if (this instanceof PlayingBall) {
-        data.mods.score.right++;
         flashZone(data, "left", table);
-        this.throwBall(true, table);
-        showWarningMessage({ scene: data.scene, message: "Score +1", pos: "right", color: "green", duration: 2000 });
-        if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
-          const index = data.obj3D.balls.indexOf(this);
-          this.dispose();
-          if (index != -1) data.obj3D.balls.splice(index, 1);
-        }
       }
-      else
-        this.updateMovement(mov.invert_x, false, false);
-
     }
     // X+ right wall: score for left
     if (this.limits.right - this.radius.value >= table.limits.right) {
       if (this instanceof PlayingBall) {
-        data.mods.score.left++;
         flashZone(data, "right", table);
-        this.throwBall(true, table);
-        showWarningMessage({ scene: data.scene, message: "Score +1", pos: "left", color: "green" });
-        if (data.mods.hell_mode == hellMode.infinite_balls && data.obj3D.balls.length > 1) {
-          const index = data.obj3D.balls.indexOf(this);
-          this.dispose();
-          if (index != -1) data.obj3D.balls.splice(index, 1);
-        }
-      }
-      else
-        this.updateMovement(mov.invert_x, false, false);
-
-    }
-  }
-
-  // Respawn ball at center and launch in random direction
-  protected throwBall(reset_pos: boolean, table?: Table) {
-    const direction: Mov = randomInt(0, 1) ? mov.left : mov.right;
-    this.velocity = this.speed.value;
-    this.speed.value = this.speed.value;
-    this.angle = 0;
-    this.updateMovement(direction, true, false);
-    if (reset_pos) {
-      const { x, z } = table ? table.pos.value : { x: 0, z: 0 };
-      this.move(null!, x, z);
-      this.updateRespawnTimer(0, 0.5); // 0.5s respawn
-    }
-  }
-
-  /**
-   * Move the ball in increments of 0.1 units, calling onStep after each mini-step.
-   * Use onStep to check collisions at each mini-step.
-   */
-  protected move(
-    data: GameData | null,
-    x?: number,
-    z?: number,
-    onStep?: () => void
-  ) {
-    const a = this.angle * Math.PI / 180;
-    const vx = this.velocity * Math.cos(a);
-    const vz = this.velocity * Math.sin(a);
-    const stepSize = 0.1;
-    if (x !== undefined) {
-      this.pos.value.x = x;
-    } else if (data) {
-      let totalDx = vx * data.mods.step * this.speed_modifier;
-      let dxSign = Math.sign(totalDx);
-      let dx = Math.abs(totalDx);
-      while (dx > 0) {
-        const moveStep = Math.min(dx, stepSize);
-        this.pos.value.x += moveStep * dxSign;
-        dx -= moveStep;
-        if (onStep) onStep();
       }
     }
-    if (z !== undefined) {
-      this.pos.value.z = z;
-    } else if (data) {
-      let totalDz = vz * data.mods.step * this.speed_modifier;
-      let dzSign = Math.sign(totalDz);
-      let dz = Math.abs(totalDz);
-      while (dz > 0) {
-        const moveStep = Math.min(dz, stepSize);
-        this.pos.value.z += moveStep * dzSign;
-        dz -= moveStep;
-        if (onStep) onStep();
-      }
-    }
-    this.mesh.position.copyFrom(this.pos.value);
-    this.updatePosition();
-  }
-
-  // Update angle, velocity, and optionally increase speed on collision
-  protected updateMovement(move: Mov, angle_distortion: boolean, increase_speed: boolean) {
-    switch (move) {
-      case mov.far: this.angle = Math.abs(this.angle); break;
-      case mov.near: this.angle = -Math.abs(this.angle); break;
-      case mov.left: this.velocity = -this.speed.value; break;
-      case mov.right: this.velocity = this.speed.value; break;
-      case mov.invert_x: this.velocity *= -1; break;
-      case mov.invert_z: this.angle *= -1; break;
-    }
-    if (increase_speed && this.speed.value < this.speed.max) this.speed.value += 2;
-    if (angle_distortion) this.angle = randomInt(-70, 70);
-    this.angle = normalizeAngle180(this.angle);
-  }
-
-  // Handles respawn timer: hides ball while respawning
-  // Returns true if timer is active
-  protected updateRespawnTimer(step: number, time?: number): boolean {
-    if (time !== undefined) {
-      this.respawn_timer = time;
-      this.mesh.isVisible = false;
-    } else if (this.respawn_timer > 0) {
-      this.respawn_timer -= step;
-      return true;
-    } else {
-      this.mesh.isVisible = true;
-    }
-    return false;
   }
 }

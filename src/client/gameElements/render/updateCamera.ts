@@ -15,7 +15,7 @@ export function updateCamera(data: GameData) {
 
     let targetAlpha = -Math.PI / 2;
     let targetBeta = 1.0;
-    let targetRadius = 180;
+    let targetRadius = 150;
     
     if (data.flags.camera_pos == 2 && mode != hellMode.twisted_view){
         targetAlpha = -Math.PI;

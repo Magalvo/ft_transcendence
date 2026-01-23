@@ -28,44 +28,10 @@ export class Paddle extends GameObject {
 
   // Main update: movement, collision, appearance
   public update(data: GameData) {
-    // this.human = this.isHuman(data);
-    // this.human ? this.handleHuman(data) : this.handleBot(data);
+    this.pos.value = this.mesh.position;
     this.keepWithinTable(data.obj3D.table);
     this.updateAppearance(data);
     // this.applyEffects(data);
-  }
-
-  // Check if this paddle is human-controlled
-  private isHuman(data: GameData) {
-    return (this.side == "left" && data.input.left_player_human) ||
-           (this.side == "right" && data.input.right_player_human);
-  }
-
-  // Move paddle by user input
-  private handleHuman(data: GameData) {
-    if (this.side == "left" && data.input.left_paddle_mov != mov.null)
-      this.move(data, data.input.left_paddle_mov, this.speed.value);
-    if (this.side == "right" && data.input.right_paddle_mov != mov.null)
-      this.move(data, data.input.right_paddle_mov, this.speed.value);
-  }
-
-  // AI: move toward closest ball if approaching
-  private handleBot(data: GameData) {
-    const filteredBalls = data.obj3D.balls.filter(e => e instanceof PlayingBall);
-    const closest = filteredBalls.reduce((prev, b) =>
-      Math.abs(b.pos.value.x - this.pos.value.x) < Math.abs(prev.pos.value.x - this.pos.value.x) ? b : prev
-    );
-    if ((this.side == "left" && closest.velocity < 0) ||
-        (this.side == "right" && closest.velocity > 0)) {
-      this.move(data, this.pos.value.z < closest.pos.value.z ? mov.far : mov.near, this.speed.value);
-    }
-  }
-
-  // Move paddle along Z axis
-  private move(data: GameData, direction: Mov, speed: number) {
-    if (direction === mov.far) this.pos.value.z += speed * data.mods.step;
-    if (direction === mov.near) this.pos.value.z -= speed * data.mods.step;
-    this.updatePosition();
   }
 
   // Keep paddle inside table bounds
@@ -82,26 +48,6 @@ export class Paddle extends GameObject {
     const mat = this.mesh.material as BABYLON.StandardMaterial;
     mat.diffuseColor = isHell ? this.paddleBad : this.paddleGood;
     this.mesh.edgesColor = isHell ? this.edgeBad : this.edgeGood;
-  }
-
-  // Apply magic/hell effects (size, speed)
-  private applyEffects(data: GameData) {
-    const effects = data.mods.is_hell ? this.hellEffects : this.magicBallEffects;
-    let size_x = 1, size_y = 1, size_z = 1;
-    let speed = this.speed.original;
-    for (let effect of effects) {
-      if (effect === magicEffect.big) size_z = 2;
-      if (effect === magicEffect.small) { size_y = 0.4; size_z = 0.4; }
-      if (effect === magicEffect.thick) size_x = 5;
-      if (effect === magicEffect.slow) speed = this.speed.original * 0.5;
-      if (effect === magicEffect.normal_speed) speed = this.speed.original * 1;
-      if (effect === magicEffect.fast) speed = this.speed.original * 4;
-      if (effect === magicEffect.freeze) speed = this.speed.original * 0;
-    }
-    this.changeSize(new Vec3(size_x, size_y, size_z));
-    this.speed.value = speed;
-    if (data.mods.hell_mode != hellMode.big_balls)
-      this.pos.value.x = this.pos.original.x;
   }
 
   // Create paddle mesh

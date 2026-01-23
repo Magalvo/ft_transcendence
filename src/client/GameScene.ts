@@ -2,7 +2,7 @@ import {
   BABYLON,
   createEnvironment3D,
   create2DParts,
-  gameUpdate,
+  renderGame,
   startMainMenu,
   createMainMenu,
   defineKeyEvents,
@@ -40,32 +40,32 @@ export class GameScene {
     this.handleEvents = new HandleEvents();
   }
 
-  // --- MAIN LOOP ---
-
+  
   public startGame(): void {
     this.resetScene();
     this.handleEvents.setData(this.data);
-
+    
     createMainMenu();
     startMainMenu(this.data, (mode) => {
       if (!this.socket) return;
-
+      
       switch (mode) {
         case 'online': this.socket.emit('onlinePlayerReady'); break;
         case 'bot': this.socket.emit('offlinePlayerReady'); break;
         case 'demo': this.socket.emit('demo'); break;
       }
     });
-
+    
     let lastTime = performance.now();
-
+    
+    // --- MAIN LOOP ---
     this.engine.runRenderLoop(() => {
       const now = performance.now();
 
       if (!this.data.flags.return_main_menu) {
         const deltaTime = (now - lastTime) / 1000;
         lastTime = now;
-        gameUpdate(deltaTime, this.data);
+        renderGame(deltaTime, this.data);
       }
 
       // Handle Hell Transition Effects

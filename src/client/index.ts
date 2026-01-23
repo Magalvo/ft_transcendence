@@ -5,7 +5,7 @@ export * from "./serverConnections/HandleEvents.ts";
 export * from "./serverConnections/syncFunctions.ts";
 export * from "./GameData.js";
 export * from "./gameElements/initializations/createObjects3D.js";
-export * from "./gameElements/render/__GameLogic.js";
+export * from "./gameElements/render/RenderGame.js";
 export * from "./gameElements/render/updateScoreLabels.js";
 export * from "./gameElements/render/updateTimer.js";
 export * from "./gameElements/render/updateHellTimer.js";
