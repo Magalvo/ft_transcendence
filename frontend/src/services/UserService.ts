@@ -22,7 +22,7 @@ export class UserService {
   public static async getProfile(): Promise<UserProfile> {
     return {
       username: 'PongMaster42',
-      avatarUrl: 'https://i.pravatar.cc/150?img=11',
+      avatarUrl: 'https://cdn.intra.42.fr/users/264153a7c38d3a37161dd2dd387b1103/dde-maga.JPG',
       wins: 42,
       losses: 5,
       status: 'online',

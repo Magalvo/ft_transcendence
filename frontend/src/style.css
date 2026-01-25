@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Global styles */
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000; /* Ensure black background if CSS fails to load initially */
+}
