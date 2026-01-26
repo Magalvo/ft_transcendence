@@ -31,7 +31,7 @@ export * from "./gameElements/meshes/Ball.js";
 export * from "./gameElements/meshes/Paddle.js";
 export * from "./gameElements/meshes/Table.js";
 export * from "../shared/utils.js";
-export * from "../shared/strings.js";
+export * from "../shared/config.js";
 export * from "../shared/types.js";
 
 // Re-export BabylonJS core and GUI modules under unified names

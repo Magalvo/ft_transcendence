@@ -1,7 +1,10 @@
-import { Vector3 } from "../../shared/Vector3.js";
-import { magicEffect } from "../../shared/strings.js";
-import { randomInt, normalizeAngle180 } from "../../shared/utils.js";
-import { ServerPaddle } from "./ServerPaddle.js";
+import {
+    Vector3,
+    magicEffect,
+    randomInt,
+    normalizeAngle180,
+    ServerPaddle
+} from "../index.js";
 
 export class ServerBall {
     public pos: Vector3;

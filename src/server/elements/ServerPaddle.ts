@@ -1,6 +1,11 @@
-import { Vector3 } from "../../shared/Vector3.js";
-import { MAGIC_EFFECT_DURATION, magicEffect, mov, type MagicEffect, type Mov } from "../../shared/strings.js";
-import type { ServerBall } from "../index.js";
+import {
+    Vector3,
+    MAGIC_EFFECT_DURATION,
+    magicEffect,
+    mov,
+    type MagicEffect,
+    type Mov,
+} from "../index.js";
 
 export class ServerPaddle {
     public pos: Vector3;
