@@ -101,7 +101,7 @@ export class GameScene {
   private initializeGameData(): void {
     this.data.scene = this.scene;
     this.data.mods = {
-      score: { left: 0, right: 0 },
+      score: { me: 0, rival: 0 },
       step: 0,
       time: 0,
       is_hell: false,

@@ -1,6 +1,7 @@
 import {
     closeMainMenu,
     COUNTDOWN_MESSAGES,
+    ENDGAME_MESSAGES,
     GameStatus,
     pauseScreen,
     showWarningMessage,
@@ -9,6 +10,7 @@ import {
     syncPaddles,
     syncPlayingBalls,
     type GameData,
+    type Side,
 } from "../index";
 
 export class HandleEvents {
@@ -16,7 +18,6 @@ export class HandleEvents {
     /* DECLARATIONS */
 
     private data: GameData;
-    private lastCountdownValue: number = -1;
 
     constructor() {
         this.data = {} as GameData;
@@ -34,9 +35,9 @@ export class HandleEvents {
     /* PUBLIC METHODS */
 
 
-    public initializeGame(server_data: { side: string }) {
-        console.log("Player Side assigned:", server_data.side);
-        this.data.mySide = server_data.side;
+    public initializeGame(side: Side) {
+        console.log("Player Side assigned:", side);
+        this.data.mySide = side;
     }
 
     public gamePaused() {
@@ -61,6 +62,29 @@ export class HandleEvents {
         this.data.env.heavenMusic.play();
     }
 
+    public onCountdown(count: number) {
+        closeMainMenu(this.data);
+        const msgData = (COUNTDOWN_MESSAGES as any)[count];
+        if (!msgData) return;
+        this.showCountdownMessage(msgData);
+    }
+
+    public onEndGame(count: number) {
+        let msgData: any;
+        if (count == 2 || count == 1)
+            msgData = ENDGAME_MESSAGES[count];
+        if (count == 0) {
+            if (this.data.mods.score.me > this.data.mods.score.rival)
+                msgData = ENDGAME_MESSAGES['WON'];
+            else if (this.data.mods.score.me < this.data.mods.score.rival)
+                msgData = ENDGAME_MESSAGES['LOST'];
+            else
+                msgData = ENDGAME_MESSAGES['DRAW'];
+        }
+        if (!msgData) return;
+        this.showCountdownMessage(msgData);
+    }
+
     public socketMessage(server_data: any) {
         // Invert visual side if player is 'right'
         let targetSide = server_data.side;
@@ -81,35 +105,15 @@ export class HandleEvents {
         if (serverState.paddles) syncPaddles(this.data, serverState.paddles);
         if (serverState.balls) syncPlayingBalls(this.data, serverState.balls, serverState.isHell);
         if (serverState.magicBalls) syncMagicBalls(this.data, serverState.magicBalls);
-
         syncGameStats(this.data, serverState);
         this.handleGameStartTrigger(serverState.status);
         this.updateHellVisuals(serverState);
-        this.handleCountdown(serverState.status, serverState.countdown);
     }
 
 
     /* PRIVATE METHODS */
 
-
-    private handleCountdown(status: number, count: number) {
-        if (status === GameStatus.COUNTDOWN) {
-            closeMainMenu(this.data);
-            if (count !== this.lastCountdownValue) {
-                this.showCountdownMessage(count);
-                this.lastCountdownValue = count;
-            }
-        } else if (status === GameStatus.RUNNING && this.lastCountdownValue !== 0) {
-            // Trigger "GO" message
-            this.showCountdownMessage(0);
-            this.lastCountdownValue = 0;
-        }
-    }
-
-    private showCountdownMessage(count: number) {
-        const msgData = (COUNTDOWN_MESSAGES as any)[count];
-        if (!msgData) return;
-
+    private showCountdownMessage(msgData: any) {
         showWarningMessage({
             scene: this.data.scene,
             message: msgData.text,

@@ -12,63 +12,65 @@ import {
 } from "../../index.js";
 
 /**
- * Main game update function, called every frame.
- * Handles game running state, time step management, and delegates to object updates.
- *
- * @param dt - Time delta since last frame (in seconds)
- * @param data - Scene/game state
+ * Main game loop logic.
+ * Manages game state, UI visibility, and physics time steps.
+ * * @param dt - Delta time since last frame (seconds)
+ * @param data - Global game state
  */
-export function renderGame(
-  dt: number,
-  data: GameData
-) {
-  // Handle pause screen logic
+export function renderGame(dt: number, data: GameData) {
+  // 1. Handle Pause Requests
   if (data.flags.pause_screen) {
-    if (data.socket) {
-      data.socket.emit('pauseGame');
-    }
+    data.socket?.emit('pauseGame');
     data.flags.pause_screen = false;
   }
 
-  // If the game is not running, hide UI and exit update
+  // 2. Idle State (Menu/Waiting)
+  // Rotates camera around the table and hides the HUD
   if (!data.flags.game_running) {
     rotateCamera(data);
     data.obj2D.guiGame.rootContainer.isVisible = false;
     return;
   }
 
+  // 3. Running State
   data.obj2D.guiGame.rootContainer.isVisible = true;
 
-  // To avoid physics bugs, split large dt into small steps (Fixed Time Step)
+  // Fixed Time Step: Splits large frame times into smaller chunks
+  // to ensure consistent physics/animation speed even if FPS drops.
   const MAX_DT = 0.05;
   let dtLeft = dt;
+
   while (dtLeft > 0) {
     data.mods.step = Math.min(dtLeft, MAX_DT);
-    updateGameObjects(data);
+    updateActiveGameElements(data);
     dtLeft -= data.mods.step;
   }
 }
 
 /**
- * Updates all game objects and handles game mechanics.
- * @param data - Scene/game state
+ * Updates all active entities, environment, and handles input.
  */
-function updateGameObjects(
-  data: GameData
-) {
-  // Update 3D Objects, Environment, UI
+function updateActiveGameElements(data: GameData) {
+  // --- Visuals & 3D Objects ---
   data.obj3D.table.update(data);
-  data.obj3D.paddles.forEach(paddle => { paddle.update(data) });
+  data.obj3D.paddles.forEach(paddle => paddle.update(data));
+  
   updateCamera(data);
+  updateEnvironment(data);
+
+  // --- UI & Game State ---
   updateScoreLabels(data);
   updateTimer(data);
   updateHellTimer(data);
-  updateEnvironment(data);
-  updateMusic(data);
   updateWarningMessages(data.mods.step);
 
-  // Send user input to Server
+  // --- Audio ---
+  updateMusic(data);
+
+  // --- Input Handling ---
   handleKeyboardEvents(data);
+
+  // Send input to server (only if player is active)
   if (data.socket && data.mySide && data.mySide !== 'spectator') {
     data.socket.emit('input', {
       side: data.mySide,

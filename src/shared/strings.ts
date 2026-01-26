@@ -5,7 +5,7 @@ export const HEAVEN_DURATION = 10; // 30
 export const MAGIC_EFFECT_DURATION = 10; // 10
 export const MAGIC_BALL_INTERVAL = 5; // 5
 export const MAGIC_BALL_MAX = 5; // 5
-export const GAME_DURATION = HELL_DURATION * 3 + HEAVEN_DURATION * 4; // *3, *4
+export const GAME_DURATION = HELL_DURATION * 1 + HEAVEN_DURATION * 1; // *3, *4
 
 export const COUNTDOWN_MESSAGES = {
   3: { text: "FATE AWAITS", color: "blue" },
@@ -13,6 +13,14 @@ export const COUNTDOWN_MESSAGES = {
   1: { text: "PREPARE", color: "green" },
   0: { text: "CLASH !!!", color: "red" }
 }
+export const ENDGAME_MESSAGES = {
+  2: { text: "TIME'S UP", color: "blue" },
+  1: { text: "YOU...", color: "blue" },
+  LOST: { text: "LOST", color: "red" },
+  WON: { text: "WON", color: "green" },
+  DRAW: { text: "DRAW", color: "blue" }
+}
+
 
 /* possible movements list */
 export const mov = {
@@ -29,7 +37,8 @@ export const mov = {
 
 export type Mov = typeof mov[keyof typeof mov];
 
-export type Side = typeof mov.left | typeof mov.right;
+export const t_side = { left: 'left', right: 'right', spectator: 'spectator' };
+export type Side = typeof t_side[keyof typeof t_side];
 
 /* hell mods */
 export const hellMode = {

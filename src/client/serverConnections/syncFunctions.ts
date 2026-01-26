@@ -119,11 +119,11 @@ export function syncGameStats(data: GameData, serverState: any) {
     if (serverState.score) {
         // If I am right, my score (right) should appear on the left UI
         if (data.mySide === 'right') {
-            data.mods.score.left = serverState.score.right;
-            data.mods.score.right = serverState.score.left;
+            data.mods.score.me = serverState.score.right;
+            data.mods.score.rival = serverState.score.left;
         } else {
-            data.mods.score.left = serverState.score.left;
-            data.mods.score.right = serverState.score.right;
+            data.mods.score.me = serverState.score.left;
+            data.mods.score.rival = serverState.score.right;
         }
     }
     if (serverState.scoreFlash) {

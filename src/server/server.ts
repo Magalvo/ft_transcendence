@@ -15,9 +15,10 @@ import {
     MAGIC_EFFECT_DURATION,
     magicEffect,
     mov,
+    GAME_DURATION,
     type MagicEffect,
     type Mov,
-    GAME_DURATION
+    type Side
 } from './index.js';
 
 // --- CONFIGURATION ---
@@ -69,6 +70,7 @@ let isHell = false;
 let currentHellMode: number = hellMode.null;
 let magicBallTimer = 0;
 let nextMagicBallId = 1;
+let lastCountdownInt = 0;
 
 // Inputs & Players
 const inputs = { left: mov.null, right: mov.null };
@@ -84,6 +86,7 @@ function resetGame() {
     console.log("Starting countdown...");
     status = GameStatus.COUNTDOWN;
     countdownTimer = 3;
+    lastCountdownInt = 4;
 
     gameTime = 0;
     phaseTimer = 0;
@@ -343,7 +346,6 @@ function createSnapshot() {
         isHell: isHell,
         activeHellMode: currentHellMode,
         scoreFlash: scoreFlash,
-        countdown: Math.ceil(countdownTimer)
     };
 }
 
@@ -353,7 +355,7 @@ io.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
     // Assign Role
-    let side = 'spectator';
+    let side: Side = 'spectator';
     if (players.left === null) {
         players.left = socket.id;
         side = 'left';
@@ -430,36 +432,47 @@ io.on('connection', (socket) => {
 });
 
 // --- MAIN GAME LOOP ---
-
 setInterval(() => {
+    const dt = TICK_MS / 1000;
+
     if (status === GameStatus.WAITING || status === GameStatus.PAUSED) {
         io.emit('gameState', createSnapshot());
         return;
     }
 
-    const dt = TICK_MS / 1000;
-
     if (status === GameStatus.COUNTDOWN) {
         countdownTimer -= dt;
+        const currentInt = Math.ceil(countdownTimer);
+        if (currentInt < lastCountdownInt) {
+            lastCountdownInt = currentInt;
+            if (currentInt > 0) {
+                io.emit('countdown', { count: currentInt });
+            }
+        }
         if (countdownTimer <= 0) {
-            console.log("Countdown finished! FIGHT!");
             status = GameStatus.RUNNING;
+            io.emit('countdown', { count: 0 });
             balls[0].throwBall();
         }
         io.emit('gameState', createSnapshot());
         return;
     }
 
-    if (gameTime >= GAME_DURATION)
-        status = GameStatus.ENDGAME;
 
     if (status === GameStatus.ENDGAME) {
-        io.emit('gameMessage', {
-            message: "TIME'S UP",
-            side: 'big',
-            color: "green",
-            duration: 5
-        });
+        countdownTimer -= dt;
+        const currentInt = Math.ceil(countdownTimer);
+        if (currentInt < lastCountdownInt) {
+            lastCountdownInt = currentInt;
+            if (currentInt > 0) {
+                io.emit('endGame', { count: currentInt });
+            }
+        }
+        if (countdownTimer <= 0) {
+            // reset game etc.
+            io.emit('endGame', { count: 0 });
+        }
+        io.emit('gameState', createSnapshot());
         return;
     }
 
@@ -471,6 +484,13 @@ setInterval(() => {
 
     // Broadcast State
     io.emit('gameState', createSnapshot());
+
+    if (gameTime >= GAME_DURATION)
+    {
+        countdownTimer = 3;
+        lastCountdownInt = 4;
+        status = GameStatus.ENDGAME;
+    }
 
 }, TICK_MS);
 

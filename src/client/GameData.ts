@@ -7,6 +7,7 @@ import {
     type Mov,
     type Objects2D,
     type Environment3D,
+    type Side,
 } from "./index.js";
 
 // --- Main Objects (Meshes) ---
@@ -19,7 +20,7 @@ export interface GameObjects {
 // --- Modifiers/Events ---
 export interface GameModifiers {
     // Score & Time
-    score: { left: number, right: number };
+    score: { me: number, rival: number };
     time: number;
     step: number;
     // Hell Mode
@@ -69,5 +70,5 @@ export interface GameData {
     obj2D: Objects2D;
     env: Environment3D;
     socket?: any;
-    mySide?: string;
+    mySide?: Side;
 }
