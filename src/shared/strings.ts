@@ -14,8 +14,8 @@ export const COUNTDOWN_MESSAGES = {
   0: { text: "CLASH !!!", color: "red" }
 }
 export const ENDGAME_MESSAGES = {
-  2: { text: "TIME'S UP", color: "blue" },
-  1: { text: "YOU...", color: "blue" },
+  3: { text: "TIME'S UP", color: "blue" },
+  2: { text: "YOU...", color: "blue" },
   LOST: { text: "LOST", color: "red" },
   WON: { text: "WON", color: "green" },
   DRAW: { text: "DRAW", color: "blue" }

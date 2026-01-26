@@ -51,7 +51,7 @@ httpServer.listen(CONFIG.PORT, () => {
 
 // --- GAME STATE ---
 let status: GameStatus = GameStatus.WAITING;
-let balls: ServerBall[] = [];
+let balls: ServerBall[] = [new ServerBall(0, 0)];
 let magicBalls: ServerMagicBall[] = [];
 
 // Initialize paddles immediately
@@ -83,10 +83,7 @@ const playersReady: { [side: string]: boolean } = { left: false, right: false };
  * Resets the game state to the initial values.
  */
 function resetGame() {
-    console.log("Starting countdown...");
-    status = GameStatus.COUNTDOWN;
-    countdownTimer = 3;
-    lastCountdownInt = 4;
+    status = GameStatus.WAITING;
 
     gameTime = 0;
     phaseTimer = 0;
@@ -104,6 +101,19 @@ function resetGame() {
     paddleLeft.resetEffects();
     paddleRight.resetEffects();
     magicBalls = [];
+    inputs.left = mov.null;
+    inputs.right = mov.null;
+    players.left = null;
+    players.right = null;
+    playersReady.left = false;
+    playersReady.right = false;
+}
+
+function startGame() {
+    console.log("Starting countdown...");
+    status = GameStatus.COUNTDOWN;
+    countdownTimer = 3;
+    lastCountdownInt = 4;
 }
 
 /**
@@ -378,7 +388,7 @@ io.on('connection', (socket) => {
                 // Both are HUMAN
                 paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
                 paddleRight = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
-                resetGame();
+                startGame();
             }
         }
     });
@@ -388,7 +398,7 @@ io.on('connection', (socket) => {
         // Human vs Bot
         paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
         paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
-        resetGame();
+        startGame();
     });
 
     socket.on('demo', () => {
@@ -396,7 +406,7 @@ io.on('connection', (socket) => {
         console.log(`Bot vs Bot demo`);
         paddleLeft = new ServerPaddle('left', 'bot', CONFIG.PADDLE_X_LEFT);
         paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
-        resetGame();
+        startGame();
     });
 
 
@@ -460,7 +470,7 @@ setInterval(() => {
 
 
     if (status === GameStatus.ENDGAME) {
-        countdownTimer -= dt;
+        countdownTimer -= dt / 2;
         const currentInt = Math.ceil(countdownTimer);
         if (currentInt < lastCountdownInt) {
             lastCountdownInt = currentInt;
@@ -469,8 +479,9 @@ setInterval(() => {
             }
         }
         if (countdownTimer <= 0) {
-            // reset game etc.
             io.emit('endGame', { count: 0 });
+            // reset game etc.
+            resetGame();
         }
         io.emit('gameState', createSnapshot());
         return;
@@ -485,8 +496,7 @@ setInterval(() => {
     // Broadcast State
     io.emit('gameState', createSnapshot());
 
-    if (gameTime >= GAME_DURATION)
-    {
+    if (gameTime >= GAME_DURATION) {
         countdownTimer = 3;
         lastCountdownInt = 4;
         status = GameStatus.ENDGAME;

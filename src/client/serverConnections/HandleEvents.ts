@@ -66,14 +66,14 @@ export class HandleEvents {
         closeMainMenu(this.data);
         const msgData = (COUNTDOWN_MESSAGES as any)[count];
         if (!msgData) return;
-        this.showCountdownMessage(msgData);
+        this.showCountdownMessage(msgData, 1);
     }
 
     public onEndGame(count: number) {
         let msgData: any;
-        if (count == 2 || count == 1)
+        if (count == 3 || count == 2)
             msgData = ENDGAME_MESSAGES[count];
-        if (count == 0) {
+        if (count == 1) {
             if (this.data.mods.score.me > this.data.mods.score.rival)
                 msgData = ENDGAME_MESSAGES['WON'];
             else if (this.data.mods.score.me < this.data.mods.score.rival)
@@ -81,8 +81,10 @@ export class HandleEvents {
             else
                 msgData = ENDGAME_MESSAGES['DRAW'];
         }
+        if (count == 0)
+            this.data.flags.return_main_menu = true;
         if (!msgData) return;
-        this.showCountdownMessage(msgData);
+        this.showCountdownMessage(msgData, 2);
     }
 
     public socketMessage(server_data: any) {
@@ -113,13 +115,13 @@ export class HandleEvents {
 
     /* PRIVATE METHODS */
 
-    private showCountdownMessage(msgData: any) {
+    private showCountdownMessage(msgData: any, duration: number) {
         showWarningMessage({
             scene: this.data.scene,
             message: msgData.text,
             pos: "big",
             color: msgData.color,
-            duration: 1
+            duration: duration
         });
     }
 

@@ -123,7 +123,6 @@ function createButtons(data: GameData, guiTexture: AdvancedDynamicTexture) {
   returnBtn.fontSize = 32;
   returnBtn.onPointerUpObservable.add(() => {
     data.flags.return_main_menu = true;
-
   });
   guiTexture.addControl(returnBtn);
 }
