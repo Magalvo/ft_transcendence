@@ -21,7 +21,7 @@ export type Objects2D = {
  * Creates all main 2D UI elements for the game (score labels, UI texture, etc).
  * @returns {Objects2D}
  */
-export function create2DParts(): Objects2D {
+export function createObjects2D(): Objects2D {
   // Create a fullscreen GUI texture for all UI elements, with a fixed ideal size
   const guiTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
     "interface_GUI",

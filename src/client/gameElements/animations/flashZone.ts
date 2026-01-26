@@ -14,7 +14,7 @@ function createFlashPlane(
   const anchorEdge = camp_side === "left" ? table.limits.left : table.limits.right;
   const plane = BABYLON.MeshBuilder.CreatePlane(
     "flashZone",
-    { width: baseWidth, height: table.dimensions.value.z },
+    { width: baseWidth, height: table.dimensions.z },
     data.scene
   );
   plane.position = new Vec3(
@@ -22,13 +22,13 @@ function createFlashPlane(
       ? anchorEdge + (baseWidth * initialScale) / 2
       : anchorEdge - (baseWidth * initialScale) / 2,
     table.limits.upper + 0.05,
-    table.pos.value.z
+    table.mesh.position.z
   );
   plane.rotation.x = Math.PI / 2;
 
   const mat = new BABYLON.StandardMaterial("flashMat", data.scene);
   mat.emissiveColor =
-    !data.is_hell
+    !data.mods.is_hell
       ? new Color3(0.7, 0.7, 1)
       : new Color3(1, 0.2, 0.2);
   mat.alpha = 0.0;
@@ -109,7 +109,7 @@ export function flashZone(
   camp_side: Side,
   table: Table
 ): void {
-  const baseWidth = table.dimensions.value.x * 0.1;
+  const baseWidth = table.dimensions.x * 0.1;
   const initialScale = 0.4;
   const finalScale = 1.15;
   const fadeInEnd = 18;

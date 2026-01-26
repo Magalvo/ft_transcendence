@@ -1,7 +1,7 @@
 import {
   BABYLON,
   createEnvironment3D,
-  create2DParts,
+  createObjects2D,
   renderGame,
   startMainMenu,
   createMainMenu,
@@ -129,7 +129,7 @@ export class GameScene {
     };
     this.data.obj3D = createObjects3D(this.scene);
     this.data.env = createEnvironment3D(this.data.obj3D, this.data.scene);
-    this.data.obj2D = create2DParts();
+    this.data.obj2D = createObjects2D();
 
     defineKeyEvents(this.data);
     this.connectToServer();

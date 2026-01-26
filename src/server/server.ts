@@ -298,6 +298,7 @@ function getPaddleMoveCmd(paddle: ServerPaddle): Mov {
  */
 function updateBalls(dt: number) {
     const paddles = [paddleLeft, paddleRight];
+    scoreFlash = null;
 
     balls.forEach(ball => {
         // Apply speed modifiers for Hell Mode
@@ -307,7 +308,8 @@ function updateBalls(dt: number) {
         }
 
         const result = ball.update(dt, paddles);
-        scoreFlash = result;
+        if (scoreFlash === null)
+            scoreFlash = result;
 
         if (result === 'left') {
             score.left++;

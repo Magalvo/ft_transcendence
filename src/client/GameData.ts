@@ -1,7 +1,6 @@
 import {
     BABYLON,
     Ball,
-    MagicBall,
     Paddle,
     Table,
     type HellMode,
@@ -50,7 +49,7 @@ export interface GameFlags {
 
 // --- Magic Balls ---
 export interface MagicBallControl {
-    magic_balls_ref: MagicBall[];
+    magic_balls_ref: Ball[];
     next_magic_ball: number;
     readonly min_time: number;
     readonly max_time: number;
