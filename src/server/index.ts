@@ -3,7 +3,7 @@ export * from "../shared/strings";
 export * from "../shared/types";
 export * from "../shared/utils";
 
-export * from "./server";
+export * from "./GameServer";
 
 export * from "./elements/ServerBall";
 export * from "./elements/ServerMagicBall";
