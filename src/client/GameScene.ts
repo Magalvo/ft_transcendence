@@ -15,6 +15,7 @@ import {
   HandleEvents,
   type GameData,
   SERVER_URL,
+  clearAllNotifications,
 } from "./index.js";
 import { io, Socket } from "socket.io-client";
 
@@ -130,6 +131,7 @@ export class GameScene {
     this.data.obj3D = createObjects3D(this.scene);
     this.data.env = createEnvironment3D(this.data.obj3D, this.data.scene);
     this.data.obj2D = createObjects2D();
+    clearAllNotifications();
 
     defineKeyEvents(this.data);
     this.connectToServer();

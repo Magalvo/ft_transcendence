@@ -1,4 +1,3 @@
-import type { BlockList } from "node:net";
 import { Vector3 } from "../../shared/Vector3.js";
 import { magicEffect } from "../../shared/strings.js";
 import { randomInt, normalizeAngle180 } from "../../shared/utils.js";
