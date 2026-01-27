@@ -1,41 +1,37 @@
-# Prerequisites
-*.d
+# Node dependencies
+node_modules/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Environment variables
+.env
+.env.*.local
+.env.local
 
-# Precompiled Headers
-*.gch
-*.pch
+# Build output
+dist/
+build/
 
-# Linker files
-*.ilk
+# SQLite database
+*.sqlite
+*.db
 
-# Debugger Files
-*.pdb
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Coverage
+coverage/
 
-# Fortran module files
-*.mod
-*.smod
+# Editor junk
+.idea/
+.vscode/
+.DS_Store
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# TypeScript cache
+*.tsbuildinfo
 
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# Fastify static cache
+public/uploads/

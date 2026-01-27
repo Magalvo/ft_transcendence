@@ -7,9 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "serve": "node -r esbuild-register scripts/server.ts"
+    "server": "node -r esbuild-register scripts/server.ts"
   },
   "devDependencies": {
+    "@types/node": "^25.0.9",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.25.11",
     "esbuild-register": "^3.6.0",

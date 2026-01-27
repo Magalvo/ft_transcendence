@@ -33,7 +33,7 @@
         <div id="popover-panel" class="popover__panel" tabindex="-1">
           <section class="chat">
             <header class="header">
-              <h2 class="room-name">Chat room #1</h2>
+              <h2 class="room-name">Chat</h2>
               <button id="close-btn" class="close-btn" aria-label="Close chat">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -50,6 +50,10 @@
                 </svg>
               </button>
             </header>
+            <!-- Селектор групи/чатів -->
+            <div id="chat-selector" style="display: flex; gap: 5px; padding: 10px; flex-wrap: wrap; border-bottom: 1px solid #ddd; max-height: 150px; overflow-y: auto; background: #fafafa;">
+              <small style="color: #999; width: 100%;">Завантаження чатів...</small>
+            </div>
             <ol class="msg-list"></ol>
             <form id="msg-form">
               <input
