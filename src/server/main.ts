@@ -1,3 +1,22 @@
-import { GameServer } from "./GameServer";
+import { GameServer, type GameFeatures } from "./index";
 
-new GameServer();
+/* THAT INFORMATION COME SOMEWHERE FORM THE GAME OPTIONS */
+const HELL_DURATION = 20;
+const HEAVEN_DURATION = 30;
+const MAGIC_EFFECT_DURATION = 10;
+const MAGIC_BALL_INTERVAL = 5;
+const MAGIC_BALL_MAX = 5;
+const ROUNDS = 3;
+const POWER_UPS = false;
+const GAME_DURATION = (HELL_DURATION * ROUNDS) + (HEAVEN_DURATION * (ROUNDS + 1));
+
+new GameServer({
+    HELL_DURATION,
+    HEAVEN_DURATION,
+    MAGIC_EFFECT_DURATION,
+    MAGIC_BALL_INTERVAL,
+    MAGIC_BALL_MAX,
+    ROUNDS,
+    POWER_UPS,
+    GAME_DURATION,
+} as GameFeatures);

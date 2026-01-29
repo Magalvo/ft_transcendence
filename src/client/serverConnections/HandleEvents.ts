@@ -35,9 +35,10 @@ export class HandleEvents {
     /* PUBLIC METHODS */
 
 
-    public initializeGame(side: Side) {
-        console.log("Player Side assigned:", side);
-        this.data.mySide = side;
+    public initializeGame(data: any) {
+        console.log("Player Side assigned:", data.side);
+        this.data.mySide = data.side;
+        this.data.gameFeatures = data.features;
     }
 
     public gamePaused() {

@@ -5,22 +5,31 @@ import {
     ServerMagicBall,
     GameStatus,
     randomInt,
-    HEAVEN_DURATION,
-    HELL_DURATION,
     hellMode,
-    MAGIC_BALL_INTERVAL,
-    MAGIC_BALL_MAX,
-    MAGIC_EFFECT_DURATION,
     magicEffect,
     mov,
-    GAME_DURATION,
     getHellModeName,
     getMagicEffectName,
     invertInput,
     CONFIG,
     type MagicEffect,
-    type Mov
+    type Mov,
+    smartBot,
 } from './index.js';
+
+export type GameFeatures = {
+    //
+    readonly HELL_DURATION: number;
+    readonly HEAVEN_DURATION: number;
+    readonly MAGIC_EFFECT_DURATION: number;
+    readonly MAGIC_BALL_INTERVAL: number;
+    //
+    readonly ROUNDS: number;
+    readonly MAGIC_BALL_MAX: number;
+    readonly POWER_UPS: Boolean;
+    //
+    readonly GAME_DURATION: number;
+};
 
 // Define the State Interface
 export interface IGameData {
@@ -56,11 +65,13 @@ export interface IGameData {
 
 export class GameEngine {
     public data: IGameData;
+    public features: GameFeatures;
     private io: Server; // Reference to IO for emitting game events (messages)
 
-    constructor(io: Server) {
+    constructor(io: Server, features: GameFeatures) {
         this.io = io;
         this.data = this.createInitialState();
+        this.features = features;
     }
 
     // --- INITIALIZATION ---
@@ -97,7 +108,8 @@ export class GameEngine {
     }
 
     public startGame() {
-        console.log("Starting countdown...");
+        console.log("Starting game...");
+        this.resetGame();
         this.data.status = GameStatus.COUNTDOWN;
         this.data.countdownTimer = 3;
         this.data.lastCountdownInt = 4;
@@ -114,8 +126,8 @@ export class GameEngine {
         // Reset Entities
         this.data.balls = [new ServerBall(0, 0)];
         this.data.magicBalls = [];
-        this.data.paddleLeft.resetEffects();
-        this.data.paddleRight.resetEffects();
+        this.data.paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
+        this.data.paddleRight = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
 
         // Reset Inputs
         this.data.inputs = { left: mov.null, right: mov.null };
@@ -130,24 +142,27 @@ export class GameEngine {
     public update(dt: number) {
         this.data.gameTime += dt;
         this.updatePhases(dt);
-        this.updateMagicBalls(dt);
+        if (this.features.POWER_UPS) this.updateMagicBalls(dt);
         this.updatePaddles(dt);
         this.updateBalls(dt);
 
         // Check for Match End
-        if (this.data.gameTime >= GAME_DURATION) {
-            this.data.status = GameStatus.ENDGAME;
-            this.data.countdownTimer = 3;
-            this.data.lastCountdownInt = 4;
-        }
+        if (this.data.gameTime >= this.features.GAME_DURATION)
+            this.endGame();
+    }
+
+    public endGame() {
+        this.data.status = GameStatus.ENDGAME;
+        this.data.countdownTimer = 3;
+        this.data.lastCountdownInt = 4;
     }
 
     private updatePhases(dt: number) {
         this.data.phaseTimer += dt;
 
-        if (!this.data.isHell && this.data.phaseTimer >= HEAVEN_DURATION) {
+        if (!this.data.isHell && this.data.phaseTimer >= this.features.HEAVEN_DURATION) {
             this.enterHellMode();
-        } else if (this.data.isHell && this.data.phaseTimer >= HELL_DURATION) {
+        } else if (this.data.isHell && this.data.phaseTimer >= this.features.HELL_DURATION) {
             this.exitHellMode();
         }
     }
@@ -156,9 +171,9 @@ export class GameEngine {
         // 1. Spawning
         if (!this.data.isHell) {
             this.data.magicBallTimer += dt;
-            if (this.data.magicBallTimer >= MAGIC_BALL_INTERVAL) {
+            if (this.data.magicBallTimer >= this.features.MAGIC_BALL_INTERVAL) {
                 this.data.magicBallTimer = 0;
-                if (this.data.magicBalls.length < MAGIC_BALL_MAX) {
+                if (this.data.magicBalls.length < this.features.MAGIC_BALL_MAX) {
                     const effect = randomInt(1, magicEffect.end_list) as MagicEffect;
                     const mb = new ServerMagicBall(this.data.nextMagicBallId++, effect);
                     this.data.magicBalls.push(mb);
@@ -179,7 +194,7 @@ export class GameEngine {
 
             for (const paddle of paddles) {
                 if (this.checkCollision(mb, paddle)) {
-                    paddle.applyPowerUp(mb.effectType);
+                    paddle.applyPowerUp(mb.effectType, this.features.MAGIC_EFFECT_DURATION);
                     collected = true;
 
                     // Emit effect message
@@ -187,7 +202,7 @@ export class GameEngine {
                         message: getMagicEffectName(mb.effectType),
                         side: paddle.side,
                         color: "green",
-                        duration: MAGIC_EFFECT_DURATION
+                        duration: this.features.MAGIC_EFFECT_DURATION
                     });
                     break;
                 }
@@ -251,7 +266,7 @@ export class GameEngine {
             message: getHellModeName(this.data.currentHellMode),
             side: "center",
             color: "red",
-            duration: HELL_DURATION
+            duration: this.features.HELL_DURATION
         });
 
         // Apply Hell Effects
@@ -260,12 +275,12 @@ export class GameEngine {
                 this.data.balls.forEach(b => b.setBigBall(true));
                 break;
             case hellMode.small_paddles:
-                this.data.paddleLeft.applyPowerUp(magicEffect.small);
-                this.data.paddleRight.applyPowerUp(magicEffect.small);
+                this.data.paddleLeft.applyPowerUp(magicEffect.small, this.features.MAGIC_EFFECT_DURATION);
+                this.data.paddleRight.applyPowerUp(magicEffect.small, this.features.MAGIC_EFFECT_DURATION);
                 break;
             case hellMode.slow_paddles:
-                this.data.paddleLeft.applyPowerUp(magicEffect.slow);
-                this.data.paddleRight.applyPowerUp(magicEffect.slow);
+                this.data.paddleLeft.applyPowerUp(magicEffect.slow, this.features.MAGIC_EFFECT_DURATION);
+                this.data.paddleRight.applyPowerUp(magicEffect.slow, this.features.MAGIC_EFFECT_DURATION);
                 break;
             case hellMode.multipleBalls:
                 while (this.data.balls.length < 4)
@@ -293,25 +308,7 @@ export class GameEngine {
         if (paddle.player === 'human') {
             return (paddle.side === 'left') ? this.data.inputs.left : this.data.inputs.right;
         }
-        return this.handleBot(paddle);
-    }
-
-    private handleBot(paddle: ServerPaddle): Mov {
-        // Find closest ball
-        const closest = this.data.balls.reduce((prev, b) =>
-            Math.abs(b.pos.x - paddle.pos.x) < Math.abs(prev.pos.x - paddle.pos.x) ? b : prev
-        );
-
-        // Calculate velocity vector X
-        const vx = closest.velocity * Math.cos(closest.angle * Math.PI / 180);
-
-        // Move only if ball is coming towards paddle
-        if ((paddle.side == "left" && vx < 0) || (paddle.side == "right" && vx > 0)) {
-            if (Math.abs(paddle.pos.z - closest.pos.z) > 2) {
-                return paddle.pos.z < closest.pos.z ? mov.far : mov.near;
-            }
-        }
-        return mov.null;
+        return smartBot(this.data, paddle);
     }
 
     private checkCollision(mb: ServerMagicBall, paddle: ServerPaddle): boolean {

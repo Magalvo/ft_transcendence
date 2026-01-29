@@ -1,3 +1,4 @@
+import type { GameFeatures } from "../server/index.js";
 import {
     BABYLON,
     Ball,
@@ -66,6 +67,7 @@ export interface GameData {
     mods: GameModifiers;
     input: GameInput;
     magicBalls: MagicBallControl;
+    gameFeatures: GameFeatures;
     flags: GameFlags;
     obj2D: Objects2D;
     env: Environment3D;

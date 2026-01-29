@@ -6,7 +6,7 @@ import {
 export function setupSocketListeners(socket: Socket, handleEvents: HandleEvents) {
     socket.on("connect", () => console.log("CLIENT: Connected to server!"));
 
-    socket.on("init", (data) => handleEvents.initializeGame(data.side));
+    socket.on("init", (data) => handleEvents.initializeGame(data));
 
     socket.on("gamePaused", () => handleEvents.gamePaused());
     socket.on("gameResumed", () => handleEvents.gameResumed());

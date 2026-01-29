@@ -1,4 +1,3 @@
-
 import {
   BABYLON,
   GameObject,

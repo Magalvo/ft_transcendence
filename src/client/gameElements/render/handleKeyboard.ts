@@ -1,4 +1,4 @@
-import { hellMode, keyCode, mov } from "../../index.js";
+import { keyCode, mov } from "../../index.js";
 import type { GameData } from "../../index.js";
 
 /**

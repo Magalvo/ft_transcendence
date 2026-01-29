@@ -1,6 +1,5 @@
 import {
     Vector3,
-    MAGIC_EFFECT_DURATION,
     magicEffect,
     mov,
     type MagicEffect,
@@ -76,7 +75,6 @@ export class ServerPaddle {
 
     public applyImpact() {
         this.knockback += 5;
-        console.log(`${this.side} pushed back! New X: ${this.pos.x}`);
     }
 
     public getBoundingBox() {
@@ -88,9 +86,9 @@ export class ServerPaddle {
         };
     }
 
-    public applyPowerUp(effect: MagicEffect) {
+    public applyPowerUp(effect: MagicEffect, duration: number) {
         this.resetEffects();
-        this.effectTimer = MAGIC_EFFECT_DURATION;
+        this.effectTimer = duration;
         this.currentEffect = effect;
 
         switch (effect) {

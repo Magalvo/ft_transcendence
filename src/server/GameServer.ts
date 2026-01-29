@@ -7,6 +7,7 @@ import {
     CONFIG,
     TICK_MS,
     GameEngine,
+    type GameFeatures,
     type Side,
 } from './index.js';
 
@@ -19,9 +20,9 @@ export class GameServer {
 
     private engine: GameEngine;
 
-    constructor() {
+    constructor(features: GameFeatures) {
         // Initialize Game Engine
-        this.engine = new GameEngine(this.io);
+        this.engine = new GameEngine(this.io, features);
 
         // Setup Network
         this.initializeSocketListeners();
@@ -102,7 +103,7 @@ export class GameServer {
                 side = 'right';
             }
 
-            socket.emit('init', { side });
+            socket.emit('init', { side: side, features: this.engine.features });
             console.log(`Player ${socket.id} assigned to: ${side}`);
 
             // 2. Event Handlers
@@ -111,8 +112,17 @@ export class GameServer {
 
             socket.on('disconnect', () => {
                 console.log(`Client disconnected: ${socket.id}`);
-                if (players.left === socket.id) players.left = null;
-                if (players.right === socket.id) players.right = null;
+                if (players.left === socket.id) {
+                    players.left = null;
+                    this.engine.data.score.left = -1;
+                }
+                if (players.right === socket.id) {
+                    players.right = null;
+                    this.engine.data.score.right = -1;
+                }
+
+                if (this.engine.data.status != GameStatus.WAITING)
+                    this.engine.endGame();
             });
         });
     }

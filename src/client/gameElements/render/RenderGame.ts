@@ -4,9 +4,9 @@ import {
   updateScoreLabels,
   updateEnvironment,
   rotateCamera,
-  updateTimer,
+  updateTimerLabel,
   updateMusic,
-  updateHellTimer,
+  updateHellTimerLabel,
   updateWarningMessages,
   type GameData,
 } from "../../index.js";
@@ -60,8 +60,8 @@ function updateActiveGameElements(data: GameData) {
 
   // --- UI & Game State ---
   updateScoreLabels(data);
-  updateTimer(data);
-  updateHellTimer(data);
+  updateTimerLabel(data);
+  updateHellTimerLabel(data);
   updateWarningMessages(data.mods.step);
 
   // --- Audio ---
