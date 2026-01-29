@@ -1,7 +1,11 @@
 import {
+    SmartBot,
     Vector3,
+    hellMode,
+    invertInput,
     magicEffect,
     mov,
+    type IGameData,
     type MagicEffect,
     type Mov,
 } from "../index.js";
@@ -9,7 +13,8 @@ import {
 export class ServerPaddle {
     public pos: Vector3;
     public side: 'left' | 'right';
-    public player: 'human' | 'bot';
+    public human: boolean;
+    private bot!: SmartBot;
 
     // Dimensões Físicas Atuais
     public width: number = 0.5;   // Eixo X (Espessura)
@@ -30,14 +35,26 @@ export class ServerPaddle {
     private baseX: number;
     private knockback: number = 0;
 
-    constructor(side: 'left' | 'right', player: 'human' | 'bot', x: number) {
+    /**
+     * 
+     * @param side left or right
+     * @param player 'human' for human player OR bot level for bot
+     * @param x x position, it depends on player side
+     */
+    constructor(side: 'left' | 'right', player: 'human' | 'bot', x: number, botLevel?: number) {
         this.side = side;
-        this.player = player;
         this.baseX = x;
         this.pos = new Vector3(x, 3, 0);
+        if (player == 'human') {
+            this.human = true;
+        }
+        else {
+            this.human = false;
+            this.bot = new SmartBot(side, botLevel);
+        }
     }
 
-    public update(deltaTime: number, playerInput: Mov) {
+    public update(deltaTime: number, data: IGameData) {
         // 1. Gerir o Timer do Efeito
         if (this.effectTimer > 0) {
             this.effectTimer -= deltaTime;
@@ -47,7 +64,8 @@ export class ServerPaddle {
         }
 
         // 2. Movimento
-        this.move(deltaTime, playerInput);
+        const command = this.getMovementCommand(data);
+        this.move(deltaTime, command);
 
         // 3. Limites (Clamping)
         const limit = (this.tableLimits.z / 2) - (this.depth / 2);
@@ -71,6 +89,23 @@ export class ServerPaddle {
 
         const direction = this.side === 'left' ? -1 : 1;
         this.pos.x = this.baseX + (direction * this.knockback);
+    }
+
+    private getMovementCommand(data: IGameData): Mov {
+        let command: Mov;
+        if (this.human) {
+            command =
+                (this.side === 'left') ?
+                    data.inputs.left :
+                    data.inputs.right;
+            if (data.currentHellMode === hellMode.inverted_keys)
+                command = invertInput(command);
+
+        }
+        else {
+            command = this.bot.think(data, this);
+        }
+        return command;
     }
 
     public applyImpact() {
@@ -122,4 +157,11 @@ export class ServerPaddle {
         this.effectTimer = 0;
         this.currentEffect = magicEffect.null;
     }
-}   
+
+    public reset() {
+        this.resetEffects();
+        this.pos = new Vector3(this.baseX, 3, 0);
+    }
+
+}
+

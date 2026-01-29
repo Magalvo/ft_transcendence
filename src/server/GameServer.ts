@@ -103,7 +103,7 @@ export class GameServer {
                 side = 'right';
             }
 
-            socket.emit('init', { side: side, features: this.engine.features });
+            socket.emit('init', { side: side, features: this.engine.data.features });
             console.log(`Player ${socket.id} assigned to: ${side}`);
 
             // 2. Event Handlers
@@ -144,13 +144,13 @@ export class GameServer {
 
         socket.on('offlinePlayerReady', () => {
             data.paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
-            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
+            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT, data.features.BOT_LEVEL);
             this.engine.startGame();
         });
 
         socket.on('demo', () => {
-            data.paddleLeft = new ServerPaddle('left', 'bot', CONFIG.PADDLE_X_LEFT);
-            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT);
+            data.paddleLeft = new ServerPaddle('left', 'bot', CONFIG.PADDLE_X_LEFT, data.features.BOT_LEVEL);
+            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT, data.features.BOT_LEVEL);
             this.engine.startGame();
         });
     }
