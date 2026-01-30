@@ -1,5 +1,6 @@
 import {
     PADDLE_CONFIG,
+    ServerTable,
     SmartBot,
     Vector3,
     hellMode,
@@ -26,7 +27,6 @@ export class ServerPaddle {
     public currentEffect: MagicEffect = magicEffect.null;
     private knockback: number = 0;
 
-    private readonly limitsZ = 45; // Table half-height
     private baseX: number;
     private bot?: SmartBot;
 
@@ -55,7 +55,7 @@ export class ServerPaddle {
         this.applyMovement(dt, command);
 
         // 3. Constraints
-        this.clampPosition();
+        this.clampPosition(data.table);
     }
 
     // --- LOGIC ---
@@ -85,8 +85,8 @@ export class ServerPaddle {
         this.pos.x = this.baseX + (dir * this.knockback);
     }
 
-    private clampPosition() {
-        const limit = this.limitsZ - (this.depth / 2);
+    private clampPosition(table: ServerTable) {
+        const limit = (table.depth / 2) - (this.depth / 2);
         if (this.pos.z > limit) this.pos.z = limit;
         if (this.pos.z < -limit) this.pos.z = -limit;
     }

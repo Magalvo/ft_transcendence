@@ -6,7 +6,8 @@ import {
   Vec3,
   type GameObjects,
   type Side,
-  Ball
+  Ball,
+  TABLE_CONFIG
 } from "../../index.js";
 
 /**
@@ -33,7 +34,7 @@ export function createTable(scene: BABYLON.Scene): Table {
   return new Table({
     scene,
     pos: new Vec3(0, -h / 2, 0),
-    dimensions: new Vec3(170, h, 90),
+    dimensions: new Vec3(TABLE_CONFIG.width, h, TABLE_CONFIG.depth),
   });
 }
 

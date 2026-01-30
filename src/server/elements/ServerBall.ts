@@ -3,7 +3,8 @@ import {
     magicEffect,
     normalizeAngle180,
     ServerPaddle,
-    BALL_CONFIG
+    BALL_CONFIG,
+    ServerTable
 } from "../index.js";
 
 export class ServerBall {
@@ -14,8 +15,6 @@ export class ServerBall {
     public isColliding: boolean = false;
 
     // Configs
-    private readonly TABLE_LIMITS = { x: 170, z: 90 };
-    
     private speedModifier: number = 1;
     private thickPaddleMod: boolean = false;
 
@@ -25,7 +24,7 @@ export class ServerBall {
     }
 
     // --- MAIN UPDATE ---
-    public update(dt: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
+    public update(dt: number, paddles: ServerPaddle[], table: ServerTable): 'left' | 'right' | null {
         this.isColliding = false;
 
         // 1. Calculate Movement
@@ -37,7 +36,7 @@ export class ServerBall {
 
         // 2. Checks
         this.checkPaddleCollisions(paddles);
-        return this.checkWallCollisions();
+        return this.checkWallCollisions(table);
     }
 
     // --- PHYSICS LOGIC ---
@@ -80,9 +79,9 @@ export class ServerBall {
         this.velocity = Math.min(this.velocity * 1.05, BALL_CONFIG.speed * 2);
     }
 
-    private checkWallCollisions(): 'left' | 'right' | null {
-        const limitX = this.TABLE_LIMITS.x / 2;
-        const limitZ = (this.TABLE_LIMITS.z / 2) - this.radius;
+    private checkWallCollisions(table: ServerTable): 'left' | 'right' | null {
+        const limitX = table.width / 2;
+        const limitZ = (table.depth / 2) - this.radius;
 
         // Score Goal
         if (this.pos.x > limitX) { this.throwBall(); return 'left'; }

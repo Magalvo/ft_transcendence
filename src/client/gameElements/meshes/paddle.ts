@@ -29,7 +29,6 @@ export class Paddle extends GameObject {
     this.updateAppearance(data);
   }
 
-
   private updateAppearance(data: GameData) {
     const isHell = !!data.mods.is_hell;
     const mat = this.mesh.material as BABYLON.StandardMaterial;

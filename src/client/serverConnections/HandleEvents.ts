@@ -9,6 +9,7 @@ import {
     syncMagicBalls,
     syncPaddles,
     syncPlayingBalls,
+    syncTable,
     type GameData,
     type Side,
 } from "../index";
@@ -108,6 +109,7 @@ export class HandleEvents {
         if (serverState.paddles) syncPaddles(this.data, serverState.paddles);
         if (serverState.balls) syncPlayingBalls(this.data, serverState.balls, serverState.isHell);
         if (serverState.magicBalls) syncMagicBalls(this.data, serverState.magicBalls);
+        if (serverState.table) syncTable(this.data, serverState.table);
         syncGameStats(this.data, serverState);
         this.handleGameStartTrigger(serverState.status);
         this.updateHellVisuals(serverState);

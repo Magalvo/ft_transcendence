@@ -25,3 +25,10 @@ export const MAGIC_BALL_CONFIG = {
     max_interval: 7,
     max_balls: 5,
 }
+
+export const TABLE_CONFIG = {
+    // 170
+    width: 170,
+    // 90
+    depth: 90,
+}

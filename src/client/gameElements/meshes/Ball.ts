@@ -10,10 +10,6 @@ export type BallOptions = GameObjectOptions & {
 };
 
 export class Ball extends GameObject {
-  public speed_modifier = 1;
-  public angle = 0;
-  public velocity = 0;
-  public respawn_timer = 0;
   public flame_animation!: BABYLON.ParticleSystem;
 
   constructor(options: BallOptions) {

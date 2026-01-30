@@ -16,6 +16,7 @@ import {
     BALL_CONFIG,
     MAGIC_BALL_CONFIG,
     randomFloat2,
+    ServerTable,
 } from './index.js';
 
 export type GameFeatures = {
@@ -45,6 +46,7 @@ export interface IGameData {
     magicBalls: ServerMagicBall[];
     paddleLeft: ServerPaddle;
     paddleRight: ServerPaddle;
+    table: ServerTable;
 
     // Stats
     score: { left: number, right: number };
@@ -92,6 +94,7 @@ export class GameEngine {
             magicBalls: [],
             paddleLeft: new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT),
             paddleRight: new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT),
+            table: new ServerTable(),
 
             score: { left: 0, right: 0 },
             scoreFlash: null,
@@ -233,7 +236,7 @@ export class GameEngine {
                 ball.setSpeedModifier(mod);
             }
 
-            const result = ball.update(dt, paddles);
+            const result = ball.update(dt, paddles, this.data.table);
             if (this.data.scoreFlash === null) this.data.scoreFlash = result;
 
             if (result === 'left') {
@@ -324,6 +327,10 @@ export class GameEngine {
                 { side: 'left', pos: this.data.paddleLeft.pos.asArray(), size: this.data.paddleLeft.depth, sizeX: this.data.paddleLeft.width },
                 { side: 'right', pos: this.data.paddleRight.pos.asArray(), size: this.data.paddleRight.depth, sizeX: this.data.paddleRight.width }
             ],
+            table: {
+                sizeX: this.data.table.width,
+                sizeZ: this.data.table.depth
+            },
             score: this.data.score,
             time: this.data.gameTime,
             hellTimer: this.data.phaseTimer,

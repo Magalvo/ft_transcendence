@@ -15,9 +15,10 @@ export function updateCamera(data: GameData) {
 
     let targetAlpha = -Math.PI / 2;
     let targetBeta = 1.0;
-    let targetRadius = 150;
-    
-    if (data.flags.camera_pos == 2 && mode != hellMode.twisted_view){
+    const table_median = (data.obj3D.table.dimensions.x + data.obj3D.table.dimensions.z) / 2;
+    let targetRadius = 0 + Math.pow(table_median, 2) * 0.01;
+
+    if (data.flags.camera_pos == 2 && mode != hellMode.twisted_view) {
         targetAlpha = -Math.PI;
         targetBeta = 1.3;
     }

@@ -50,11 +50,8 @@ export function renderGame(dt: number, data: GameData) {
 /**
  * Updates all active entities, environment, and handles input.
  */
-function updateActiveGameElements(data: GameData) {
+function updateActiveGameElements(data: GameData) {  
   // --- Visuals & 3D Objects ---
-  data.obj3D.table.update(data);
-  data.obj3D.paddles.forEach(paddle => paddle.update(data));
-  
   updateCamera(data);
   updateEnvironment(data);
 

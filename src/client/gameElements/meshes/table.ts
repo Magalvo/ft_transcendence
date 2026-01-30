@@ -21,8 +21,6 @@ export class Table extends GameObject {
 
   constructor(options: TableOptions) {
     super(options);
-
-    options.dimensions = options.dimensions;
     this.good_color = new Color3(0.7, 0.7, 1);
     this.bad_color = new Color3(1, 0.2, 0.2);
     this.initializeTable(options);

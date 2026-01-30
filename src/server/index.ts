@@ -12,4 +12,5 @@ export * from "./config";
 export * from "./elements/ServerBall";
 export * from "./elements/ServerMagicBall";
 export * from "./elements/ServerPaddle";
+export * from "./elements/ServerTable";
 export * from "./elements/smartBot";

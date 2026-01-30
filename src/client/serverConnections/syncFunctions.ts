@@ -3,15 +3,18 @@ import {
     BABYLON,
     createPlayingBall,
     flashZone,
+    PADDLE_CONFIG,
     removeFireFromMesh,
     spawnHitParticles,
+    TABLE_CONFIG,
     type GameData,
 } from "../index";
 
 const SCENE_CONFIG = {
-    PADDLE_BASE_DEPTH: 30,
-    PADDLE_BASE_WIDTH: 0.5,
-
+    PADDLE_BASE_DEPTH: PADDLE_CONFIG.depth,
+    PADDLE_BASE_WIDTH: PADDLE_CONFIG.width,
+    TABLE_BASE_DEPTH: TABLE_CONFIG.depth,
+    TABLE_BASE_WIDTH: TABLE_CONFIG.width,
 };
 
 export function syncPaddles(data: GameData, serverPaddles: any[]) {
@@ -113,6 +116,18 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
             localBalls.push(newMesh);
         }
     });
+}
+
+export function syncTable(data: GameData, serverTable: any) {
+    const table = data.obj3D.table;
+
+    // Sync Dimensions
+    // const serverZ = serverTable.sizeZ;
+    // const serverX = serverTable.sizeX;
+
+    // table.mesh.scaling.z = serverZ / SCENE_CONFIG.TABLE_BASE_DEPTH;
+    // table.mesh.scaling.x = serverX / SCENE_CONFIG.TABLE_BASE_WIDTH;
+    table.update(data);
 }
 
 export function syncGameStats(data: GameData, serverState: any) {
