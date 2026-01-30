@@ -29,6 +29,7 @@ export type GameFeatures = {
     readonly BOT_LEVEL: number; // 1-10
     //
     readonly GAME_DURATION: number;
+    readonly PLAYERS_PER_SIDE: number;
 };
 
 // Define the State Interface
@@ -44,8 +45,8 @@ export interface IGameData {
     // Entities
     balls: ServerBall[];
     magicBalls: ServerMagicBall[];
-    paddleLeft: ServerPaddle;
-    paddleRight: ServerPaddle;
+    paddlesLeft: ServerPaddle[];
+    paddlesRight: ServerPaddle[];
     table: ServerTable;
 
     // Stats
@@ -59,9 +60,9 @@ export interface IGameData {
     nextMagicBallId: number;
 
     // Players
-    inputs: { left: Mov, right: Mov };
-    players: { left: string | null, right: string | null };
-    playersReady: { left: boolean, right: boolean };
+    inputs: { left: Mov[], right: Mov[] };
+    players: { left: (string | null)[], right: (string | null)[] };
+    playersReady: { left: boolean[], right: boolean[] };
 
     // Features
     features: GameFeatures;
@@ -69,7 +70,7 @@ export interface IGameData {
 
 export class GameEngine {
     public data: IGameData;
-    private io: Server; // Reference to IO for emitting game events (messages)
+    private io: Server;
 
     constructor(io: Server, features: GameFeatures) {
         this.io = io;
@@ -82,6 +83,10 @@ export class GameEngine {
      * Creates a clean state object.
      */
     private createInitialState(features: GameFeatures): IGameData {
+        const inputsLeft = new Array(features.PLAYERS_PER_SIDE).fill(mov.null);
+        const inputsRight = new Array(features.PLAYERS_PER_SIDE).fill(mov.null);
+        const playersLeft = new Array(features.PLAYERS_PER_SIDE).fill(null);
+        const playersRight = new Array(features.PLAYERS_PER_SIDE).fill(null);
         return {
             status: GameStatus.WAITING,
             gameTime: 0,
@@ -92,8 +97,8 @@ export class GameEngine {
 
             balls: [],
             magicBalls: [],
-            paddleLeft: new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT),
-            paddleRight: new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT),
+            paddlesLeft: [],
+            paddlesRight: [],
             table: new ServerTable(),
 
             score: { left: 0, right: 0 },
@@ -104,9 +109,12 @@ export class GameEngine {
             magicBallTimer: 0,
             nextMagicBallId: 1,
 
-            inputs: { left: mov.null, right: mov.null },
-            players: { left: null, right: null },
-            playersReady: { left: false, right: false },
+            inputs: { left: inputsLeft, right: inputsRight },
+            players: { left: playersLeft, right: playersRight },
+            playersReady: {
+                left: new Array(features.PLAYERS_PER_SIDE).fill(false),
+                right: new Array(features.PLAYERS_PER_SIDE).fill(false)
+            },
 
             features: features
         };
@@ -131,12 +139,42 @@ export class GameEngine {
         // Reset Entities
         while (this.data.balls.length < BALL_CONFIG.min_amount) this.data.balls.push(new ServerBall(0, 0));
         this.data.magicBalls = [];
-        this.data.paddleLeft.reset();
-        this.data.paddleRight.reset();
+
+        this.data.paddlesLeft = this.createSidePaddles('left');
+        this.data.paddlesRight = this.createSidePaddles('right');
 
         // Reset Inputs
-        this.data.inputs = { left: mov.null, right: mov.null };
-        this.data.playersReady = { left: false, right: false };
+        this.data.inputs.left.fill(mov.null);
+        this.data.inputs.right.fill(mov.null);
+        this.data.playersReady = {
+            left: new Array(this.data.features.PLAYERS_PER_SIDE).fill(false),
+            right: new Array(this.data.features.PLAYERS_PER_SIDE).fill(false)
+        };
+    }
+
+    private createSidePaddles(side: 'left' | 'right'): ServerPaddle[] {
+        const paddles: ServerPaddle[] = [];
+        const players_amount = this.data.features.PLAYERS_PER_SIDE;
+        const table_d = this.data.table.depth;
+
+        for (let i = 0; i < players_amount; i++) {
+            const z = (table_d * -0.5) + (table_d / (players_amount + 1) * (i + 1));
+            // const z = (table_d * -0.5);
+            // Verifica se este slot tem um jogador humano
+            const hasPlayer = this.data.players[side][i] !== null;
+            const type = hasPlayer ? 'human' : 'bot';
+
+            // Criamos o paddle passando o ID do player (opcional) ou apenas o tipo
+            const paddle = new ServerPaddle(side, type, this.data);
+
+            // Força a posição Z inicial para não ficarem sobrepostos
+            paddle.pos.z = z;
+            // Guarda o índice para sabermos qual input usar
+            paddle.playerIndex = i;
+
+            paddles.push(paddle);
+        }
+        return paddles;
     }
 
     // --- MAIN UPDATE METHODS ---
@@ -193,10 +231,10 @@ export class GameEngine {
         // 2. Collision & Physics
         for (let i = this.data.magicBalls.length - 1; i >= 0; i--) {
             const mb = this.data.magicBalls[i];
-            mb.update(dt);
+            mb.update(dt, this.data);
 
             let collected = false;
-            const paddles = [this.data.paddleLeft, this.data.paddleRight];
+            const paddles = [...this.data.paddlesLeft, ...this.data.paddlesRight];
 
             for (const paddle of paddles) {
                 if (this.checkCollision(mb, paddle)) {
@@ -219,12 +257,12 @@ export class GameEngine {
     }
 
     private updatePaddles(dt: number) {
-        this.data.paddleLeft.update(dt, this.data);
-        this.data.paddleRight.update(dt, this.data);
+        [...this.data.paddlesLeft, ...this.data.paddlesRight].
+            forEach(paddle => { paddle.update(dt, this.data); });
     }
 
     private updateBalls(dt: number) {
-        const paddles = [this.data.paddleLeft, this.data.paddleRight];
+        const paddles = [...this.data.paddlesLeft, ...this.data.paddlesRight];
         this.data.scoreFlash = null;
 
         this.data.balls.forEach(ball => {
@@ -241,10 +279,10 @@ export class GameEngine {
 
             if (result === 'left') {
                 this.data.score.left++;
-                ball.throwBall();
+                ball.throwBall(this.data.table);
             } else if (result === 'right') {
                 this.data.score.right++;
-                ball.throwBall();
+                ball.throwBall(this.data.table);
             }
         });
     }
@@ -254,8 +292,7 @@ export class GameEngine {
     private enterHellMode() {
         this.data.isHell = true;
         this.data.phaseTimer = 0;
-        this.data.paddleLeft.resetEffects();
-        this.data.paddleRight.resetEffects();
+        [...this.data.paddlesLeft, ...this.data.paddlesRight].forEach(paddle => { paddle.resetEffects() });
         this.data.magicBalls = [];
 
         this.data.currentHellMode = randomInt(1, hellMode.end_list);
@@ -274,16 +311,18 @@ export class GameEngine {
                 this.data.balls.forEach(b => b.setSizeModifier(BALL_CONFIG.big_ball_size_mod));
                 break;
             case hellMode.small_paddles:
-                this.data.paddleLeft.applyEffect(magicEffect.small, this.data.features.HELL_DURATION);
-                this.data.paddleRight.applyEffect(magicEffect.small, this.data.features.HELL_DURATION);
+                [...this.data.paddlesLeft, ...this.data.paddlesRight].forEach(paddle => {
+                    paddle.applyEffect(magicEffect.small, this.data.features.HELL_DURATION)
+                });
                 break;
             case hellMode.slow_paddles:
-                this.data.paddleLeft.applyEffect(magicEffect.slow, this.data.features.HELL_DURATION);
-                this.data.paddleRight.applyEffect(magicEffect.slow, this.data.features.HELL_DURATION);
+                [...this.data.paddlesLeft, ...this.data.paddlesRight].forEach(paddle => {
+                    paddle.applyEffect(magicEffect.slow, this.data.features.HELL_DURATION)
+                });
                 break;
             case hellMode.multipleBalls:
                 while (this.data.balls.length < BALL_CONFIG.max_amount) this.data.balls.push(new ServerBall(0, 0));
-                this.data.balls.forEach(b => { if (b.velocity === 0) b.throwBall(); });
+                this.data.balls.forEach(b => { if (b.velocity === 0) b.throwBall(this.data.table); });
                 break;
         }
     }
@@ -299,9 +338,7 @@ export class GameEngine {
             b.resetSize();
             b.resetSpeedModifier();
         });
-
-        this.data.paddleLeft.resetEffects();
-        this.data.paddleRight.resetEffects();
+        [...this.data.paddlesLeft, ...this.data.paddlesRight].forEach(paddle => { paddle.resetEffects() });
     }
 
     private checkCollision(mb: ServerMagicBall, paddle: ServerPaddle): boolean {
@@ -315,6 +352,13 @@ export class GameEngine {
      * Generates a DTO (Data Transfer Object) for the client.
      */
     public getSnapshot() {
+        const allPaddles = [...this.data.paddlesLeft, ...this.data.paddlesRight].map(p => ({
+            side: p.side,
+            index: p.playerIndex,
+            pos: p.pos.asArray(),
+            size: p.depth,
+            sizeX: p.width
+        }));
         return {
             status: this.data.status,
             balls: this.data.balls.map(b => ({
@@ -323,10 +367,7 @@ export class GameEngine {
                 particles: b.isColliding,
             })),
             magicBalls: this.data.magicBalls.map(mb => mb.getData()),
-            paddles: [
-                { side: 'left', pos: this.data.paddleLeft.pos.asArray(), size: this.data.paddleLeft.depth, sizeX: this.data.paddleLeft.width },
-                { side: 'right', pos: this.data.paddleRight.pos.asArray(), size: this.data.paddleRight.depth, sizeX: this.data.paddleRight.width }
-            ],
+            paddles: allPaddles,
             table: {
                 sizeX: this.data.table.width,
                 sizeZ: this.data.table.depth

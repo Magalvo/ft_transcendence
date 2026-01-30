@@ -3,8 +3,6 @@ export const CONFIG = {
     PORT: 3000,
     TICK_RATE: 60,
     PAUSE_COOLDOWN_MS: 500,
-    PADDLE_X_LEFT: -68,
-    PADDLE_X_RIGHT: 68,
     SPEED_MOD_FAST: 4,
     SPEED_MOD_NORMAL: 2
 };

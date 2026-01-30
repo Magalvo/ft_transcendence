@@ -4,7 +4,8 @@ import {
     normalizeAngle180,
     ServerPaddle,
     BALL_CONFIG,
-    ServerTable
+    ServerTable,
+    randomFloat2
 } from "../index.js";
 
 export class ServerBall {
@@ -20,7 +21,7 @@ export class ServerBall {
 
     constructor(x: number, z: number) {
         this.pos = new Vector3(x, 2, z);
-        this.throwBall();
+        // this.throwBall();
     }
 
     // --- MAIN UPDATE ---
@@ -84,8 +85,8 @@ export class ServerBall {
         const limitZ = (table.depth / 2) - this.radius;
 
         // Score Goal
-        if (this.pos.x > limitX) { this.throwBall(); return 'left'; }
-        if (this.pos.x < -limitX) { this.throwBall(); return 'right'; }
+        if (this.pos.x > limitX) { this.throwBall(table); return 'left'; }
+        if (this.pos.x < -limitX) { this.throwBall(table); return 'right'; }
 
         // Wall Bounce
         if (this.pos.z > limitZ) {
@@ -115,9 +116,9 @@ export class ServerBall {
         this.speedModifier = 1.0;
     }
 
-    public throwBall() {
-        this.pos.x = 0; 
-        this.pos.z = 0;
+    public throwBall(table: ServerTable) {
+        this.pos.x = randomFloat2(table.width * 0.6, table.width * -0.6); 
+        this.pos.z = randomFloat2(table.depth * 0.6, table.depth * -0.6); 
         this.resetSpeedModifier();
         this.velocity = BALL_CONFIG.speed;
         this.thickPaddleMod = false;

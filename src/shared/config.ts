@@ -3,20 +3,17 @@ export const SERVER_URL = "http://localhost:3000";
 export const PADDLE_CONFIG = {
     width: 0.5,
     depth: 30,
-    speed: 60,
-    //
+    speed: 120, // 60
     knockback_step: 4,
     knockback_recover: 0.5,
 }
 
 export const BALL_CONFIG = {
     radius: 2,
-    speed: 50,
-    //
+    speed: 50, // 50
     big_ball_size_mod: 2.5,
-    //
-    min_amount: 1,
-    max_amount: 5,
+    min_amount: 3, // 1
+    max_amount: 5, // 5
 }
 
 export const MAGIC_BALL_CONFIG = {
@@ -27,8 +24,6 @@ export const MAGIC_BALL_CONFIG = {
 }
 
 export const TABLE_CONFIG = {
-    // 170
-    width: 170,
-    // 90
-    depth: 90,
+    width: 300, // 170
+    depth: 170, // 90
 }

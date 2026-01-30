@@ -21,16 +21,13 @@ export class GameServer {
     private engine: GameEngine;
 
     constructor(features: GameFeatures) {
-        // Initialize Game Engine
         this.engine = new GameEngine(this.io, features);
-
-        // Setup Network
         this.initializeSocketListeners();
+
         this.httpServer.listen(CONFIG.PORT, () => {
             console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
         });
 
-        // Start Loop
         setInterval(this.gameLoop.bind(this), TICK_MS);
     }
 
@@ -38,13 +35,11 @@ export class GameServer {
         const dt = TICK_MS / 1000;
         const data = this.engine.data;
 
-        // 1. Idle / Paused
         if (data.status === GameStatus.WAITING || data.status === GameStatus.PAUSED) {
             this.io.emit('gameState', this.engine.getSnapshot());
             return;
         }
 
-        // 2. Countdown
         if (data.status === GameStatus.COUNTDOWN) {
             data.countdownTimer -= dt;
             const currentInt = Math.ceil(data.countdownTimer);
@@ -57,14 +52,13 @@ export class GameServer {
             if (data.countdownTimer <= 0) {
                 data.status = GameStatus.RUNNING;
                 this.io.emit('countdown', { count: 0 });
-                this.engine.data.balls.forEach(b => { b.throwBall(); });
+                this.engine.data.balls.forEach(b => { b.throwBall(this.engine.data.table); });
             }
 
             this.io.emit('gameState', this.engine.getSnapshot());
             return;
         }
 
-        // 3. Endgame Animation
         if (data.status === GameStatus.ENDGAME) {
             data.countdownTimer -= dt / 2;
             const currentInt = Math.ceil(data.countdownTimer);
@@ -83,7 +77,6 @@ export class GameServer {
             return;
         }
 
-        // 4. Running Game Physics
         this.engine.update(dt);
         this.io.emit('gameState', this.engine.getSnapshot());
     }
@@ -92,34 +85,47 @@ export class GameServer {
         this.io.on('connection', (socket: Socket) => {
             console.log(`Client connected: ${socket.id}`);
             const players = this.engine.data.players;
+            // Garante que usamos um valor default caso as features não tenham a propriedade
+            const max = this.engine.data.features.PLAYERS_PER_SIDE;
 
-            // 1. Assign Role
             let side: Side = 'spectator';
-            if (players.left === null) {
-                players.left = socket.id;
+            let index = -1;
+
+            const freeLeft = players.left.findIndex(p => p === null);
+            if (freeLeft !== -1 && freeLeft < max) {
+                players.left[freeLeft] = socket.id;
                 side = 'left';
-            } else if (players.right === null) {
-                players.right = socket.id;
-                side = 'right';
+                index = freeLeft;
+            }
+            else {
+                const freeRight = players.right.findIndex(p => p === null);
+                if (freeRight !== -1 && freeRight < max) {
+                    players.right[freeRight] = socket.id;
+                    side = 'right';
+                    index = freeRight;
+                }
             }
 
-            socket.emit('init', { side: side, features: this.engine.data.features });
-            console.log(`Player ${socket.id} assigned to: ${side}`);
+            socket.emit('init', {
+                side: side,
+                index: index,
+                features: this.engine.data.features
+            });
+            console.log(`Player ${socket.id} assigned to: ${side} [${index}]`);
 
-            // 2. Event Handlers
             this.setupPlayerReadyHandlers(socket);
-            this.setupGameControlHandlers(socket, side);
+            this.setupGameControlHandlers(socket, side, index);
 
             socket.on('disconnect', () => {
+                if (side === 'left' && index !== -1) {
+                    players.left[index] = null;
+                    if (index === 0) this.engine.data.score.left = -1;
+                }
+                if (side === 'right' && index !== -1) {
+                    players.right[index] = null;
+                    if (index === 0) this.engine.data.score.right = -1;
+                }
                 console.log(`Client disconnected: ${socket.id}`);
-                if (players.left === socket.id) {
-                    players.left = null;
-                    this.engine.data.score.left = -1;
-                }
-                if (players.right === socket.id) {
-                    players.right = null;
-                    this.engine.data.score.right = -1;
-                }
 
                 if (this.engine.data.status != GameStatus.WAITING)
                     this.engine.endGame();
@@ -129,38 +135,84 @@ export class GameServer {
 
     private setupPlayerReadyHandlers(socket: Socket) {
         const data = this.engine.data;
+        const maxPlayers = data.features.PLAYERS_PER_SIDE;
+
+        const paddleXLeft = (CONFIG as any).PADDLE_X_LEFT ?? -68;
+        const paddleXRight = (CONFIG as any).PADDLE_X_RIGHT ?? 68;
+
+        const spawnPaddles = (side: 'left' | 'right', mode: 'online' | 'offline' | 'demo') => {
+            const paddles: ServerPaddle[] = [];
+            const spacing = 20;
+            const startZ = maxPlayers === 1 ? 0 : -((maxPlayers - 1) * spacing) / 2;
+
+            for (let i = 0; i < maxPlayers; i++) {
+                const playerId = data.players[side][i];
+                let type: 'human' | 'bot' | null = null;
+
+                if (mode === 'demo') type = 'bot';
+                else if (mode === 'offline') type = playerId ? 'human' : 'bot';
+                else if (mode === 'online') {
+                    if (playerId) type = 'human';
+                    else continue;
+                }
+
+                if (type) {
+                    const x = (side === 'left') ? paddleXLeft : paddleXRight;
+                    const p = new ServerPaddle(side, type, data);
+
+                    p.pos.z = startZ + (i * spacing);
+                    p.playerIndex = i;
+                    paddles.push(p);
+                }
+            }
+            return paddles;
+        };
 
         socket.on('onlinePlayerReady', () => {
-            const pSide = (data.players.left === socket.id) ? 'left' : (data.players.right === socket.id) ? 'right' : null;
-            if (pSide) {
-                data.playersReady[pSide] = true;
-                if (data.playersReady.left && data.playersReady.right) {
-                    data.paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
-                    data.paddleRight = new ServerPaddle('right', 'human', CONFIG.PADDLE_X_RIGHT);
-                    this.engine.startGame();
-                }
+            const leftList = data.players.left as unknown as (string | null)[];
+            const rightList = data.players.right as unknown as (string | null)[];
+            const leftIndex = leftList.indexOf(socket.id);
+            const rightIndex = rightList.indexOf(socket.id);
+
+            if (leftIndex !== -1) {
+                data.playersReady.left[leftIndex] = true;
+                console.log(`Left Player ${leftIndex} is Ready`);
+            }
+            else if (rightIndex !== -1) {
+                data.playersReady.right[rightIndex] = true;
+                console.log(`Right Player ${rightIndex} is Ready`);
+            }
+            const isLobbyFull = !leftList.includes(null) && !rightList.includes(null);
+            const allLeftReady = data.playersReady.left.every(r => r === true);
+            const allRightReady = data.playersReady.right.every(r => r === true);
+            if (isLobbyFull && allLeftReady && allRightReady) {
+                console.log("All players ready! Starting game...");
+                data.paddlesLeft = spawnPaddles('left', 'online');
+                data.paddlesRight = spawnPaddles('right', 'online');
+                this.engine.startGame();
             }
         });
 
         socket.on('offlinePlayerReady', () => {
-            data.paddleLeft = new ServerPaddle('left', 'human', CONFIG.PADDLE_X_LEFT);
-            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT, data.features.BOT_LEVEL);
+            data.paddlesLeft = spawnPaddles('left', 'offline');
+            data.paddlesRight = spawnPaddles('right', 'offline');
             this.engine.startGame();
         });
 
         socket.on('demo', () => {
-            data.paddleLeft = new ServerPaddle('left', 'bot', CONFIG.PADDLE_X_LEFT, data.features.BOT_LEVEL);
-            data.paddleRight = new ServerPaddle('right', 'bot', CONFIG.PADDLE_X_RIGHT, data.features.BOT_LEVEL);
+            data.paddlesLeft = spawnPaddles('left', 'demo');
+            data.paddlesRight = spawnPaddles('right', 'demo');
             this.engine.startGame();
         });
     }
 
-    private setupGameControlHandlers(socket: Socket, side: Side) {
+    private setupGameControlHandlers(socket: Socket, side: Side, index: number) {
         const data = this.engine.data;
+        const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
 
         socket.on('pauseGame', () => {
             const now = Date.now();
-            if (now - data.lastPauseToggle < CONFIG.PAUSE_COOLDOWN_MS) return;
+            if (now - data.lastPauseToggle < cooldown) return;
 
             data.lastPauseToggle = now;
             if (data.status === GameStatus.RUNNING) {
@@ -173,8 +225,14 @@ export class GameServer {
         });
 
         socket.on('input', (inputData) => {
-            if (side === 'left' && inputData.side === 'left') data.inputs.left = inputData.cmd;
-            if (side === 'right' && inputData.side === 'right') data.inputs.right = inputData.cmd;
+            if (side === 'spectator' || index === -1) return;
+
+            if (side === 'left' && inputData.side === 'left') {
+                data.inputs.left[index] = inputData.cmd;
+            }
+            if (side === 'right' && inputData.side === 'right') {
+                data.inputs.right[index] = inputData.cmd;
+            }
         });
     }
 }

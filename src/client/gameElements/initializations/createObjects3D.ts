@@ -17,13 +17,8 @@ import {
  */
 export function createObjects3D(scene: BABYLON.Scene): GameObjects {
   const table = createTable(scene);
-  const balls = [
-    createPlayingBall(scene, table.mesh.position.x, table.mesh.position.z),
-  ];
-  const paddles = [
-    createPaddle(table.limits.left * 0.8, "left", scene),
-    createPaddle(table.limits.right * 0.8, "right", scene),
-  ];
+  const balls: Ball[] = [];
+  const paddles: Paddle[] = [];
 
   return { table, balls, paddles };
 }

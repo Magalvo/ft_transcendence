@@ -16,6 +16,7 @@ export class ServerPaddle {
     public pos: Vector3;
     public side: 'left' | 'right';
     public human: boolean;
+    public playerIndex: number = -1;
 
     // Stats
     public width: number = PADDLE_CONFIG.width;
@@ -31,14 +32,14 @@ export class ServerPaddle {
     private bot?: SmartBot;
 
     // --- CONSTRUCTOR ---
-    constructor(side: 'left' | 'right', playerType: 'human' | 'bot', x: number, botLevel: number = 5) {
+    constructor(side: 'left' | 'right', playerType: 'human' | 'bot', data: IGameData) {
         this.side = side;
-        this.baseX = x;
-        this.pos = new Vector3(x, 3, 0);
+        this.baseX = data.table.width / 2 * 0.8 * (side == 'left' ? -1 : 1);
+        this.pos = new Vector3(this.baseX, 3, 0);
         this.human = (playerType === 'human');
 
         if (!this.human) {
-            this.bot = new SmartBot(side, botLevel);
+            this.bot = new SmartBot(side, data.features.BOT_LEVEL);
         }
     }
 
@@ -64,7 +65,7 @@ export class ServerPaddle {
             return this.bot.think(data, this);
         }
 
-        let cmd = (this.side === 'left') ? data.inputs.left : data.inputs.right;
+        let cmd = (this.side === 'left') ? data.inputs.left[this.playerIndex] : data.inputs.right[this.playerIndex];
 
         if (data.currentHellMode === hellMode.inverted_keys) {
             cmd = invertInput(cmd);

@@ -3,6 +3,7 @@ import {
     randomInt,
     randomFloat2,
     type MagicEffect,
+    type IGameData,
 } from "../index.js";
 
 export class ServerMagicBall {
@@ -14,7 +15,6 @@ export class ServerMagicBall {
 
     // Movimento
     private velocity: Vector3;
-    private tableLimits = { x: 170, z: 90 };
 
     constructor(id: number, effectType: MagicEffect) {
         this.id = id;
@@ -31,14 +31,14 @@ export class ServerMagicBall {
         );
     }
 
-    public update(dt: number) {
+    public update(dt: number, data: IGameData) {
         // Movimento simples
         this.pos.x += this.velocity.x * dt;
         this.pos.z += this.velocity.z * dt;
 
         // Ressalto nas paredes (Manter dentro da mesa)
-        const halfWidth = this.tableLimits.x / 2;
-        const halfDepth = this.tableLimits.z / 2;
+        const halfWidth = data.table.width / 2;
+        const halfDepth = data.table.depth / 2;
 
         if (this.pos.x > halfWidth - 5 || this.pos.x < -halfWidth + 5) {
             this.velocity.x *= -1;

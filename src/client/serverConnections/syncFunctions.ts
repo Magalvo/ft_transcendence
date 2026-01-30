@@ -1,6 +1,7 @@
 import {
     addFireEffect,
     BABYLON,
+    createPaddle,
     createPlayingBall,
     flashZone,
     PADDLE_CONFIG,
@@ -16,32 +17,42 @@ const SCENE_CONFIG = {
     TABLE_BASE_DEPTH: TABLE_CONFIG.depth,
     TABLE_BASE_WIDTH: TABLE_CONFIG.width,
 };
-
 export function syncPaddles(data: GameData, serverPaddles: any[]) {
-    serverPaddles.forEach((pData: any) => {
-        // Determine visual association (My paddle is always Left visually)
-        let visualSide = pData.side;
-        if (data.mySide === 'right') {
-            visualSide = (pData.side === 'right') ? 'left' : 'right';
-        }
+    const localPaddles = data.obj3D.paddles;
 
-        const paddle = data.obj3D.paddles.find(p => p.side === visualSide);
+    while (localPaddles.length < serverPaddles.length) {
+        localPaddles.push(createPaddle(0, 'left', data.scene));
+    }
+
+    while (localPaddles.length > serverPaddles.length) {
+        const removed = localPaddles.pop();
+        if (removed) removed.mesh.dispose();
+    }
+
+    serverPaddles.forEach((pData: any, i: number) => {
+        const paddle = localPaddles[i];
         if (!paddle) return;
 
-        // Apply mirrored position
+        paddle.side = pData.side;
+
         const [px, py, pz] = pData.pos;
-        paddle.mesh.position.set(getVisualX(data, px), py, pz);
+        const visualX = getVisualX(data, px);
 
-        // Sync Dimensions
-        const serverZ = pData.sizeZ || pData.size;
-        const serverX = pData.sizeX || SCENE_CONFIG.PADDLE_BASE_WIDTH;
+        paddle.mesh.position.set(visualX, py, pz);
 
-        if (serverZ) paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
-        if (serverX) paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
-        paddle.update(data);
+        const serverZ = pData.size;  // Depth
+        const serverX = pData.sizeX; // Width
+
+        if (serverZ) {
+            paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
+        }
+        if (serverX) {
+            paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
+        }
+
+        if (paddle.update) paddle.update(data);
     });
 }
-
 export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boolean) {
     const localBalls = data.obj3D.balls;
 
