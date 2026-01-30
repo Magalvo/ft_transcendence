@@ -1,155 +1,130 @@
 import {
     Vector3,
     magicEffect,
-    randomInt,
     normalizeAngle180,
-    ServerPaddle
+    ServerPaddle,
+    BALL_CONFIG
 } from "../index.js";
 
 export class ServerBall {
     public pos: Vector3;
-    public velocity: number = 0; // Velocidade escalar
-    public angle: number = 0;    // Ângulo em graus
-    public radius: number = 2;
+    public velocity: number = 0;
+    public angle: number = 0;
+    public radius: number = BALL_CONFIG.radius;
     public isColliding: boolean = false;
-    private readonly BASE_RADIUS = 2;
-    private readonly BASE_SPEED = 50;
-    private speedModifier: number = 1;
-    private thickPaddleSpeedModifier: boolean = false;
-    private tableLimits = { x: 170, z: 90 };
 
+    // Configs
+    private readonly TABLE_LIMITS = { x: 170, z: 90 };
+    
+    private speedModifier: number = 1;
+    private thickPaddleMod: boolean = false;
 
     constructor(x: number, z: number) {
         this.pos = new Vector3(x, 2, z);
         this.throwBall();
-        this.resetStats();
     }
 
-    // O update agora recebe as raquetes
-    public update(deltaTime: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
+    // --- MAIN UPDATE ---
+    public update(dt: number, paddles: ServerPaddle[]): 'left' | 'right' | null {
         this.isColliding = false;
-        const a = this.angle * Math.PI / 180;
-        const finalSpeedMod =
-            this.thickPaddleSpeedModifier == true
-                ? 2.5
-                : this.speedModifier;
 
-        // Calcular vetor de movimento
-        const moveStep = this.velocity * deltaTime * finalSpeedMod;
-        const vx = moveStep * Math.cos(a);
-        const vz = moveStep * Math.sin(a);
+        // 1. Calculate Movement
+        const rad = this.angle * Math.PI / 180;
+        const speed = this.velocity * dt * (this.thickPaddleMod ? 2.5 : this.speedModifier);
+        
+        this.pos.x += speed * Math.cos(rad);
+        this.pos.z += speed * Math.sin(rad);
 
-        // Mover
-        this.pos.x += vx;
-        this.pos.z += vz;
-
-        // Verificar colisões
+        // 2. Checks
         this.checkPaddleCollisions(paddles);
         return this.checkWallCollisions();
     }
 
+    // --- PHYSICS LOGIC ---
     private checkPaddleCollisions(paddles: ServerPaddle[]) {
         for (const paddle of paddles) {
-            const pBox = paddle.getBoundingBox();
+            const box = paddle.getBoundingBox();
 
-            // Lógica AABB (Axis-Aligned Bounding Box)
-            // Verifica se a bola (ponto + raio) sobrepõe a caixa da raquete
-            const collisionX =
-                (this.pos.x + this.radius >= pBox.left) &&
-                (this.pos.x - this.radius <= pBox.right);
-
-            const collisionZ =
-                (this.pos.z + this.radius >= pBox.near) &&
-                (this.pos.z - this.radius <= pBox.far);
-
-            if (collisionX && collisionZ) {
-                // HOUVE COLISÃO!
-                this.isColliding = true;
-                if (paddle.side === 'left') {
-                    this.pos.x = pBox.right + this.radius + 0.1;
-                    if (Math.abs(this.angle) > 90) {
-                        this.angle = 180 - this.angle;
-                    }
-                } else {
-                    this.pos.x = pBox.left - this.radius - 0.1;
-                    if (Math.abs(this.angle) < 90) {
-                        this.angle = 180 - this.angle;
-                    }
-                }
-
-                if (this.radius > 2.5) {
-                    paddle.applyImpact();
-                }
-
-                this.thickPaddleSpeedModifier =
-                    (paddle.currentEffect == magicEffect.thick)
-                        ? true
-                        : false;
-
-                const hitOffset = this.pos.z - paddle.pos.z;
-                this.angle += hitOffset * 0.5;
-
-                this.angle = normalizeAngle180(this.angle);
-                this.velocity = Math.min(this.velocity * 1.05, this.BASE_SPEED * 2);
+            // AABB Collision Check
+            if (this.pos.x + this.radius >= box.left &&
+                this.pos.x - this.radius <= box.right &&
+                this.pos.z + this.radius >= box.near &&
+                this.pos.z - this.radius <= box.far) {
+                
+                this.resolvePaddleHit(paddle, box);
             }
         }
     }
 
-    private checkWallCollisions(): 'left' | 'right' | null {
-        // ... (Mantém o código igual ao passo anterior) ...
-        // Apenas certifica-te que quando fazes this.throwBall(), resetas a velocidade:
-        // this.velocity = this.BASE_SPEED; 
-
-        // Copia a tua função checkWallCollisions do Passo 7, 
-        // mas garante que dentro dela usas o throwBall correto.
-        const halfWidth = this.tableLimits.x / 2;
-        const halfDepth = this.tableLimits.z / 2;
-
-        if (this.pos.x > halfWidth - this.radius) {
-            this.throwBall(); return 'left';
-        } else if (this.pos.x < -halfWidth + this.radius) {
-            this.throwBall(); return 'right';
+    private resolvePaddleHit(paddle: ServerPaddle, box: any) {
+        this.isColliding = true;
+        
+        // Push ball out of paddle to prevent sticking
+        if (paddle.side === 'left') {
+            this.pos.x = box.right + this.radius + 0.1;
+            if (Math.abs(this.angle) > 90) this.angle = 180 - this.angle;
+        } else {
+            this.pos.x = box.left - this.radius - 0.1;
+            if (Math.abs(this.angle) < 90) this.angle = 180 - this.angle;
         }
 
-        if (this.pos.z > halfDepth - this.radius) {
-            this.isColliding = true;
-            this.pos.z = halfDepth - this.radius;
+        // Apply Logic Effects
+        if (this.radius > 2.5) paddle.applyImpact();
+        this.thickPaddleMod = (paddle.currentEffect === magicEffect.thick);
+
+        // Ricochet Angle based on impact point
+        const hitOffset = this.pos.z - paddle.pos.z;
+        this.angle = normalizeAngle180(this.angle + (hitOffset * 0.5));
+        
+        // Increase speed slightly
+        this.velocity = Math.min(this.velocity * 1.05, BALL_CONFIG.speed * 2);
+    }
+
+    private checkWallCollisions(): 'left' | 'right' | null {
+        const limitX = this.TABLE_LIMITS.x / 2;
+        const limitZ = (this.TABLE_LIMITS.z / 2) - this.radius;
+
+        // Score Goal
+        if (this.pos.x > limitX) { this.throwBall(); return 'left'; }
+        if (this.pos.x < -limitX) { this.throwBall(); return 'right'; }
+
+        // Wall Bounce
+        if (this.pos.z > limitZ) {
+            this.pos.z = limitZ;
             this.angle *= -1;
-        } else if (this.pos.z < -halfDepth + this.radius) {
             this.isColliding = true;
-            this.pos.z = -halfDepth + this.radius;
+        } else if (this.pos.z < -limitZ) {
+            this.pos.z = -limitZ;
             this.angle *= -1;
+            this.isColliding = true;
         }
         return null;
     }
 
-    public setBigBall(active: boolean) {
-        if (active) {
-            this.radius = 5;
-        } else {
-            this.radius = this.BASE_RADIUS;
-        }
+    // --- STATE MANAGEMENT ---
+    public setSizeModifier(mod: number) {
+        this.radius = BALL_CONFIG.radius * mod;
+    }
+    public resetSize() {
+        this.radius = BALL_CONFIG.radius;
     }
 
-    public setSpeedModifier(modifier: number) {
-        this.speedModifier = modifier;
+    public setSpeedModifier(mod: number) {
+        this.speedModifier = mod;
     }
-
-    public resetStats() {
-        this.radius = this.BASE_RADIUS;
+    public resetSpeedModifier() {
         this.speedModifier = 1.0;
-        this.velocity = this.BASE_SPEED;
     }
 
     public throwBall() {
-        if (this.pos.x && this.pos.y) {
-            this.pos.x = randomInt(-10, 10);
-            this.pos.z = randomInt(-10, 10);
-        }
-        this.velocity = this.BASE_SPEED;
-        this.angle = Math.random() < 0.5 ? 0 : 180;
-        this.angle += (Math.random() * 90) - 45;
+        this.pos.x = 0; 
+        this.pos.z = 0;
+        this.resetSpeedModifier();
+        this.velocity = BALL_CONFIG.speed;
+        this.thickPaddleMod = false;
+
+        // Random start angle
+        this.angle = (Math.random() < 0.5 ? 0 : 180) + ((Math.random() * 90) - 45);
         this.angle = normalizeAngle180(this.angle);
-        this.thickPaddleSpeedModifier = false;
     }
 }

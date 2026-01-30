@@ -6,7 +6,7 @@ export const COUNTDOWN_MESSAGES = {
 }
 
 export const ENDGAME_MESSAGES = {
-  3: { text: "TIME'S UP", color: "blue" },
+  3: { text: "END GAME", color: "blue" },
   2: { text: "YOU...", color: "blue" },
   LOST: { text: "LOST", color: "red" },
   WON: { text: "WON", color: "green" },

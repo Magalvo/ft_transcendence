@@ -57,7 +57,7 @@ export class GameServer {
             if (data.countdownTimer <= 0) {
                 data.status = GameStatus.RUNNING;
                 this.io.emit('countdown', { count: 0 });
-                data.balls[0].throwBall();
+                this.engine.data.balls.forEach(b => { b.throwBall(); });
             }
 
             this.io.emit('gameState', this.engine.getSnapshot());

@@ -1,4 +1,5 @@
 import {
+    PADDLE_CONFIG,
     SmartBot,
     Vector3,
     hellMode,
@@ -14,104 +15,83 @@ export class ServerPaddle {
     public pos: Vector3;
     public side: 'left' | 'right';
     public human: boolean;
-    private bot!: SmartBot;
 
-    // Dimensões Físicas Atuais
-    public width: number = 0.5;   // Eixo X (Espessura)
-    public depth: number = 30;    // Eixo Z (Comprimento)
-    private speed: number = 60;   // Velocidade
+    // Stats
+    public width: number = PADDLE_CONFIG.width;
+    public depth: number = PADDLE_CONFIG.depth;
+    private speed: number = PADDLE_CONFIG.speed;
 
-    // Valores Base
-    private readonly BASE_WIDTH = 0.5;
-    private readonly BASE_DEPTH = 30;
-    private readonly BASE_SPEED = 60;
-
-    // Timer do Efeito (em segundos de jogo)
+    // Effects
     private effectTimer: number = 0;
     public currentEffect: MagicEffect = magicEffect.null;
-
-    private tableLimits = { z: 90 };
-
-    private baseX: number;
     private knockback: number = 0;
 
-    /**
-     * 
-     * @param side left or right
-     * @param player 'human' for human player OR bot level for bot
-     * @param x x position, it depends on player side
-     */
-    constructor(side: 'left' | 'right', player: 'human' | 'bot', x: number, botLevel?: number) {
+    private readonly limitsZ = 45; // Table half-height
+    private baseX: number;
+    private bot?: SmartBot;
+
+    // --- CONSTRUCTOR ---
+    constructor(side: 'left' | 'right', playerType: 'human' | 'bot', x: number, botLevel: number = 5) {
         this.side = side;
         this.baseX = x;
         this.pos = new Vector3(x, 3, 0);
-        if (player == 'human') {
-            this.human = true;
-        }
-        else {
-            this.human = false;
+        this.human = (playerType === 'human');
+
+        if (!this.human) {
             this.bot = new SmartBot(side, botLevel);
         }
     }
 
-    public update(deltaTime: number, data: IGameData) {
-        // 1. Gerir o Timer do Efeito
+    // --- MAIN UPDATE ---
+    public update(dt: number, data: IGameData) {
+        // 1. Effects
         if (this.effectTimer > 0) {
-            this.effectTimer -= deltaTime;
-            if (this.effectTimer <= 0) {
-                this.resetEffects();
-            }
+            this.effectTimer -= dt;
+            if (this.effectTimer <= 0) this.resetEffects();
         }
 
-        // 2. Movimento
-        const command = this.getMovementCommand(data);
-        this.move(deltaTime, command);
+        // 2. Movement
+        const command = this.getCommand(data);
+        this.applyMovement(dt, command);
 
-        // 3. Limites (Clamping)
-        const limit = (this.tableLimits.z / 2) - (this.depth / 2);
+        // 3. Constraints
+        this.clampPosition();
+    }
+
+    // --- LOGIC ---
+    private getCommand(data: IGameData): Mov {
+        if (!this.human && this.bot) {
+            return this.bot.think(data, this);
+        }
+
+        let cmd = (this.side === 'left') ? data.inputs.left : data.inputs.right;
+
+        if (data.currentHellMode === hellMode.inverted_keys) {
+            cmd = invertInput(cmd);
+        }
+        return cmd;
+    }
+
+    private applyMovement(dt: number, cmd: Mov) {
+        // Z-Axis Move
+        if (cmd === mov.far) this.pos.z += this.speed * dt;
+        if (cmd === mov.near) this.pos.z -= this.speed * dt;
+
+        // X-Axis Knockback recovery
+        if (this.knockback > 0)
+            this.knockback = Math.max(0, this.knockback - (dt * PADDLE_CONFIG.knockback_recover));
+
+        const dir = (this.side === 'left') ? -1 : 1;
+        this.pos.x = this.baseX + (dir * this.knockback);
+    }
+
+    private clampPosition() {
+        const limit = this.limitsZ - (this.depth / 2);
         if (this.pos.z > limit) this.pos.z = limit;
         if (this.pos.z < -limit) this.pos.z = -limit;
     }
 
-    private move(deltaTime: number, moveCommand: Mov) {
-        let dir = 0;
-        if (moveCommand === mov.far) dir = 1;
-        if (moveCommand === mov.near) dir = -1;
-
-        if (dir !== 0) {
-            this.pos.z += dir * this.speed * deltaTime;
-        }
-
-        if (this.knockback > 0) {
-            this.knockback -= deltaTime * 0.3;
-            if (this.knockback < 0) this.knockback = 0;
-        }
-
-        const direction = this.side === 'left' ? -1 : 1;
-        this.pos.x = this.baseX + (direction * this.knockback);
-    }
-
-    private getMovementCommand(data: IGameData): Mov {
-        let command: Mov;
-        if (this.human) {
-            command =
-                (this.side === 'left') ?
-                    data.inputs.left :
-                    data.inputs.right;
-            if (data.currentHellMode === hellMode.inverted_keys)
-                command = invertInput(command);
-
-        }
-        else {
-            command = this.bot.think(data, this);
-        }
-        return command;
-    }
-
-    public applyImpact() {
-        this.knockback += 5;
-    }
-
+    // --- PUBLIC API ---
     public getBoundingBox() {
         return {
             left: this.pos.x - this.width / 2,
@@ -121,39 +101,29 @@ export class ServerPaddle {
         };
     }
 
-    public applyPowerUp(effect: MagicEffect, duration: number) {
+    public applyImpact() {
+        this.knockback += PADDLE_CONFIG.knockback_step;
+    }
+
+    public applyEffect(effect: MagicEffect, duration: number) {
         this.resetEffects();
-        this.effectTimer = duration;
         this.currentEffect = effect;
+        this.effectTimer = duration;
 
         switch (effect) {
-            case magicEffect.big: // BIG (Z)
-                this.depth = this.BASE_DEPTH * 2;
-                break;
-            case magicEffect.small: // SMALL (Z)
-                this.depth = this.BASE_DEPTH * 0.4;
-                break;
-            case magicEffect.thick: // THICK (X - THICKNESS)
-                this.width = this.BASE_WIDTH * 5;
-                break;
-            case magicEffect.fast:
-                this.speed = this.BASE_SPEED * 4;
-                break;
-            case magicEffect.slow:
-                this.speed = this.BASE_SPEED * 0.5;
-                break;
-            case magicEffect.freeze:
-                this.speed = this.BASE_SPEED * 0.1;
-                break;
-            default:
-                break;
+            case magicEffect.big: this.depth = 60; break;
+            case magicEffect.small: this.depth = 12; break;
+            case magicEffect.thick: this.width = 2.5; break;
+            case magicEffect.fast: this.speed = 240; break;
+            case magicEffect.slow: this.speed = 30; break;
+            case magicEffect.freeze: this.speed = 1; break;
         }
     }
 
     public resetEffects() {
-        this.width = this.BASE_WIDTH;
-        this.depth = this.BASE_DEPTH;
-        this.speed = this.BASE_SPEED;
+        this.width = PADDLE_CONFIG.width;
+        this.depth = PADDLE_CONFIG.depth;
+        this.speed = PADDLE_CONFIG.speed;
         this.effectTimer = 0;
         this.currentEffect = magicEffect.null;
     }
@@ -162,6 +132,4 @@ export class ServerPaddle {
         this.resetEffects();
         this.pos = new Vector3(this.baseX, 3, 0);
     }
-
 }
-
