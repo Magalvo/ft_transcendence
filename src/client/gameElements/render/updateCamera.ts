@@ -9,7 +9,7 @@ function lerp(start: number, end: number, amt: number) {
 }
 
 export function updateCamera(data: GameData) {
-    const camera = data.env.camera;
+    const camera = data.env3D.camera;
     const mode = data.mods.hell_mode;
     const isHell = data.mods.is_hell;
 
@@ -39,6 +39,6 @@ export function updateCamera(data: GameData) {
 }
 
 export function rotateCamera(data: GameData) {
-    data.env.camera.alpha += (data.mods.step ? data.mods.step * 0.05 : 0);
-    data.env.camera.beta += (data.mods.step ? data.mods.step * 0.03 : -0.001);
+    data.env3D.camera.alpha += (data.mods.step ? data.mods.step * 0.05 : 0);
+    data.env3D.camera.beta += (data.mods.step ? data.mods.step * 0.03 : -0.001);
 }

@@ -36,13 +36,13 @@ export function resumeGame(data: GameData) {
   if (data.obj2D.guiPauseMenu)
     data.obj2D.guiPauseMenu.dispose();
   // Detach extra camera control
-  data.env.camera.detachControl();
+  data.env3D.camera.detachControl();
   // Resume game
   data.flags.game_running = true;
   data.flags.pause_screen = false;
   // resume music
-  data.env.hellMusic.play();
-  data.env.heavenMusic.play();
+  data.env3D.hellMusic.play();
+  data.env3D.heavenMusic.play();
 }
 /**
  * Resumes the game: removes the pause overlay and returns control to the player.
@@ -55,8 +55,8 @@ function pauseGame(data: GameData) {
   data.flags.game_running = false;
   data.flags.pause_screen = true;
   // pause music
-  data.env.hellMusic.pause();
-  data.env.heavenMusic.pause();
+  data.env3D.hellMusic.pause();
+  data.env3D.heavenMusic.pause();
   // reset canvas effects
   const canvas = document.getElementById("renderCanvas");
   if (canvas)
@@ -78,7 +78,7 @@ function createPauseScreen(data: GameData): GUI.AdvancedDynamicTexture {
   pauseGame(data);
 
   // Reposition the camera for the pause view
-  positionCamera(data.env);
+  positionCamera(data.env3D);
 
   // Create title and subtitle
   createTitle(guiTexture);

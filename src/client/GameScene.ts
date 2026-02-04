@@ -1,105 +1,69 @@
 import {
   BABYLON,
+  createObjects3D,
   createEnvironment3D,
   createObjects2D,
   renderGame,
-  startMainMenu,
-  createMainMenu,
   defineKeyEvents,
-  hellMode,
-  mov,
   undefineKeyEvents,
-  createObjects3D,
-  clearMagicNotifications,
-  setupSocketListeners,
   HandleEvents,
+  setupSocketListeners,
   type GameData,
   SERVER_URL,
-  clearAllNotifications,
+  hellMode,
+  mov,
+  GameConfiguration,
 } from "./index.js";
 import { io, Socket } from "socket.io-client";
 
-/**
- * Main class handling the game scene, socket connections, and the render loop.
- */
 export class GameScene {
   private canvas: HTMLCanvasElement;
   private engine: BABYLON.Engine;
   private data: GameData;
   private handleEvents: HandleEvents;
   private scene!: BABYLON.Scene;
-  private socket!: Socket;
-  private wasHell: boolean = false;
+  public socket!: Socket; 
 
   constructor() {
-    // HTML related
     this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-    this.engine = new BABYLON.Engine(this.canvas);
+    this.engine = new BABYLON.Engine(this.canvas, true);
     window.addEventListener("resize", () => { this.engine.resize(); });
-    // code
+    
     this.data = {} as GameData;
-    this.handleEvents = new HandleEvents();
+    this.handleEvents = new HandleEvents(this);
   }
 
-  
-  public startGame(): void {
-    this.resetScene();
-    this.handleEvents.setData(this.data);
-    
-    createMainMenu();
-    startMainMenu(this.data, (mode) => {
-      if (!this.socket) return;
-      
-      switch (mode) {
-        case 'online': this.socket.emit('onlinePlayerReady'); break;
-        case 'bot': this.socket.emit('offlinePlayerReady'); break;
-        case 'demo': this.socket.emit('demo'); break;
-      }
-    });
-    
-    let lastTime = performance.now();
-    
-    // --- MAIN LOOP ---
+  public startConnection(): void {
+    this.socket = io(SERVER_URL);
+    setupSocketListeners(this.socket, this.handleEvents);
+
     this.engine.runRenderLoop(() => {
-      const now = performance.now();
-
-      if (!this.data.flags.return_main_menu) {
-        const deltaTime = (now - lastTime) / 1000;
-        lastTime = now;
-        renderGame(deltaTime, this.data);
-      }
-
-      // Handle Hell Transition Effects
-      const isHell = this.data.mods.is_hell;
-      if (isHell !== this.wasHell) {
-        if (isHell) clearMagicNotifications();
-        this.wasHell = isHell;
-      }
-
-      this.scene.render();
-
-      if (this.data.flags.return_main_menu) {
-        this.data.flags.return_main_menu = false;
-        this.engine.stopRenderLoop();
-        this.startGame();
+      if (this.scene) {
+        this.scene.render();
       }
     });
   }
 
-  // --- SCENE MANAGEMENT ---
-
-  private resetScene(): void {
+  public resetScene(serverConfigs: GameConfiguration): void {
     undefineKeyEvents();
-
     if (this.scene) this.scene.dispose();
-    if (this.socket) this.socket.disconnect();
-
     this.scene = new BABYLON.Scene(this.engine);
-    this.initializeGameData();
+    this.initializeGameData(serverConfigs);
+    this.data.obj3D = createObjects3D(this.scene, serverConfigs);
+    this.data.obj2D = createObjects2D(); 
+    this.data.env3D = createEnvironment3D(this.data.obj3D, this.scene);
+    defineKeyEvents(this.data);
+    
+    this.scene.registerBeforeRender(() => {
+      const dt = this.engine.getDeltaTime() / 1000;
+      renderGame(dt, this.data);
+    });
   }
 
-  private initializeGameData(): void {
+  private initializeGameData(configs: any): void {
     this.data.scene = this.scene;
+    this.data.socket = this.socket;
+    this.data.gameConfigs = configs;
     this.data.mods = {
       score: { me: 0, rival: 0 },
       step: 0,
@@ -117,10 +81,10 @@ export class GameScene {
     };
     this.data.magicBalls = {
       magic_balls_ref: [],
-      next_magic_ball: 5,
-      min_time: 5,
-      max_time: 15,
-      max_balls: 4,
+      next_magic_ball: 0,
+      min_time: configs.magic_ball?.min_interval || 3,
+      max_time: configs.magic_ball?.max_interval || 7,
+      max_balls: configs.magic_ball?.max_balls || 5,
     };
     this.data.flags = {
       game_running: false,
@@ -128,20 +92,5 @@ export class GameScene {
       return_main_menu: false,
       camera_pos: 1,
     };
-    this.data.obj3D = createObjects3D(this.scene);
-    this.data.env = createEnvironment3D(this.data.obj3D, this.data.scene);
-    this.data.obj2D = createObjects2D();
-    clearAllNotifications();
-
-    defineKeyEvents(this.data);
-    this.connectToServer();
-    this.data.socket = this.socket;
-  }
-
-  // --- NETWORKING ---
-
-  private connectToServer() {
-    this.socket = io(SERVER_URL);
-    setupSocketListeners(this.socket, this.handleEvents);
   }
 }

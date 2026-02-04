@@ -5,7 +5,7 @@ import { hellMode, type GameData } from "../../index.js";
  * @param data - Scene/game state
  */
 export function updateEnvironment(data: GameData) {
-    const env = data.env;
+    const env = data.env3D;
     const isHell = data.mods.is_hell;
 
     // 1. Skybox Rotation

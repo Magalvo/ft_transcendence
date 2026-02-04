@@ -1,4 +1,5 @@
-import type { GameFeatures } from "../server/index.js";
+import { Socket } from "socket.io-client"; // Import necessário
+import type { GameConfiguration } from "../server/index.js";
 import {
     BABYLON,
     Ball,
@@ -27,8 +28,7 @@ export interface GameModifiers {
     // Hell Mode
     is_hell: boolean;
     hell_mode: HellMode;
-    devilElapsed: number;
-    goodElapsed: number;
+    phaseTimer: number;
 }
 
 // --- Controllers e Input ---
@@ -62,15 +62,23 @@ export interface MagicBallControl {
 // --- GLOBAL GAME DATA (GameData) ---
 // -----------------------------------
 export interface GameData {
+    // Core
     scene: BABYLON.Scene;
+    socket: Socket; // <--- ADICIONADO: Essencial para enviar input no render loop
+    mySide: Side;
+    myIndex: number;
+
+    // Configurações vindas do Servidor
+    gameConfigs: GameConfiguration;
+
+    // Game Elements
     obj3D: GameObjects;
+    obj2D: Objects2D;
+    env3D: Environment3D;
+
+    // Logic Groups
     mods: GameModifiers;
     input: GameInput;
-    magicBalls: MagicBallControl;
-    gameFeatures: GameFeatures;
     flags: GameFlags;
-    obj2D: Objects2D;
-    env: Environment3D;
-    socket?: any;
-    mySide?: Side;
+    magicBalls: MagicBallControl;
 }

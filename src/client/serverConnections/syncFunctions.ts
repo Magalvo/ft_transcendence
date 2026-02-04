@@ -4,19 +4,11 @@ import {
     createPaddle,
     createPlayingBall,
     flashZone,
-    PADDLE_CONFIG,
     removeFireFromMesh,
     spawnHitParticles,
-    TABLE_CONFIG,
     type GameData,
 } from "../index";
 
-const SCENE_CONFIG = {
-    PADDLE_BASE_DEPTH: PADDLE_CONFIG.depth,
-    PADDLE_BASE_WIDTH: PADDLE_CONFIG.width,
-    TABLE_BASE_DEPTH: TABLE_CONFIG.depth,
-    TABLE_BASE_WIDTH: TABLE_CONFIG.width,
-};
 export function syncPaddles(data: GameData, serverPaddles: any[]) {
     const localPaddles = data.obj3D.paddles;
 
@@ -44,10 +36,10 @@ export function syncPaddles(data: GameData, serverPaddles: any[]) {
         const serverX = pData.sizeX; // Width
 
         if (serverZ) {
-            paddle.mesh.scaling.z = serverZ / SCENE_CONFIG.PADDLE_BASE_DEPTH;
+            paddle.mesh.scaling.z = serverZ / data.gameConfigs.paddle.depth;
         }
         if (serverX) {
-            paddle.mesh.scaling.x = serverX / SCENE_CONFIG.PADDLE_BASE_WIDTH;
+            paddle.mesh.scaling.x = serverX / data.gameConfigs.paddle.width;
         }
 
         if (paddle.update) paddle.update(data);
@@ -129,7 +121,7 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
     });
 }
 
-export function syncTable(data: GameData, serverTable: any) {
+export function syncTable(data: GameData) {
     const table = data.obj3D.table;
 
     // Sync Dimensions
@@ -164,6 +156,7 @@ export function syncGameStats(data: GameData, serverState: any) {
     data.mods.time = serverState.time;
     data.mods.is_hell = serverState.isHell;
     data.mods.hell_mode = serverState.activeHellMode;
+    data.mods.phaseTimer = serverState.phaseTimer;
 }
 
 /**

@@ -3,24 +3,29 @@ import {
     magicEffect,
     normalizeAngle180,
     ServerPaddle,
-    BALL_CONFIG,
     ServerTable,
-    randomFloat2
+    randomFloat2,
+    GameConfiguration
 } from "../index.js";
 
 export class ServerBall {
     public pos: Vector3;
     public velocity: number = 0;
     public angle: number = 0;
-    public radius: number = BALL_CONFIG.radius;
+    public radius: number;
     public isColliding: boolean = false;
+    public readonly original_radius: number;
+    public readonly original_speed: number;
 
     // Configs
     private speedModifier: number = 1;
     private thickPaddleMod: boolean = false;
 
-    constructor(x: number, z: number) {
+    constructor(x: number, z: number, configs: GameConfiguration) {
         this.pos = new Vector3(x, 2, z);
+        this.radius = configs.ball.radius;
+        this.original_radius = configs.ball.radius;
+        this.original_speed = configs.ball.speed;
         // this.throwBall();
     }
 
@@ -77,7 +82,7 @@ export class ServerBall {
         this.angle = normalizeAngle180(this.angle + (hitOffset * 0.5));
         
         // Increase speed slightly
-        this.velocity = Math.min(this.velocity * 1.05, BALL_CONFIG.speed * 2);
+        this.velocity = Math.min(this.velocity * 1.05, this.original_speed * 2);
     }
 
     private checkWallCollisions(table: ServerTable): 'left' | 'right' | null {
@@ -103,10 +108,10 @@ export class ServerBall {
 
     // --- STATE MANAGEMENT ---
     public setSizeModifier(mod: number) {
-        this.radius = BALL_CONFIG.radius * mod;
+        this.radius = this.original_radius * mod;
     }
     public resetSize() {
-        this.radius = BALL_CONFIG.radius;
+        this.radius = this.original_radius;
     }
 
     public setSpeedModifier(mod: number) {
@@ -117,10 +122,10 @@ export class ServerBall {
     }
 
     public throwBall(table: ServerTable) {
-        this.pos.x = randomFloat2(table.width * 0.6, table.width * -0.6); 
-        this.pos.z = randomFloat2(table.depth * 0.6, table.depth * -0.6); 
+        this.pos.x = randomFloat2(table.width * -0.1, table.width * 0.1); 
+        this.pos.z = randomFloat2(table.depth * -0.1, table.depth * 0.1);
         this.resetSpeedModifier();
-        this.velocity = BALL_CONFIG.speed;
+        this.velocity = this.original_speed;
         this.thickPaddleMod = false;
 
         // Random start angle

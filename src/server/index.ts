@@ -1,11 +1,13 @@
 export * from "../shared/Vector3";
-export * from "../shared/config";
 export * from "../shared/strings";
 export * from "../shared/types";
 export * from "../shared/utils";
 
-export * from "./GameServer";
+export * from "./Game";
 export * from "./GameEngine";
+export * from "./GameConfiguration";
+export * from "./GamePlayer";
+export * from "./IGameData";
 export * from "./utils";
 export * from "./config";
 

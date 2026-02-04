@@ -1,5 +1,5 @@
 import {
-    PADDLE_CONFIG,
+    GameConfiguration,
     ServerTable,
     SmartBot,
     Vector3,
@@ -15,13 +15,15 @@ import {
 export class ServerPaddle {
     public pos: Vector3;
     public side: 'left' | 'right';
-    public human: boolean;
+    public playerType: 'human' | 'bot';
     public playerIndex: number = -1;
 
     // Stats
-    public width: number = PADDLE_CONFIG.width;
-    public depth: number = PADDLE_CONFIG.depth;
-    private speed: number = PADDLE_CONFIG.speed;
+    public width: number;
+    public depth: number;
+    private speed: number;
+
+    private configs: GameConfiguration;
 
     // Effects
     private effectTimer: number = 0;
@@ -32,15 +34,19 @@ export class ServerPaddle {
     private bot?: SmartBot;
 
     // --- CONSTRUCTOR ---
-    constructor(side: 'left' | 'right', playerType: 'human' | 'bot', data: IGameData) {
+    constructor(playerType: 'human', side: 'left' | 'right', data: IGameData)
+    constructor(playerType: 'bot', side: 'left' | 'right', data: IGameData, bot_level: number)
+    constructor(playerType: 'human' | 'bot', side: 'left' | 'right', data: IGameData, bot_level?: number) {
+        this.configs = data.configs;
+        this.width = data.configs.paddle.width;
+        this.depth = data.configs.paddle.depth;
+        this.speed = data.configs.paddle.speed;
         this.side = side;
         this.baseX = data.table.width / 2 * 0.8 * (side == 'left' ? -1 : 1);
         this.pos = new Vector3(this.baseX, 3, 0);
-        this.human = (playerType === 'human');
-
-        if (!this.human) {
-            this.bot = new SmartBot(side, data.features.BOT_LEVEL);
-        }
+        this.playerType = playerType;
+        if (playerType == 'bot')
+            this.bot = new SmartBot(side, bot_level);
     }
 
     // --- MAIN UPDATE ---
@@ -61,7 +67,7 @@ export class ServerPaddle {
 
     // --- LOGIC ---
     private getCommand(data: IGameData): Mov {
-        if (!this.human && this.bot) {
+        if (this.playerType == 'bot' && this.bot) {
             return this.bot.think(data, this);
         }
 
@@ -80,7 +86,7 @@ export class ServerPaddle {
 
         // X-Axis Knockback recovery
         if (this.knockback > 0)
-            this.knockback = Math.max(0, this.knockback - (dt * PADDLE_CONFIG.knockback_recover));
+            this.knockback = Math.max(0, this.knockback - (dt * this.configs.paddle.knockback_recover));
 
         const dir = (this.side === 'left') ? -1 : 1;
         this.pos.x = this.baseX + (dir * this.knockback);
@@ -103,7 +109,7 @@ export class ServerPaddle {
     }
 
     public applyImpact() {
-        this.knockback += PADDLE_CONFIG.knockback_step;
+        this.knockback += this.configs.paddle.knockback_step;
     }
 
     public applyEffect(effect: MagicEffect, duration: number) {
@@ -122,9 +128,9 @@ export class ServerPaddle {
     }
 
     public resetEffects() {
-        this.width = PADDLE_CONFIG.width;
-        this.depth = PADDLE_CONFIG.depth;
-        this.speed = PADDLE_CONFIG.speed;
+        this.width = this.configs.paddle.width;
+        this.depth = this.configs.paddle.depth;
+        this.speed = this.configs.paddle.speed;
         this.effectTimer = 0;
         this.currentEffect = magicEffect.null;
     }

@@ -1,17 +1,48 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="UTF-8" />
     <title>Pong in TypeScript</title>
     <link rel="stylesheet" href="/src/style.css">
+    
+    <style>
+        /* (Podes manter o teu CSS aqui igual ao que tinhas) */
+        body { margin: 0; overflow: hidden; background-color: #111; }
+        canvas { width: 100%; height: 100%; display: block; outline: none; }
+        
+        #lobby-overlay {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.85); padding: 20px; color: white;
+            border-radius: 8px; font-family: sans-serif;
+            display: flex; flex-direction: column; gap: 15px;
+            border: 1px solid #444; min-width: 250px; z-index: 10;
+        }
+        button { padding: 8px 12px; cursor: pointer; background: #444; color: white; border: 1px solid #666; border-radius: 4px; margin: 2px;}
+        button:hover { background: #666; }
+        button.ready { background: #2e7d32; font-weight: bold; margin-top: 10px;}
+        .hidden { display: none !important; }
+    </style>
 </head>
 
 <body>
-    <!-- não trocar id do canvas -->
+    <div id="lobby-overlay">
+        <h3>🎮 Game Lobby (Vite Mode)</h3>
+        <div>
+            <strong>Left:</strong>
+            <button id="btn-join-left">👤 Human</button>
+            <button id="btn-bot-left">🤖 Bot</button>
+        </div>
+        <div>
+            <strong>Right:</strong>
+            <button id="btn-join-right">👤 Human</button>
+            <button id="btn-bot-right">🤖 Bot</button>
+        </div>
+        <button id="btn-ready" class="ready">✅ I AM READY</button>
+        <div id="status-msg" style="margin-top:5px; color: yellow;"></div>
+    </div>
+
     <canvas id="renderCanvas"></canvas>
-    <script type="module" src="./src/client/main.js"></script>
-
+    
+    <script type="module" src="/src/client/main.ts"></script>
 </body>
-
 </html>

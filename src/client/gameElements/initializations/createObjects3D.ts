@@ -7,7 +7,7 @@ import {
   type GameObjects,
   type Side,
   Ball,
-  TABLE_CONFIG
+  GameConfiguration
 } from "../../index.js";
 
 /**
@@ -15,8 +15,8 @@ import {
  * @param scene 
  * @returns 
  */
-export function createObjects3D(scene: BABYLON.Scene): GameObjects {
-  const table = createTable(scene);
+export function createObjects3D(scene: BABYLON.Scene, configs: GameConfiguration): GameObjects {
+  const table = createTable(scene, configs);
   const balls: Ball[] = [];
   const paddles: Paddle[] = [];
 
@@ -24,12 +24,12 @@ export function createObjects3D(scene: BABYLON.Scene): GameObjects {
 }
 
 // Create a new Table at the center of the scene
-export function createTable(scene: BABYLON.Scene): Table {
+export function createTable(scene: BABYLON.Scene, configs: GameConfiguration): Table {
   const h = 0.5;
   return new Table({
     scene,
     pos: new Vec3(0, -h / 2, 0),
-    dimensions: new Vec3(TABLE_CONFIG.width, h, TABLE_CONFIG.depth),
+    dimensions: new Vec3(configs.table.width, h, configs.table.depth),
   });
 }
 

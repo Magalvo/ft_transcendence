@@ -1,11 +1,12 @@
 //
 export * from "../shared/utils.js";
-export * from "../shared/config.js";
+export * from "../server/GameConfiguration.js";
 export * from "../shared/strings.js";
 export * from "../shared/types.js";
 //
 export * from "./GameScene.js";
 export * from "./GameData.js";
+export * from "./configs.js";
 //
 export * from "./serverConnections/socketListeners.ts";
 export * from "./serverConnections/HandleEvents.ts";

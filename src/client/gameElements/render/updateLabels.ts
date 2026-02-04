@@ -2,7 +2,7 @@ import { type GameData } from "../../index.js";
 
 export function updateTimerLabel(data: GameData) {
     // get total time rounded to to seconds
-    const total_seconds = Math.max(0, Math.floor(data.gameFeatures.GAME_DURATION - data.mods.time));
+    const total_seconds = Math.max(0, Math.floor(data.gameConfigs.game_duration - data.mods.time));
     // separate minutes and seconds
     const min = Math.floor(total_seconds / 60);
     const seconds = total_seconds % 60;
@@ -19,13 +19,8 @@ export function updateScoreLabels(data: GameData) {
 }
 
 export function updateHellTimerLabel(data: GameData) {
-    // Determine which timer to show based on the current side
-    const remaining =
-        data.mods.devilElapsed > 0
-            ? data.gameFeatures.HELL_DURATION - data.mods.devilElapsed
-            : data.gameFeatures.HEAVEN_DURATION - data.mods.goodElapsed;
     // Format to 1 decimal place
-    data.obj2D.devil_timer_label.text = remaining.toFixed(1);
+    data.obj2D.devil_timer_label.text = data.mods.phaseTimer.toFixed(1);
     // Color label based on active side
-    data.obj2D.devil_timer_label.color = data.mods.devilElapsed > 0 ? "red" : "blue";
+    data.obj2D.devil_timer_label.color = data.mods.is_hell ? "red" : "blue";
 }

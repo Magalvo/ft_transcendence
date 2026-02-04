@@ -32,7 +32,7 @@ export function createMainMenu() {
  * @param onOptionSelected Callback function receiving the selected mode ('online' | 'bot')
  */
 export function startMainMenu(data: GameData, onOptionSelected: (mode: 'online' | 'bot' | 'demo') => void) {
-    positionCamera(data.env);
+    positionCamera(data.env3D);
     createTitle();
 
     // Show loading overlay, then reveal buttons
@@ -57,7 +57,7 @@ function waitForScene(scene: any): Promise<void> {
  * Destroys the menu GUI and releases camera control.
  */
 export function closeMainMenu(data: GameData) {
-    data.env.camera.detachControl();
+    data.env3D.camera.detachControl();
     if (guiTexture) {
         guiTexture.dispose();
     }
