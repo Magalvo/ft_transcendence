@@ -27,12 +27,14 @@ export function renderGame(dt: number, data: GameData) {
   // 2. Idle State (Menu/Waiting)
   // Rotates camera around the table and hides the HUD
   if (!data.flags.game_running) {
+    data.env3D.camera.attachControl();
     rotateCamera(data);
     data.obj2D.guiGame.rootContainer.isVisible = false;
     return;
   }
 
   // 3. Running State
+  data.env3D.camera.detachControl();
   data.obj2D.guiGame.rootContainer.isVisible = true;
 
   // Fixed Time Step: Splits large frame times into smaller chunks
