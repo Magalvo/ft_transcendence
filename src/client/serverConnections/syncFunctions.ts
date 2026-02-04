@@ -156,7 +156,7 @@ export function syncGameStats(data: GameData, serverState: any) {
     data.mods.time = serverState.time;
     data.mods.is_hell = serverState.isHell;
     data.mods.hell_mode = serverState.activeHellMode;
-    data.mods.phaseTimer = serverState.phaseTimer;
+    data.mods.phaseTimer = serverState.phaseTimer | 0;
 }
 
 /**

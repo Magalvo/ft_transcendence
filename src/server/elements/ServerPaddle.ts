@@ -34,15 +34,16 @@ export class ServerPaddle {
     private bot?: SmartBot;
 
     // --- CONSTRUCTOR ---
-    constructor(playerType: 'human', side: 'left' | 'right', data: IGameData)
-    constructor(playerType: 'bot', side: 'left' | 'right', data: IGameData, bot_level: number)
-    constructor(playerType: 'human' | 'bot', side: 'left' | 'right', data: IGameData, bot_level?: number) {
+    constructor(nb: number, playerType: 'human', side: 'left' | 'right', data: IGameData)
+    constructor(nb: number, playerType: 'bot', side: 'left' | 'right', data: IGameData, bot_level: number)
+    constructor(nb: number, playerType: 'human' | 'bot', side: 'left' | 'right', data: IGameData, bot_level?: number) {
         this.configs = data.configs;
         this.width = data.configs.paddle.width;
         this.depth = data.configs.paddle.depth;
         this.speed = data.configs.paddle.speed;
         this.side = side;
-        this.baseX = data.table.width / 2 * 0.8 * (side == 'left' ? -1 : 1);
+        this.baseX = data.table.width / 2 * (0.9 - nb * 0.2) * (side == 'left' ? -1 : 1);
+        // this.baseX = data.table.width / 0.4 * nb * (side == 'left' ? -1 : 1);
         this.pos = new Vector3(this.baseX, 3, 0);
         this.playerType = playerType;
         if (playerType == 'bot')

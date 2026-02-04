@@ -2,47 +2,92 @@
 <html>
 <head>
     <meta charset="UTF-8" />
-    <title>Pong in TypeScript</title>
-    <link rel="stylesheet" href="/src/style.css">
-    
+    <title>Pong Lobby</title>
+    <link rel="stylesheet" href="/src/client/style.css">
     <style>
-        /* (Podes manter o teu CSS aqui igual ao que tinhas) */
-        body { margin: 0; overflow: hidden; background-color: #111; }
-        canvas { width: 100%; height: 100%; display: block; outline: none; }
+        body { margin: 0; background-color: #111; color: white; font-family: sans-serif; }
         
-        #lobby-overlay {
-            position: absolute; top: 20px; left: 20px;
-            background: rgba(0, 0, 0, 0.85); padding: 20px; color: white;
-            border-radius: 8px; font-family: sans-serif;
-            display: flex; flex-direction: column; gap: 15px;
-            border: 1px solid #444; min-width: 250px; z-index: 10;
+        /* LAYOUTS */
+        #game-view { display: none; width: 100vw; height: 100vh; }
+        #lobby-view { display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        
+        /* LOBBY STYLES */
+        .header { text-align: center; margin-bottom: 20px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        
+        .arena { display: flex; gap: 40px; justify-content: center; width: 100%; max-width: 1000px; }
+        .team-column { display: flex; flex-direction: column; gap: 10px; width: 300px; background: #222; padding: 10px; border-radius: 8px; }
+        .bench-column { width: 200px; background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px dashed #444; }
+        
+        h3 { text-align: center; margin: 0 0 10px 0; color: #888; }
+        
+        /* SLOTS */
+        .slot {
+            background: #333; height: 60px; border-radius: 4px; display: flex; 
+            align-items: center; justify-content: space-between; padding: 0 10px;
+            border: 2px solid #444; user-select: none;
         }
-        button { padding: 8px 12px; cursor: pointer; background: #444; color: white; border: 1px solid #666; border-radius: 4px; margin: 2px;}
-        button:hover { background: #666; }
-        button.ready { background: #2e7d32; font-weight: bold; margin-top: 10px;}
-        .hidden { display: none !important; }
+        .slot.empty { border-style: dashed; opacity: 0.5; cursor: pointer; }
+        .slot.human { border-color: #4CAF50; background: #1e3a1f; }
+        .slot.bot { border-color: #2196F3; background: #152b3d; }
+        
+        .slot-actions { display: flex; gap: 5px; }
+        button.mini { padding: 2px 6px; font-size: 10px; cursor: pointer; }
+        
+        /* BENCH PLAYERS */
+        .bench-player { 
+            background: #444; padding: 8px; margin-bottom: 5px; border-radius: 4px; cursor: grab; 
+            display: flex; justify-content: space-between;
+        }
+        .bench-player.me { border: 1px solid yellow; }
+        
+        /* GENERAL UI */
+        .leader-badge { background: gold; color: black; padding: 2px 5px; border-radius: 4px; font-size: 10px; display: none;}
+        .is-leader .leader-badge { display: inline-block; }
+        
+        button { padding: 10px 20px; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        button.start-btn { background: #2e7d32; font-weight: bold; font-size: 1.2em; margin-top: 20px;}
     </style>
 </head>
 
 <body>
-    <div id="lobby-overlay">
-        <h3>🎮 Game Lobby (Vite Mode)</h3>
-        <div>
-            <strong>Left:</strong>
-            <button id="btn-join-left">👤 Human</button>
-            <button id="btn-bot-left">🤖 Bot</button>
+    <div id="lobby-view">
+        <div class="header">
+            <h1>Game Lobby</h1>
+            <div id="leader-msg" style="color: gold; display: none;">👑 You are the Party Leader</div>
         </div>
-        <div>
-            <strong>Right:</strong>
-            <button id="btn-join-right">👤 Human</button>
-            <button id="btn-bot-right">🤖 Bot</button>
+
+        <div class="controls" id="leader-controls">
+            <button onclick="setMode('one_for_one')">1 vs 1</button>
+            <button onclick="setMode('two_for_two')">2 vs 2</button>
+            <button onclick="setMode('three_for_three')">3 vs 3</button>
         </div>
-        <button id="btn-ready" class="ready">✅ I AM READY</button>
-        <div id="status-msg" style="margin-top:5px; color: yellow;"></div>
+
+        <div class="arena">
+            <div class="team-column">
+                <h3>LEFT TEAM</h3>
+                <div id="slots-left"></div>
+            </div>
+
+            <div class="bench-column">
+                <h3>BENCH</h3>
+                <div id="bench-list"></div>
+            </div>
+
+            <div class="team-column">
+                <h3>RIGHT TEAM</h3>
+                <div id="slots-right"></div>
+            </div>
+        </div>
+
+        <button id="btn-start" class="start-btn" onclick="startGame()" disabled>START GAME</button>
     </div>
 
-    <canvas id="renderCanvas"></canvas>
-    
+    <div id="game-view">
+        <canvas id="renderCanvas"></canvas>
+    </div>
+
     <script type="module" src="/src/client/main.ts"></script>
 </body>
 </html>

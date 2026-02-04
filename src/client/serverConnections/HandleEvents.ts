@@ -17,9 +17,13 @@ import {
 export class HandleEvents {
     private data: GameData;
     private gameScene: GameScene;
+    
+    // --- CONTROLO DE FILA ---
+    private isReady: boolean = false;
+    private eventQueue: Array<() => void> = [];
 
     constructor(gameScene: GameScene) {
-        this.data = {} as GameData; // Placeholder
+        this.data = {} as GameData; 
         this.gameScene = gameScene;
     }
 
@@ -29,96 +33,103 @@ export class HandleEvents {
 
     /**
      * Recebe o evento 'init' do servidor.
-     * Cria a cena nova e define o lado do jogador.
+     * Este é o momento em que preparamos tudo.
      */
     public initializeGame(serverData: any) {
-        console.log("🔥 SERVER INIT RECEIVED:", serverData);
+        console.log("🔥 SERVER INIT RECEIVED. Building Scene...");
+        
+        // 1. Reset da flag para impedir processamento imediato
+        this.isReady = false;
 
-        // 1. Criar a cena com as configs do servidor
+        // 2. Criar a cena (Síncrono, mas pesado)
         this.gameScene.resetScene(serverData.configs);
 
-        // 2. Atualizar a referência de dados locais
+        // 3. Atualizar referências
         this.data = (this.gameScene as any).data;
-
-        // 3. Definir o lado do jogador
         this.data.mySide = serverData.side;
         this.data.myIndex = serverData.index;
 
-        console.log(`Eu sou: ${serverData.side} (Index: ${serverData.index})`);
+        console.log(`✅ Scene Ready. I am: ${serverData.side} [${serverData.index}]`);
+
+        // 4. MARCAR COMO PRONTO E PROCESSAR FILA
+        this.isReady = true;
+        this.processQueue();
     }
 
+    /**
+     * Executa todos os eventos que chegaram enquanto estávamos a carregar
+     */
+    private processQueue() {
+        if (this.eventQueue.length > 0) {
+            console.log(`Processing ${this.eventQueue.length} queued events...`);
+            // Executa cada função guardada na ordem correta
+            this.eventQueue.forEach(eventFn => eventFn());
+            this.eventQueue = [];
+        }
+    }
+
+    // --- GAME STATE (60 FPS) ---
+
     public gameState(serverState: any) {
-        // Só sincroniza se a cena já estiver criada
-        if (!this.data || !this.data.scene) return;
+        // Se não estiver pronto, ignoramos updates de estado (não vale a pena guardar na fila, 
+        // pois o próximo update substitui este).
+        if (!this.isReady || !this.data.scene) return;
 
         if (serverState.paddles) syncPaddles(this.data, serverState.paddles);
         if (serverState.balls) syncPlayingBalls(this.data, serverState.balls, serverState.isHell);
         if (serverState.magicBalls) syncMagicBalls(this.data, serverState.magicBalls);
-        syncTable(this.data);
+        // if (serverState.table) syncTable(this.data, serverState.table);
 
         syncGameStats(this.data, serverState);
         this.handleGameStartTrigger(serverState.status);
-        // this.updateHellVisuals(serverState);
+        this.updateHellVisuals(serverState);
     }
 
-    // --- GAME CONTROL EVENTS ---
-
-    public gamePaused() {
-        console.log("Game Paused by Server");
-        // Força a flag para permitir criar o menu, se necessário
-        this.data.flags.game_running = true; 
-        pauseScreen(this.data);
-        // Atualiza estado interno
-        this.data.flags.game_running = false; 
-    }
-
-    public gameResumed() {
-        console.log("Game Resumed");
-        resumeGame(this.data);
-        
-        this.data.flags.game_running = true;
-        this.data.flags.pause_screen = false;
-    }
-
-    // --- MESSAGING EVENTS ---
+    // --- EVENTS QUE PRECISAM DE ESPERAR ---
 
     public onCountdown(count: number) {
-        // Fecha o menu principal se ainda estiver aberto (lógica antiga)
-        // closeMainMenu(this.data); 
-        
-        // Tenta ir buscar a mensagem ao dicionário antigo
+        // Se não estiver pronto, guarda na fila
+        if (!this.isReady) {
+            this.eventQueue.push(() => this.onCountdown(count));
+            return;
+        }
+
         const msgData = (COUNTDOWN_MESSAGES as any)[count];
-        
-        // Se não existir (ex: count = 0), ou mostramos "GO" ou ignoramos
-        if (count >= 0) {
-            // Se msgData for undefined, usamos um fallback simples
+        if (count > 0) {
             const fallback = { text: String(count), color: "white" };
             this.showCountdownMessage(msgData || fallback, 1);
         }
     }
 
     public onEndGame(count: number) {
+        // Se não estiver pronto, guarda na fila (Evita o erro 'reading score of undefined')
+        if (!this.isReady) {
+            this.eventQueue.push(() => this.onEndGame(count));
+            return;
+        }
+
         let msgData: any;
 
-        // Mensagens de contagem decrescente para o fim (3, 2...)
         if (count == 3 || count == 2) {
             msgData = (ENDGAME_MESSAGES as any)[count];
         }
         
-        // No último segundo (1), decide quem ganhou e mostra a mensagem final
         if (count == 1) {
-            if (this.data.mods.score.me > this.data.mods.score.rival)
-                msgData = (ENDGAME_MESSAGES as any)['WON'];
-            else if (this.data.mods.score.me < this.data.mods.score.rival)
-                msgData = (ENDGAME_MESSAGES as any)['LOST'];
-            else
-                msgData = (ENDGAME_MESSAGES as any)['DRAW'];
+            // Acesso seguro aos mods
+            if (this.data.mods && this.data.mods.score) {
+                if (this.data.mods.score.me > this.data.mods.score.rival)
+                    msgData = (ENDGAME_MESSAGES as any)['WON'];
+                else if (this.data.mods.score.me < this.data.mods.score.rival)
+                    msgData = (ENDGAME_MESSAGES as any)['LOST'];
+                else
+                    msgData = (ENDGAME_MESSAGES as any)['DRAW'];
+            }
         }
 
-        // Quando chega a 0, volta ao menu
         if (count == 0) {
-            this.data.flags.return_main_menu = true;
-            // Aqui podes disparar um evento para mostrar o Lobby HTML novamente, se quiseres
+            if (this.data.flags) {
+                this.data.flags.return_main_menu = true;
+            }
             // window.dispatchEvent(new Event('game-end')); 
         }
 
@@ -127,7 +138,11 @@ export class HandleEvents {
     }
 
     public socketMessage(server_data: any) {
-        // Lógica antiga para inverter o lado visual da mensagem se formos o jogador da direita
+        if (!this.isReady) {
+            this.eventQueue.push(() => this.socketMessage(server_data));
+            return;
+        }
+
         let targetSide = server_data.side;
         if (this.data.mySide === 'right' && (server_data.side === 'left' || server_data.side === 'right')) {
             targetSide = (server_data.side === 'left') ? 'right' : 'left';
@@ -136,17 +151,44 @@ export class HandleEvents {
         showWarningMessage({
             scene: this.data.scene,
             message: server_data.message,
-            pos: targetSide, // Usa o lado ajustado visualmente
+            pos: targetSide,
             color: server_data.color,
             duration: server_data.duration
         });
     }
 
+    public gamePaused() {
+        if (!this.isReady) {
+            this.eventQueue.push(() => this.gamePaused());
+            return;
+        }
+
+        console.log("Game Paused by Server");
+        if (this.data.flags) {
+            this.data.flags.game_running = true; 
+            pauseScreen(this.data);
+            this.data.flags.game_running = false; 
+        }
+    }
+
+    public gameResumed() {
+        if (!this.isReady) {
+            this.eventQueue.push(() => this.gameResumed());
+            return;
+        }
+
+        console.log("Game Resumed");
+        resumeGame(this.data);
+        if (this.data.flags) {
+            this.data.flags.game_running = true;
+            this.data.flags.pause_screen = false;
+        }
+    }
+
     /* PRIVATE HELPER METHODS */
 
     private handleGameStartTrigger(status: GameStatus) {
-        // Se o servidor entrou em Countdown, o jogo vai começar -> esconde o Lobby
-        if (status === GameStatus.COUNTDOWN && !this.data.flags.game_running) {
+        if (status === GameStatus.COUNTDOWN && this.data.flags && !this.data.flags.game_running) {
             this.data.flags.game_running = true;
             window.dispatchEvent(new Event('game-start'));
         }
@@ -161,5 +203,16 @@ export class HandleEvents {
             color: msgData.color,
             duration: duration
         });
+    }
+
+    private updateHellVisuals(serverState: any) {
+        // if (!this.data.mods) return;
+        // if (serverState.isHell) {
+        //     this.data.mods.devilElapsed = serverState.hellTimer;
+        //     this.data.mods.goodElapsed = 0;
+        // } else {
+        //     this.data.mods.goodElapsed = serverState.hellTimer;
+        //     this.data.mods.devilElapsed = 0;
+        // }
     }
 }

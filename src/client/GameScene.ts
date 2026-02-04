@@ -27,14 +27,13 @@ export class GameScene {
   constructor() {
     this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
     this.engine = new BABYLON.Engine(this.canvas, true);
-    window.addEventListener("resize", () => { this.engine.resize(); });
-    
+    window.addEventListener("resize", () => { this.engine.resize(); });   
     this.data = {} as GameData;
     this.handleEvents = new HandleEvents(this);
   }
 
-  public startConnection(): void {
-    this.socket = io(SERVER_URL);
+  public startConnection(existingSocket?: Socket): void {
+    this.socket = existingSocket || io(SERVER_URL);
     setupSocketListeners(this.socket, this.handleEvents);
 
     this.engine.runRenderLoop(() => {
@@ -58,6 +57,7 @@ export class GameScene {
       const dt = this.engine.getDeltaTime() / 1000;
       renderGame(dt, this.data);
     });
+    this.engine.resize(); 
   }
 
   private initializeGameData(configs: any): void {
@@ -70,8 +70,7 @@ export class GameScene {
       time: 0,
       is_hell: false,
       hell_mode: hellMode.null,
-      devilElapsed: 0,
-      goodElapsed: 0,
+      phaseTimer: 0,
     };
     this.data.input = {
       keysPressed: [],

@@ -19,6 +19,7 @@ export function updateScoreLabels(data: GameData) {
 }
 
 export function updateHellTimerLabel(data: GameData) {
+    if (data.mods.phaseTimer)
     // Format to 1 decimal place
     data.obj2D.devil_timer_label.text = data.mods.phaseTimer.toFixed(1);
     // Color label based on active side

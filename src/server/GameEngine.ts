@@ -135,11 +135,13 @@ export class GameEngine {
             const type = player ? player.type : 'bot'; // Default para bot se slot vazio
 
             // Criamos o paddle
+            let team_paddles = 1;
+            paddles.forEach(p => { if (p.side == side) team_paddles++; });
             let paddle: ServerPaddle;
             if (type == 'human')
-                paddle = new ServerPaddle(type, side, this.data);
+                paddle = new ServerPaddle(team_paddles, type, side, this.data);
             else
-                paddle = new ServerPaddle(type, side, this.data, player.level!);
+                paddle = new ServerPaddle(team_paddles, type, side, this.data, player.level!);
 
             // Força a posição Z inicial
             paddle.pos.z = z;
