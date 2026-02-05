@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { Lobby } from './Lobby.js'; // Importar a nova classe Lobby
+import { Lobby } from './Lobby.js';
 import { CONFIG } from './index.js';
 
 const app = express();
@@ -11,7 +11,6 @@ const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Criamos o Lobby (que vai gerir o Game internamente)
 const lobby = new Lobby(io);
 
 console.log("--- LOBBY SERVER STARTED ---");

@@ -1,7 +1,6 @@
 import { Server } from 'socket.io';
 import { GameConfiguration, GamePlayer, Game } from './index.js';
 
-/* Tipos auxiliares para o Lobby */
 export interface LobbySlot {
     index: number;
     side: 'left' | 'right';
@@ -13,24 +12,20 @@ export interface LobbySlot {
 
 export class Lobby {
     private io: Server;
-    private clients: string[] = [];
+    private clients: string[] = []; // Index 0 is Leader
 
-    // Estado do Lobby
     public config: GameConfiguration;
-    public slots: { left: LobbySlot[], right: LobbySlot[] };
+    public slots: { left: LobbySlot[], right: LobbySlot[] } = { left: [], right: [] };
     public bench: string[] = [];
-
     public gameInstance: Game | null = null;
 
     constructor(io: Server) {
         this.io = io;
         this.config = new GameConfiguration("normal", "one_for_one");
-        this.slots = { left: [], right: [] };
-        // Inicializa slots com a config default
-        this.updateSlotsStructure();
+        this.resizeSlots();
     }
 
-    // --- CLIENT MANAGEMENT ---
+    /* --- CLIENT MANAGEMENT --- */
 
     public addClient(socketId: string) {
         this.clients.push(socketId);
@@ -40,226 +35,151 @@ export class Lobby {
 
     public removeClient(socketId: string) {
         this.clients = this.clients.filter(id => id !== socketId);
-        this.bench = this.bench.filter(id => id !== socketId);
-        this.vacateSlotIfOccupiedBy(socketId, 'left');
-        this.vacateSlotIfOccupiedBy(socketId, 'right');
-
-        if (this.gameInstance) {
-            this.gameInstance.removePlayerBySocket(socketId);
-        }
-
+        this.clearPlayerFromSlots(socketId); // Removes from bench and slots
+        this.gameInstance?.removePlayerBySocket(socketId);
         this.broadcastState();
-    }
-
-    private vacateSlotIfOccupiedBy(socketId: string, side: 'left' | 'right') {
-        const slot = this.slots[side].find(s => s.socketId === socketId);
-        if (slot) {
-            slot.content = 'empty';
-            slot.socketId = undefined;
-            slot.playerName = undefined;
-        }
     }
 
     public isLeader(socketId: string): boolean {
-        return this.clients.length > 0 && this.clients[0] === socketId;
+        return this.clients[0] === socketId;
     }
 
-    // --- LOBBY ACTIONS ---
+    /* --- ACTIONS --- */
 
-    public setGameMode(socketId: string, type: "one_for_one" | "two_for_two" | "three_for_three") {
-        if (!this.isLeader(socketId)) return;
-
-        // 1. Atualiza a Configuração
+    public setGameMode(id: string, type: "one_for_one" | "two_for_two" | "three_for_three") {
+        if (!this.isLeader(id)) return;
         this.config.setGameType(type);
-
-        // 2. Reconstrói os Slots visuais (Adiciona/Remove conforme necessário)
-        this.updateSlotsStructure();
-
+        this.resizeSlots();
         this.broadcastState();
     }
 
-    public setGameDuration(socketId: string, duration: "fast" | "normal" | "long") {
-        if (!this.isLeader(socketId)) return;
+    public setGameDuration(id: string, duration: "fast" | "normal" | "long") {
+        if (!this.isLeader(id)) return;
         this.config.setGameDuration(duration);
         this.broadcastState();
     }
 
-    public setPowerUps(socketId: string, enabled: boolean) {
-        if (!this.isLeader(socketId)) return;
+    public setPowerUps(id: string, enabled: boolean) {
+        if (!this.isLeader(id)) return;
         this.config.power_ups = enabled;
         this.broadcastState();
     }
 
-    public movePlayerToSlot(socketId: string, targetSocketId: string, side: 'left' | 'right', slotIndex: number) {
-        if (!this.isLeader(socketId)) return;
-        if (!this.clients.includes(targetSocketId)) return;
+    public movePlayerToSlot(leaderId: string, targetId: string, side: 'left' | 'right', idx: number) {
+        if (!this.isLeader(leaderId) || !this.clients.includes(targetId)) return;
 
-        this.removeFromCurrentPosition(targetSocketId);
+        this.clearPlayerFromSlots(targetId); // Remove from current pos first
 
-        const targetSlot = this.slots[side][slotIndex];
-        if (!targetSlot) return;
+        const slot = this.slots[side][idx];
+        if (!slot) return;
 
-        // Se o slot estava ocupado por humano, manda para banco
-        if (targetSlot.content === 'human' && targetSlot.socketId) {
-            this.bench.push(targetSlot.socketId);
-        }
+        // If slot occupied by human, send them to bench (Swap)
+        if (slot.content === 'human' && slot.socketId) this.bench.push(slot.socketId);
 
-        targetSlot.content = 'human';
-        targetSlot.socketId = targetSocketId;
-        targetSlot.playerName = `Player ${targetSocketId.substr(0, 4)}`;
+        Object.assign(slot, {
+            content: 'human',
+            socketId: targetId,
+            playerName: `Player ${targetId.slice(0, 4)}`,
+            botLevel: undefined
+        });
 
         this.broadcastState();
     }
 
-    public addBot(socketId: string, side: 'left' | 'right', slotIndex: number) {
-        if (!this.isLeader(socketId)) return;
-
-        const slot = this.slots[side][slotIndex];
+    public addBot(id: string, side: 'left' | 'right', idx: number) {
+        if (!this.isLeader(id)) return;
+        const slot = this.slots[side][idx];
         if (slot) {
-            if (slot.content === 'human' && slot.socketId) {
-                this.bench.push(slot.socketId);
-            }
-            slot.content = 'bot';
-            slot.botLevel = 5;
-            slot.socketId = undefined;
+            if (slot.content === 'human' && slot.socketId) this.bench.push(slot.socketId);
+            Object.assign(slot, { content: 'bot', botLevel: 5, socketId: undefined, playerName: undefined });
         }
         this.broadcastState();
     }
 
-    public removeBot(socketId: string, side: 'left' | 'right', slotIndex: number) {
-        if (!this.isLeader(socketId)) return;
+    public removeBot(id: string, side: 'left' | 'right', idx: number) {
+        if (!this.isLeader(id)) return;
+        const slot = this.slots[side][idx];
+        if (slot?.content === 'bot') this.resetSlot(slot);
+        this.broadcastState();
+    }
 
-        const slot = this.slots[side][slotIndex];
-        if (slot && slot.content === 'bot') {
-            slot.content = 'empty';
-            slot.botLevel = undefined;
+    public changeBotLevel(id: string, side: 'left' | 'right', idx: number, delta: number) {
+        if (!this.isLeader(id)) return;
+        const slot = this.slots[side][idx];
+        if (slot?.content === 'bot' && slot.botLevel !== undefined) {
+            slot.botLevel = Math.max(1, Math.min(10, slot.botLevel + delta));
         }
         this.broadcastState();
     }
 
-    public changeBotLevel(socketId: string, side: 'left' | 'right', slotIndex: number, delta: number) {
-        if (!this.isLeader(socketId)) return;
-        const slot = this.slots[side][slotIndex];
-        if (slot && slot.content === 'bot' && slot.botLevel !== undefined) {
-            let newLevel = slot.botLevel + delta;
-            if (newLevel < 1) newLevel = 1;
-            if (newLevel > 10) newLevel = 10;
-            slot.botLevel = newLevel;
-        }
-        this.broadcastState();
-    }
+    public startGame(id: string) {
+        if (!this.isLeader(id) || !this.canStart()) return;
 
-    public startGame(socketId: string) {
-        if (!this.isLeader(socketId)) return;
+        console.log("Starting Game...");
 
-        // --- VALIDAÇÃO DE SEGURANÇA ---
-        // Mesmo que o cliente tenha hackeado o botão, o servidor recusa se não estiver pronto
-        if (!this.checkGameRequirements()) {
-            console.log("Start Game rejected: Requirements not met.");
-            return;
-        }
-        // ------------------------------
-
-        console.log("Lobby Leader requested Start Game...");
-
-        const finalPlayers: GamePlayer[] = [];
-
-        // Helper para converter slot em GamePlayer
-        const processSlot = (slot: LobbySlot, side: 'left' | 'right') => {
-            if (slot.content === 'human' && slot.socketId) {
-                finalPlayers.push(new GamePlayer('human', slot.socketId, side, slot.playerName || "Player"));
-            } else if (slot.content === 'bot' && slot.botLevel) {
-                finalPlayers.push(new GamePlayer('bot', slot.botLevel, side, "Bot Lvl " + slot.botLevel));
-            }
+        const players: GamePlayer[] = [];
+        const process = (s: LobbySlot) => {
+            if (s.content === 'human' && s.socketId)
+                players.push(new GamePlayer('human', s.socketId, s.side, s.playerName || "Player"));
+            else if (s.content === 'bot' && s.botLevel)
+                players.push(new GamePlayer('bot', s.botLevel, s.side, `Bot Lvl ${s.botLevel}`));
         };
 
-        this.slots.left.forEach(s => processSlot(s, 'left'));
-        this.slots.right.forEach(s => processSlot(s, 'right'));
+        this.slots.left.forEach(process);
+        this.slots.right.forEach(process);
 
-        this.gameInstance = new Game(this.io, this.config, finalPlayers);
+        this.gameInstance = new Game(this.io, this.config, players);
         this.gameInstance.start();
         this.io.emit('gameStarted');
     }
 
-    // --- HELPERS E VALIDAÇÕES ---
+    /* --- HELPERS --- */
 
-    /**
-     * Verifica se o jogo pode começar.
-     * Regra: TODOS os slots têm de estar preenchidos (Human ou Bot).
-     */
-    private checkGameRequirements(): boolean {
-        // Verifica lado esquerdo
-        const leftOk = this.slots.left.every(slot => slot.content !== 'empty');
-        // Verifica lado direito
-        const rightOk = this.slots.right.every(slot => slot.content !== 'empty');
-
-        return leftOk && rightOk;
+    private canStart(): boolean {
+        const sides = [this.slots.left, this.slots.right];
+        return sides.every(side => side.every(s => s.content !== 'empty'));
     }
 
-    private updateSlotsStructure() {
-        // Pega o número de slots atual da configuração (1, 2 ou 3)
+    private resizeSlots() {
         const size = this.config.players_per_side;
 
-        // Cópia temporária para tentar preservar quem já lá está
-        const oldLeft = [...this.slots.left];
-        const oldRight = [...this.slots.right];
+        (['left', 'right'] as const).forEach(side => {
+            const arr = this.slots[side];
 
-        this.slots.left = [];
-        this.slots.right = [];
-
-        for (let i = 0; i < size; i++) {
-            // Se já existia um slot nesta posição (i), mantemos o conteúdo.
-            // Se não existia (estamos a aumentar o tamanho), criamos um novo 'empty'.
-            if (i < oldLeft.length) {
-                this.slots.left.push(oldLeft[i]);
-            } else {
-                this.slots.left.push({ index: i, side: 'left', content: 'empty' });
+            // 1. Move overflowing humans to bench
+            while (arr.length > size) {
+                const removed = arr.pop();
+                if (removed?.content === 'human' && removed.socketId) this.bench.push(removed.socketId);
             }
 
-            if (i < oldRight.length) {
-                this.slots.right.push(oldRight[i]);
-            } else {
-                this.slots.right.push({ index: i, side: 'right', content: 'empty' });
+            // 2. Add missing slots (preserving existing ones)
+            while (arr.length < size) {
+                arr.push({ index: arr.length, side, content: 'empty' });
             }
-        }
-
-        // Se diminuímos o tamanho (ex: 3v3 -> 1v1), os jogadores nos slots extra vão para o banco
-        for (let i = size; i < oldLeft.length; i++) {
-            if (oldLeft[i].content === 'human' && oldLeft[i].socketId) this.bench.push(oldLeft[i].socketId!);
-        }
-        for (let i = size; i < oldRight.length; i++) {
-            if (oldRight[i].content === 'human' && oldRight[i].socketId) this.bench.push(oldRight[i].socketId!);
-        }
+        });
     }
 
-    private removeFromCurrentPosition(socketId: string) {
+    private clearPlayerFromSlots(socketId: string) {
         this.bench = this.bench.filter(id => id !== socketId);
-        this.slots.left.forEach(slot => {
-            if (slot.socketId === socketId) {
-                slot.content = 'empty';
-                slot.socketId = undefined;
-                slot.playerName = undefined;
-            }
+        
+        (['left', 'right'] as const).forEach(side => {
+            this.slots[side].forEach(slot => {
+                if (slot.socketId === socketId) this.resetSlot(slot);
+            });
         });
-        this.slots.right.forEach(slot => {
-            if (slot.socketId === socketId) {
-                slot.content = 'empty';
-                slot.socketId = undefined;
-                slot.playerName = undefined;
-            }
-        });
+    }
+
+    private resetSlot(slot: LobbySlot) {
+        Object.assign(slot, { content: 'empty', socketId: undefined, playerName: undefined, botLevel: undefined });
     }
 
     private broadcastState() {
-        // Enviamos para o front-end se está pronto para começar ou não
-        const isReady = this.checkGameRequirements();
-
         this.io.emit('lobbyState', {
             config: this.config,
             slots: this.slots,
             bench: this.bench,
             leader: this.clients[0],
-            isReadyToStart: isReady // <--- NOVA FLAG
+            isReadyToStart: this.canStart()
         });
     }
 }
