@@ -83,3 +83,9 @@ button:hover:not(:disabled) { background: #666; }
 button:disabled { opacity: 0.3; cursor: not-allowed; }
 button.start-btn { background: #2e7d32; font-weight: bold; font-size: 1.2em; margin-top: 30px; padding: 15px 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 button.start-btn:hover:not(:disabled) { background: #388e3c; transform: scale(1.05); }
+
+
+.controls-section { margin-bottom: 20px; text-align: center; }
+.controls-section h3 { margin: 5px 0; font-size: 14px; color: #888; text-transform: uppercase; }
+.btn-group { display: inline-flex; gap: 5px; align-items: center; margin: 0 15px; }
+.active { background-color: #2196F3; color: white; border: 1px solid #64B5F6; }

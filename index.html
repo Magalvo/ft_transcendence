@@ -64,6 +64,21 @@
             <button onclick="setMode('three_for_three')">3 vs 3</button>
         </div>
 
+        <div class="controls-section">
+            <h3>Settings</h3>
+            <div class="controls" id="settings-controls">
+                <div class="btn-group">
+                    <span>Duration:</span>
+                    <button id="btn-dur-fast" onclick="setDuration('fast')">Fast</button>
+                    <button id="btn-dur-normal" onclick="setDuration('normal')">Normal</button>
+                    <button id="btn-dur-long" onclick="setDuration('long')">Long</button>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-powerups" onclick="togglePowerUps()" style="width: 150px">Power Ups: ON</button>
+                </div>
+            </div>
+        </div>
+
         <div class="arena">
             <div class="team-column">
                 <h3>LEFT TEAM</h3>

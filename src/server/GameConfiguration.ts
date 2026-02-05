@@ -4,10 +4,11 @@ export class GameConfiguration {
     /* --- ATTRIBUTES --- */
     private _heaven_duration = 30;
     private _hell_duration = 20;
-    
+
     // Default options: 1 x 1
     private _players_per_side = 1;
     private _game_duration!: number;
+    private _duration_label: "fast" | "normal" | "long" = "normal";
     private _hell_rounds_amount!: number;
     private _power_ups = true;
     private _base_paddle = {
@@ -33,7 +34,7 @@ export class GameConfiguration {
     private _paddle = { ...this._base_paddle };
     private _ball = { ...this._base_ball };
     private _table = { ...this._base_table };
-    
+
     private _magic_ball = {
         effect_duration: 10,
         min_interval: 3,
@@ -53,11 +54,12 @@ export class GameConfiguration {
     /* --- GET METHODS --- */
     public get players_per_side() { return this._players_per_side; }
     public get game_duration() { return this._game_duration; }
+    public get duration_label() { return this._duration_label; }
     public get hell_rounds_amount() { return this._hell_rounds_amount; }
     public get power_ups() { return this._power_ups; }
     public get hell_duration() { return this._hell_duration; }
     public get heaven_duration() { return this._heaven_duration; }
-    
+
     public get paddle() { return this._paddle; }
     public get ball() { return this._ball; }
     public get magic_ball() { return this._magic_ball; }
@@ -65,12 +67,13 @@ export class GameConfiguration {
 
     /* --- SET METHODS --- */
     public set power_ups(state: boolean) { this._power_ups = state; }
-    
+
     public setGameDuration(duration: "fast" | "normal" | "long") {
+        this._duration_label = duration;
         if (duration == "fast") this._hell_rounds_amount = 2;
         if (duration == "normal") this._hell_rounds_amount = 4;
         if (duration == "long") this._hell_rounds_amount = 8;
-        
+
         this._game_duration =
             this._hell_rounds_amount * (this._heaven_duration + 1)
             + this._hell_rounds_amount * this._hell_duration;
@@ -107,12 +110,13 @@ export class GameConfiguration {
         return {
             paddles_per_side: this._players_per_side,
             game_duration: this._game_duration,
+            duration_label: this._duration_label,
             hell_rounds_amount: this._hell_rounds_amount,
             power_ups: this._power_ups,
             paddle: this._paddle,
             ball: this._ball,
             magic_ball: this._magic_ball,
-            table: this._table 
+            table: this._table
         };
     }
 }

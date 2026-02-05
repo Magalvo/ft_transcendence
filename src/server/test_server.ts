@@ -28,6 +28,14 @@ io.on('connection', (socket) => {
         lobby.setGameMode(socket.id, mode);
     });
 
+    socket.on('lobby_setDuration', (duration) => {
+        lobby.setGameDuration(socket.id, duration);
+    });
+
+    socket.on('lobby_setPowerUps', (enabled) => {
+        lobby.setPowerUps(socket.id, enabled);
+    });
+
     socket.on('lobby_movePlayer', (data: { targetId: string, side: 'left'|'right', slotIndex: number }) => {
         lobby.movePlayerToSlot(socket.id, data.targetId, data.side, data.slotIndex);
     });

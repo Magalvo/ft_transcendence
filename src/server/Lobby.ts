@@ -78,6 +78,18 @@ export class Lobby {
         this.broadcastState();
     }
 
+    public setGameDuration(socketId: string, duration: "fast" | "normal" | "long") {
+        if (!this.isLeader(socketId)) return;
+        this.config.setGameDuration(duration);
+        this.broadcastState();
+    }
+
+    public setPowerUps(socketId: string, enabled: boolean) {
+        if (!this.isLeader(socketId)) return;
+        this.config.power_ups = enabled;
+        this.broadcastState();
+    }
+
     public movePlayerToSlot(socketId: string, targetSocketId: string, side: 'left' | 'right', slotIndex: number) {
         if (!this.isLeader(socketId)) return;
         if (!this.clients.includes(targetSocketId)) return;
@@ -157,7 +169,7 @@ export class Lobby {
             if (slot.content === 'human' && slot.socketId) {
                 finalPlayers.push(new GamePlayer('human', slot.socketId, side, slot.playerName || "Player"));
             } else if (slot.content === 'bot' && slot.botLevel) {
-                finalPlayers.push(new GamePlayer('bot', slot.botLevel, side, "Bot Lvl "+ slot.botLevel));
+                finalPlayers.push(new GamePlayer('bot', slot.botLevel, side, "Bot Lvl " + slot.botLevel));
             }
         };
 
