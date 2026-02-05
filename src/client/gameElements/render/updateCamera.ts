@@ -1,5 +1,4 @@
-import { type GameData, hellMode } from "../../index.js";
-
+import { type GameData, hellMode, Vec3 } from "../../index.js";
 /**
  * Smoothly updates the camera's position and orientation based on the game state.
  * @param data - Scene/game state
@@ -22,6 +21,9 @@ export function updateCamera(data: GameData) {
         targetAlpha = -Math.PI;
         targetBeta = 1.3;
     }
+
+    if (data.flags.game_running == true)
+        data.env3D.camera.target = new Vec3(0, 0, 0);
 
     if (isHell)
         targetBeta += Math.PI * 4;
