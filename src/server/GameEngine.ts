@@ -204,14 +204,16 @@ export class GameEngine {
                 if (this.checkCollision(mb, paddle)) {
                     paddle.applyEffect(mb.effectType, this.config.magic_ball.effect_duration);
                     collected = true;
-
-                    // Emit effect message
-                    this.io.emit('gameMessage', {
-                        message: getMagicEffectName(mb.effectType),
-                        side: paddle.side,
-                        color: "green",
-                        duration: this.config.magic_ball.effect_duration,
-                    });
+                    const teamPlayers = this.data.players.filter(p => p.side === paddle.side);
+                    const player = teamPlayers[paddle.playerIndex];
+                    if (player && player.type === 'human' && player.socket_id) {
+                        this.io.to(player.socket_id).emit('gameMessage', {
+                            message: getMagicEffectName(mb.effectType),
+                            side: paddle.side,
+                            color: "green",
+                            duration: this.config.magic_ball.effect_duration,
+                        });
+                    }
                     break;
                 }
             }
