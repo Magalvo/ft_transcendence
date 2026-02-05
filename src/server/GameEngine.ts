@@ -67,19 +67,11 @@ export class GameEngine {
     }
 
     public initGameEntities() {
-        // 1. Reset
         this.data.balls = [];
         this.data.paddlesLeft = [];
         this.data.paddlesRight = [];
-
-        // 2. Criar Bolas
-        for (let i = 0; i < this.data.configs.ball.min_amount; i++) {
+        for (let i = 0; i < this.data.configs.ball.min_amount; i++)
             this.data.balls.push(new ServerBall(0, 0, this.config));
-        }
-
-        // 3. Criar Paddles (Física) baseados nos Jogadores (Lógica)
-        // Nota: O método spawnPaddlesForSide ou createSidePaddles fazem o mesmo.
-        // Vamos usar o createSidePaddles que é mais robusto para resets.
         this.data.paddlesLeft = this.createSidePaddles('left');
         this.data.paddlesRight = this.createSidePaddles('right');
     }
@@ -87,9 +79,9 @@ export class GameEngine {
     public startGame() {
         console.log("Starting game...");
         this.resetGame();
-        this.data.status = GameStatus.COUNTDOWN;
         this.data.countdownTimer = 3;
         this.data.lastCountdownInt = 4;
+        this.data.status = GameStatus.COUNTDOWN;
     }
 
     public resetGame() {

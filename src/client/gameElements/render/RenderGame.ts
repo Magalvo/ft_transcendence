@@ -8,6 +8,7 @@ import {
   updateMusic,
   updateHellTimerLabel,
   updateWarningMessages,
+  updateCountdownUI,
   type GameData,
 } from "../../index.js";
 
@@ -18,6 +19,8 @@ import {
  * @param data - Global game state
  */
 export function renderGame(dt: number, data: GameData) {
+  const visualDt = Math.min(dt, 0.1);
+  updateCountdownUI(visualDt);
   // 1. Handle Pause Requests
   if (data.flags.pause_screen) {
     data.socket?.emit('pauseGame');
@@ -52,7 +55,7 @@ export function renderGame(dt: number, data: GameData) {
 /**
  * Updates all active entities, environment, and handles input.
  */
-function updateActiveGameElements(data: GameData) {  
+function updateActiveGameElements(data: GameData) {
   // --- Visuals & 3D Objects ---
   updateCamera(data);
   updateEnvironment(data);

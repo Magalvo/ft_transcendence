@@ -27,6 +27,7 @@ export * from "./gameElements/initializations/defineEvents.js";
 export * from "./gameElements/user_interface/mainMenu.js";
 export * from "./gameElements/user_interface/pauseScreen.js";
 export * from "./gameElements/user_interface/showWarningMessage.js";
+export * from "./gameElements/user_interface/Countdown.js";
 //
 export * from "./gameElements/animations/flashZone.js";
 export * from "./gameElements/animations/ballHitParticles.ts";

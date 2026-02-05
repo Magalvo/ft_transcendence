@@ -13,16 +13,22 @@ export class Game {
     private engine: GameEngine;
     private gameLoopInterval: NodeJS.Timeout | null = null;
 
+    private humansReady = 0;
+    private totalHumans = 0;
+
     constructor(io: Server, configurations: GameConfiguration, initialPlayers: GamePlayer[]) {
         this.io = io;
         this.engine = new GameEngine(this.io, configurations);
-        
-        // Inicializa os jogadores vindos do Lobby
+
+        this.totalHumans = 0;
+
         initialPlayers.forEach(p => {
             let id = 0;
             while (this.engine.data.players.some(existing => existing.id === id)) id++;
             p.id = id;
-            p.setReady(); 
+            p.setReady();
+            if (p.type === 'human')
+                this.totalHumans++;
             this.engine.data.players.push(p);
         });
     }
@@ -35,22 +41,14 @@ export class Game {
         }
     }
 
-    // O método que arranca tudo
     public start() {
         console.log("Initializing Game Entities...");
-        
+
         this.engine.initGameEntities();
-        this.setupInputs(); 
-        
+        this.setupInputs();
+
         this.engine.data.status = GameStatus.COUNTDOWN;
-        
-        // Espera buffer para o cliente renderizar a cena
         console.log("Waiting for clients to render scene...");
-        setTimeout(() => {
-            console.log("🚀 Starting Game Loop now!");
-            if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
-            this.gameLoopInterval = setInterval(this.gameLoop.bind(this), TICK_MS);
-        }, 2000); 
     }
 
     private setupInputs() {
@@ -69,17 +67,21 @@ export class Game {
         const teamPlayers = this.engine.data.players.filter(p => p.side === player.side);
         const myIndex = teamPlayers.indexOf(player);
 
-        // --- CORREÇÃO AQUI ---
-        // Mudámos de 'features' para 'configs' para bater certo com o cliente HandleEvents.ts
         socket.on('requestGameInit', () => {
             console.log(`Sending Init to player ${player.socket_id}`);
             socket.emit('init', {
                 side: player.side,
                 index: myIndex,
-                configs: this.engine.data.configs // <--- MUDANÇA (era 'features')
+                configs: this.engine.data.configs
             });
         });
-        // ---------------------
+
+        socket.on('renderReady', () => {
+            console.log(`Player ${player.socket_id} is ready to start!`);
+            this.humansReady++;
+            if (this.humansReady >= this.totalHumans)
+                this.startGameLoop();
+        });
 
         socket.on('input', (data) => {
             if (this.engine.data.status !== GameStatus.RUNNING) return;
@@ -96,7 +98,7 @@ export class Game {
 
             if (now - data.lastPauseToggle < cooldown) return;
             data.lastPauseToggle = now;
-            
+
             if (data.status === GameStatus.RUNNING) {
                 data.status = GameStatus.PAUSED;
                 this.io.emit('gamePaused');
@@ -105,6 +107,13 @@ export class Game {
                 this.io.emit('gameResumed');
             }
         });
+    }
+
+    private startGameLoop() {
+        console.log("🚀 ALL PLAYERS READY -> Starting Game Loop!");
+        this.engine.startGame();
+        if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
+        this.gameLoopInterval = setInterval(this.gameLoop.bind(this), TICK_MS);
     }
 
     private gameLoop() {
@@ -136,7 +145,6 @@ export class Game {
         }
 
         if (data.status === GameStatus.ENDGAME) {
-            // Lógica de fim de jogo (simplificada para não repetir código desnecessário)
             data.countdownTimer -= dt / 2;
             const currentInt = Math.ceil(data.countdownTimer);
             if (currentInt < data.lastCountdownInt) {

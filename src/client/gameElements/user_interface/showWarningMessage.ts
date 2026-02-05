@@ -1,15 +1,11 @@
 import { GUI, BABYLON } from "../../index.js";
 
-// --- CONFIGURATION ---
 const MSG_CONFIG = {
     DEFAULT_WIDTH: "320px",
     DEFAULT_HEIGHT: "80px",
-    BIG_WIDTH: "500px",
-    BIG_HEIGHT: "250px",
     CORNER_RADIUS: 12,
     THICKNESS: 2,
     FONT_SIZE: 24,
-    FONT_SIZE_BIG: 50,
     OFFSET_BOTTOM: "-100px",
     OFFSET_SIDE: "40px",
     COLORS: {
@@ -21,7 +17,6 @@ const MSG_CONFIG = {
     }
 };
 
-// --- STATE MANAGEMENT ---
 interface ActiveMessage {
     rect: GUI.Rectangle;
     guiTexture: GUI.AdvancedDynamicTexture;
@@ -29,131 +24,76 @@ interface ActiveMessage {
     fading: boolean;
 }
 
-// Global state to track active messages per position
+// Removemos 'big' daqui
 const activeMessages: { [key: string]: ActiveMessage | null } = {
     left: null,
     right: null,
-    center: null,
-    big: null
+    center: null
 };
 
-/**
- * Displays a warning message on the UI.
- * Replaces any existing message at the same position.
- * @param params Configuration object for the message
- */
+// Removemos a opção "big" do tipo pos
 export function showWarningMessage(
-    {
-        scene,
-        message,
-        pos,
-        duration = 10,
-        color = "red",
-    }: {
-        scene: BABYLON.Scene,
-        message: string,
-        pos: "left" | "right" | "center" | "big",
-        duration?: number,
-        color?: "red" | "green" | "blue",
-    }
+    { scene, message, pos, duration = 3, color = "red" }: 
+    { scene: BABYLON.Scene, message: string, pos: "left" | "right" | "center", duration?: number, color?: "red" | "green" | "blue" }
 ) {
-    // 1. Cleanup existing message at this position
     if (activeMessages[pos]) {
-        activeMessages[pos]!.guiTexture.dispose();
+        try { activeMessages[pos]!.guiTexture.dispose(); } catch (e) {}
         activeMessages[pos] = null;
     }
 
-    // 2. Create New UI
-    const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Message", true, scene);
+    try {
+        const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Message", true, scene);
+        const rect = createUIContainer(color); // Função simplificada abaixo
+        positionContainer(rect, pos);
 
-    // Create Container
-    const isBig = (pos === "big");
-    const rect = createUIContainer(color, isBig);
-    positionContainer(rect, pos);
+        const textBlock = new GUI.TextBlock();
+        textBlock.text = message;
+        textBlock.color = MSG_CONFIG.COLORS.TEXT;
+        textBlock.fontSize = MSG_CONFIG.FONT_SIZE;
+        textBlock.fontWeight = "bold";
+        textBlock.textWrapping = true;
+        textBlock.resizeToFit = true;
 
-    // Create Text
-    const textBlock = new GUI.TextBlock();
-    textBlock.text = message;
-    textBlock.color = MSG_CONFIG.COLORS.TEXT;
-    textBlock.fontSize = isBig ? MSG_CONFIG.FONT_SIZE_BIG : MSG_CONFIG.FONT_SIZE;
-    textBlock.fontWeight = "bold";
-    textBlock.textWrapping = true;
-    textBlock.resizeToFit = true;
+        rect.addControl(textBlock);
+        gui.addControl(rect);
 
-    rect.addControl(textBlock);
-    gui.addControl(rect);
-
-    // 3. Store State
-    activeMessages[pos] = {
-        rect: rect,
-        guiTexture: gui,
-        timer: duration,
-        fading: false
-    };
+        activeMessages[pos] = {
+            rect: rect,
+            guiTexture: gui,
+            timer: duration,
+            fading: false
+        };
+    } catch (err) { console.error(err); }
 }
 
-/**
- * Updates message timers and handles fade-out animations.
- * Should be called in the game loop.
- * @param dt Delta Time in seconds
- */
 export function updateWarningMessages(dt: number) {
-    const positions = ["left", "right", "center", "big"];
-
-    positions.forEach(pos => {
+    ["left", "right", "center"].forEach(pos => {
         const msg = activeMessages[pos];
         if (!msg) return;
-
-        // Decrease timer
         msg.timer -= dt;
-
-        // Trigger Fade Out in the last 0.5 seconds
-        if (msg.timer <= 0.5 && !msg.fading) {
-            msg.fading = true;
-        }
-
-        // Apply Manual Fade Animation
-        if (msg.fading) {
-            msg.rect.alpha = Math.max(0, msg.rect.alpha - (dt * 2));
-        }
-
-        // Cleanup when time expires
+        if (msg.timer <= 0.5 && !msg.fading) msg.fading = true;
+        if (msg.fading) msg.rect.alpha = Math.max(0, msg.rect.alpha - (dt * 2));
         if (msg.timer <= 0) {
-            msg.guiTexture.dispose();
+            try { msg.guiTexture.dispose(); } catch (e) {}
             activeMessages[pos] = null;
         }
     });
 }
 
-/**
- * Immediately clears side notifications (used when Hell Mode starts).
- */
-export function clearMagicNotifications() {
-    ["left", "right"].forEach(side => {
-        const msg = activeMessages[side];
-        if (msg) {
-            msg.guiTexture.dispose();
-            activeMessages[side] = null;
-        }
-    });
-}
-
 export function clearAllNotifications() {
-    ["left", "right", "center", "big"].forEach(side => {
+    ["left", "right", "center"].forEach(side => {
         const msg = activeMessages[side];
         if (msg) {
-            msg.guiTexture.dispose();
+            try { msg.guiTexture.dispose(); } catch (e) {}
             activeMessages[side] = null;
         }
     });
 }
 
-// --- INTERNAL HELPERS ---
-
-function createUIContainer(color: string, isBig: boolean): GUI.Rectangle {
+function createUIContainer(color: string): GUI.Rectangle {
     const rect = new GUI.Rectangle();
-    rect.width = isBig ? MSG_CONFIG.BIG_WIDTH : MSG_CONFIG.DEFAULT_WIDTH;
-    rect.height = isBig ? MSG_CONFIG.BIG_HEIGHT : MSG_CONFIG.DEFAULT_HEIGHT;
+    rect.width = MSG_CONFIG.DEFAULT_WIDTH;
+    rect.height = MSG_CONFIG.DEFAULT_HEIGHT;
     rect.cornerRadius = MSG_CONFIG.CORNER_RADIUS;
     rect.color = MSG_CONFIG.COLORS.BORDER;
     rect.thickness = MSG_CONFIG.THICKNESS;
@@ -164,7 +104,6 @@ function createUIContainer(color: string, isBig: boolean): GUI.Rectangle {
         case "blue": rect.background = MSG_CONFIG.COLORS.BG_BLUE; break;
         default: rect.background = MSG_CONFIG.COLORS.BG_RED; break;
     }
-
     return rect;
 }
 
@@ -184,13 +123,6 @@ function positionContainer(rect: GUI.Rectangle, pos: string) {
         case "center":
             rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
             rect.left = "0px";
-            // Center messages are slightly higher than bottom ones
-            rect.top = MSG_CONFIG.OFFSET_BOTTOM;
-            break;
-        case "big":
-            rect.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-            rect.left = "0px";
-            rect.top = "-40%"; // Center of screen
             break;
     }
 }

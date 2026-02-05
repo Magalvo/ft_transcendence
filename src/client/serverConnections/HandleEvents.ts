@@ -6,24 +6,27 @@ import {
     pauseScreen,
     resumeGame,
     showWarningMessage,
+    clearAllNotifications,
     syncGameStats,
     syncMagicBalls,
     syncPaddles,
     syncPlayingBalls,
     syncTable,
+    disposeCountdown,
+    showCountdownDisplay,
     type GameData,
 } from "../index.js";
 
 export class HandleEvents {
     private data: GameData;
     private gameScene: GameScene;
-    
+
     // --- CONTROLO DE FILA ---
     private isReady: boolean = false;
     private eventQueue: Array<() => void> = [];
 
     constructor(gameScene: GameScene) {
-        this.data = {} as GameData; 
+        this.data = {} as GameData;
         this.gameScene = gameScene;
     }
 
@@ -31,29 +34,26 @@ export class HandleEvents {
         this.data = data;
     }
 
-    /**
-     * Recebe o evento 'init' do servidor.
-     * Este é o momento em que preparamos tudo.
-     */
     public initializeGame(serverData: any) {
         console.log("🔥 SERVER INIT RECEIVED. Building Scene...");
-        
-        // 1. Reset da flag para impedir processamento imediato
+        clearAllNotifications();
+        disposeCountdown();
         this.isReady = false;
-
-        // 2. Criar a cena (Síncrono, mas pesado)
         this.gameScene.resetScene(serverData.configs);
-
-        // 3. Atualizar referências
         this.data = (this.gameScene as any).data;
         this.data.mySide = serverData.side;
         this.data.myIndex = serverData.index;
+        if (this.data.scene) {
+            this.data.scene.executeWhenReady(() => {
+                console.log("✅ GPU Ready. Sending Signal to Server.");
+                this.isReady = true;
+                this.processQueue();
 
-        console.log(`✅ Scene Ready. I am: ${serverData.side} [${serverData.index}]`);
-
-        // 4. MARCAR COMO PRONTO E PROCESSAR FILA
-        this.isReady = true;
-        this.processQueue();
+                if (this.data.socket) {
+                    this.data.socket.emit('renderReady');
+                }
+            });
+        }
     }
 
     /**
@@ -87,21 +87,20 @@ export class HandleEvents {
     // --- EVENTS QUE PRECISAM DE ESPERAR ---
 
     public onCountdown(count: number) {
-        // Se não estiver pronto, guarda na fila
         if (!this.isReady) {
             this.eventQueue.push(() => this.onCountdown(count));
             return;
         }
 
         const msgData = (COUNTDOWN_MESSAGES as any)[count];
-        if (count > 0) {
-            const fallback = { text: String(count), color: "white" };
-            this.showCountdownMessage(msgData || fallback, 1);
+        // Se houver mensagem para este número (3, 2, 1, GO)
+        if (msgData && this.data.scene) {
+            // USA O NOVO SISTEMA
+            showCountdownDisplay(this.data.scene, msgData.text, msgData.color, 1.0);
         }
     }
 
     public onEndGame(count: number) {
-        // Se não estiver pronto, guarda na fila (Evita o erro 'reading score of undefined')
         if (!this.isReady) {
             this.eventQueue.push(() => this.onEndGame(count));
             return;
@@ -112,9 +111,8 @@ export class HandleEvents {
         if (count == 3 || count == 2) {
             msgData = (ENDGAME_MESSAGES as any)[count];
         }
-        
+
         if (count == 1) {
-            // Acesso seguro aos mods
             if (this.data.mods && this.data.mods.score) {
                 if (this.data.mods.score.me > this.data.mods.score.rival)
                     msgData = (ENDGAME_MESSAGES as any)['WON'];
@@ -125,15 +123,9 @@ export class HandleEvents {
             }
         }
 
-        if (count == 0) {
-            if (this.data.flags) {
-                this.data.flags.return_main_menu = true;
-            }
-            // window.dispatchEvent(new Event('game-end')); 
-        }
-
-        if (!msgData) return;
-        this.showCountdownMessage(msgData, 2);
+        if (count == 0 && this.data.flags) this.data.flags.return_main_menu = true;
+        if (msgData && this.data.scene)
+            showCountdownDisplay(this.data.scene, msgData.text, msgData.color, 2.0);
     }
 
     public socketMessage(server_data: any) {
@@ -164,9 +156,9 @@ export class HandleEvents {
 
         console.log("Game Paused by Server");
         if (this.data.flags) {
-            this.data.flags.game_running = true; 
+            this.data.flags.game_running = true;
             pauseScreen(this.data);
-            this.data.flags.game_running = false; 
+            this.data.flags.game_running = false;
         }
     }
 
@@ -192,16 +184,4 @@ export class HandleEvents {
             window.dispatchEvent(new Event('game-start'));
         }
     }
-
-    private showCountdownMessage(msgData: any, duration: number) {
-        if (!this.data.scene) return;
-        showWarningMessage({
-            scene: this.data.scene,
-            message: msgData.text,
-            pos: "big",
-            color: msgData.color,
-            duration: duration
-        });
-    }
-
 }
