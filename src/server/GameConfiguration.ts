@@ -10,8 +10,6 @@ export class GameConfiguration {
     private _game_duration!: number;
     private _hell_rounds_amount!: number;
     private _power_ups = true;
-    
-    // Configurações base (para poder fazer reset)
     private _base_paddle = {
         width: 0.5,
         depth: 30,
@@ -79,32 +77,28 @@ export class GameConfiguration {
     }
 
     public setGameType(type: "one_for_one" | "two_for_two" | "three_for_three") {
-        // 1. Primeiro fazemos reset aos valores base para evitar acumulação de multiplicadores
         this._paddle = { ...this._base_paddle };
         this._ball = { ...this._base_ball };
         this._table = { ...this._base_table };
 
-        // 2. Aplica as alterações conforme o modo
         if (type == "one_for_one") {
-            this._players_per_side = 1; // A CORREÇÃO CRUCIAL
+            this._players_per_side = 1;
         }
         else if (type == "two_for_two") {
-            this._players_per_side = 2; // A CORREÇÃO CRUCIAL
-            
-            // Ajustes de gameplay para 2v2
-            this._ball.min_amount = 2;
+            this._players_per_side = 2;
+            this._ball.min_amount = 3;
             this._ball.max_amount = 8;
-            this._ball.speed *= 1.2;
-            this._table.depth *= 1.5; // Mesa mais funda para caberem 2
+            this._ball.speed *= 1.5;
+            this._table.width *= 1.5;
+            this._table.depth *= 1.7;
         }
         else if (type == "three_for_three") {
-            this._players_per_side = 3; // A CORREÇÃO CRUCIAL
-            
-            // Ajustes de gameplay para 3v3
-            this._ball.min_amount = 3;
+            this._players_per_side = 3;
+            this._ball.min_amount = 5;
             this._ball.max_amount = 10;
-            this._ball.speed *= 1.3;
-            this._table.depth *= 2.0; // Mesa muito funda
+            this._ball.speed *= 2;
+            this._table.width *= 2;
+            this._table.depth *= 2.2;
         }
     }
 
