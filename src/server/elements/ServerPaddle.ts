@@ -32,12 +32,14 @@ export class ServerPaddle {
 
     private baseX: number;
     private bot?: SmartBot;
+    public nickname: string;
 
     // --- CONSTRUCTOR ---
-    constructor(nb: number, playerType: 'human', side: 'left' | 'right', data: IGameData)
-    constructor(nb: number, playerType: 'bot', side: 'left' | 'right', data: IGameData, bot_level: number)
-    constructor(nb: number, playerType: 'human' | 'bot', side: 'left' | 'right', data: IGameData, bot_level?: number) {
+    constructor(nb: number, nickname: string, playerType: 'human', side: 'left' | 'right', data: IGameData)
+    constructor(nb: number, nickname: string, playerType: 'bot', side: 'left' | 'right', data: IGameData, bot_level: number)
+    constructor(nb: number, nickname: string, playerType: 'human' | 'bot', side: 'left' | 'right', data: IGameData, bot_level?: number) {
         this.configs = data.configs;
+        this.nickname = nickname;
         this.width = data.configs.paddle.width;
         this.depth = data.configs.paddle.depth;
         this.speed = data.configs.paddle.speed;

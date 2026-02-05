@@ -6,20 +6,20 @@ export interface LobbySlot {
     index: number;
     side: 'left' | 'right';
     content: 'empty' | 'human' | 'bot';
-    socketId?: string; 
-    botLevel?: number; 
+    socketId?: string;
+    botLevel?: number;
     playerName?: string;
 }
 
 export class Lobby {
     private io: Server;
-    private clients: string[] = []; 
-    
+    private clients: string[] = [];
+
     // Estado do Lobby
     public config: GameConfiguration;
     public slots: { left: LobbySlot[], right: LobbySlot[] };
-    public bench: string[] = []; 
-    
+    public bench: string[] = [];
+
     public gameInstance: Game | null = null;
 
     constructor(io: Server) {
@@ -68,13 +68,13 @@ export class Lobby {
 
     public setGameMode(socketId: string, type: "one_for_one" | "two_for_two" | "three_for_three") {
         if (!this.isLeader(socketId)) return;
-        
+
         // 1. Atualiza a Configuração
         this.config.setGameType(type);
-        
+
         // 2. Reconstrói os Slots visuais (Adiciona/Remove conforme necessário)
-        this.updateSlotsStructure(); 
-        
+        this.updateSlotsStructure();
+
         this.broadcastState();
     }
 
@@ -94,8 +94,8 @@ export class Lobby {
 
         targetSlot.content = 'human';
         targetSlot.socketId = targetSocketId;
-        targetSlot.playerName = `Player ${targetSocketId.substr(0,4)}`;
-        
+        targetSlot.playerName = `Player ${targetSocketId.substr(0, 4)}`;
+
         this.broadcastState();
     }
 
@@ -155,9 +155,9 @@ export class Lobby {
         // Helper para converter slot em GamePlayer
         const processSlot = (slot: LobbySlot, side: 'left' | 'right') => {
             if (slot.content === 'human' && slot.socketId) {
-                finalPlayers.push(new GamePlayer('human', slot.socketId, side));
+                finalPlayers.push(new GamePlayer('human', slot.socketId, side, slot.playerName || "Player"));
             } else if (slot.content === 'bot' && slot.botLevel) {
-                finalPlayers.push(new GamePlayer('bot', slot.botLevel, side));
+                finalPlayers.push(new GamePlayer('bot', slot.botLevel, side, "Bot Lvl "+ slot.botLevel));
             }
         };
 
@@ -186,8 +186,8 @@ export class Lobby {
 
     private updateSlotsStructure() {
         // Pega o número de slots atual da configuração (1, 2 ou 3)
-        const size = this.config.players_per_side; 
-        
+        const size = this.config.players_per_side;
+
         // Cópia temporária para tentar preservar quem já lá está
         const oldLeft = [...this.slots.left];
         const oldRight = [...this.slots.right];
@@ -243,7 +243,7 @@ export class Lobby {
         const isReady = this.checkGameRequirements();
 
         this.io.emit('lobbyState', {
-            config: this.config, 
+            config: this.config,
             slots: this.slots,
             bench: this.bench,
             leader: this.clients[0],

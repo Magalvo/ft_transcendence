@@ -10,18 +10,21 @@ export class GamePlayer {
     private _state: "waiting" | "ready" = "waiting";
     public id: number = -1;
     public input: Mov = mov.null;
+    public nick: string;
 
     /* --- CONSTRUCTORS --- */
-    constructor(type: "human", socket_id: string, side: "left" | "right");
-    constructor(type: "bot", level: number, side: "left" | "right");
-    constructor(type: "human" | "bot", idOrLevel: string | number, side: "left" | "right") {
+    constructor(type: "human", socket_id: string, side: "left" | "right", name: string);
+    constructor(type: "bot", level: number, side: "left" | "right", name: string);
+    constructor(type: "human" | "bot", idOrLevel: string | number, side: "left" | "right", nick: string) {
         this._type = type;
-        if (type == "human")
+        if (type == "human") {
             this._socket_id = idOrLevel as string;
-        else{
+        }
+        else {
             this._level = idOrLevel as number;
             this.setReady();
         }
+        this.nick = nick;
         this._side = side;
     };
 

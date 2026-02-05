@@ -42,7 +42,7 @@ export function syncPaddles(data: GameData, serverPaddles: any[]) {
             paddle.mesh.scaling.x = serverX / data.gameConfigs.paddle.width;
         }
 
-        if (paddle.update) paddle.update(data);
+        if (paddle.update) paddle.update(data, pData.nickname);
     });
 }
 export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boolean) {

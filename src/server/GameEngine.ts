@@ -116,39 +116,27 @@ export class GameEngine {
     private createSidePaddles(side: 'left' | 'right'): ServerPaddle[] {
         const paddles: ServerPaddle[] = [];
         const players_amount = this.config.players_per_side;
-        // const table_d = this.data.table.depth;
 
-        // 1. Filtrar os jogadores deste lado específico
         const teamPlayers = this.data.players.filter(p => p.side === side);
 
         for (let i = 0; i < players_amount; i++) {
-            // Calcular posição Z
-            // Fórmula para centralizar:
-            // Se amount=1 -> z=0
-            // Se amount=2 -> z=-spacing/2 e +spacing/2
             const spacing = 20;
             const startZ = players_amount === 1 ? 0 : -((players_amount - 1) * spacing) / 2;
             const z = startZ + (i * spacing);
 
-            // 2. Verificar se existe jogador para este slot [i]
-            const player = teamPlayers[i]; // Pode ser undefined se não houver jogador suficiente
-            const type = player ? player.type : 'bot'; // Default para bot se slot vazio
+            const player = teamPlayers[i];
+            const type = player ? player.type : 'bot';
 
-            // Criamos o paddle
             let team_paddles = 1;
             paddles.forEach(p => { if (p.side == side) team_paddles++; });
             let paddle: ServerPaddle;
             if (type == 'human')
-                paddle = new ServerPaddle(team_paddles, type, side, this.data);
+                paddle = new ServerPaddle(team_paddles, player.nick, type, side, this.data);
             else
-                paddle = new ServerPaddle(team_paddles, type, side, this.data, player.level!);
+                paddle = new ServerPaddle(team_paddles, player.nick, type, side, this.data, player.level!);
 
-            // Força a posição Z inicial
             paddle.pos.z = z;
-
-            // Guarda o índice para sabermos qual input usar
             paddle.playerIndex = i;
-
             paddles.push(paddle);
         }
         return paddles;
@@ -333,7 +321,8 @@ export class GameEngine {
             index: p.playerIndex,
             pos: p.pos.asArray(),
             size: p.depth,
-            sizeX: p.width
+            sizeX: p.width,
+            nickname: p.nickname,
         }));
         return {
             status: this.data.status,
