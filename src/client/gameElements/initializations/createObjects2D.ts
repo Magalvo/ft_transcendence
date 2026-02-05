@@ -68,10 +68,10 @@ function createScoreLabel(
  */
 function createTimer(advancedTexture: GUI.AdvancedDynamicTexture): GUI.TextBlock {
   const timerText = new GUI.TextBlock();
-  timerText.text = "0";
+  timerText.text = "";
   timerText.color = "white";
   timerText.fontSize = "100px";
-  timerText.top = "-40%";
+  timerText.top = "-31%";
   advancedTexture.addControl(timerText);
   return timerText;
 }
@@ -83,9 +83,9 @@ function createTimer(advancedTexture: GUI.AdvancedDynamicTexture): GUI.TextBlock
  */
 function createDevilTimer(advancedTexture: GUI.AdvancedDynamicTexture): GUI.TextBlock {
   const timerText = new GUI.TextBlock();
-  timerText.text = "0";
+  timerText.text = "";
   timerText.color = "white";
-  timerText.fontSize = "60px";
+  timerText.fontSize = "40px";
   timerText.top = "-30%";
   advancedTexture.addControl(timerText);
   return timerText;
