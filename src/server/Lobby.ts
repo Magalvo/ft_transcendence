@@ -137,7 +137,9 @@ export class Lobby {
 
     private canStart(): boolean {
         const sides = [this.slots.left, this.slots.right];
-        return sides.every(side => side.every(s => s.content !== 'empty'));
+        const allSlotsFilled = sides.every(side => side.every(s => s.content !== 'empty'));
+        const benchEmpty = this.bench.length === 0;
+        return allSlotsFilled && benchEmpty;
     }
 
     private resizeSlots() {
