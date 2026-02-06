@@ -1,7 +1,11 @@
 import { type GameData } from "../../index.js";
 
 export function updateMusic(data: GameData) {
-    if (!data.mods.is_hell) {
+    if (!data.flags.game_running) {
+        data.env3D.hellMusic.pause();
+        data.env3D.heavenMusic.pause();
+    }
+    else if (!data.mods.is_hell) {
         data.env3D.hellMusic.pause();
         data.env3D.heavenMusic.play();
     }

@@ -24,7 +24,6 @@ export * from "./gameElements/initializations/environment3D.js";
 export * from "./gameElements/initializations/createObjects2D.js";
 export * from "./gameElements/initializations/defineEvents.js";
 //
-export * from "./gameElements/user_interface/mainMenu.js";
 export * from "./gameElements/user_interface/pauseScreen.js";
 export * from "./gameElements/user_interface/showWarningMessage.js";
 export * from "./gameElements/user_interface/Countdown.js";

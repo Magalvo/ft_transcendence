@@ -36,7 +36,7 @@ export class ServerBall {
         // 1. Calculate Movement
         const rad = this.angle * Math.PI / 180;
         const speed = this.velocity * dt * (this.thickPaddleMod ? 2.5 : this.speedModifier);
-        
+
         this.pos.x += speed * Math.cos(rad);
         this.pos.z += speed * Math.sin(rad);
 
@@ -55,7 +55,7 @@ export class ServerBall {
                 this.pos.x - this.radius <= box.right &&
                 this.pos.z + this.radius >= box.near &&
                 this.pos.z - this.radius <= box.far) {
-                
+
                 this.resolvePaddleHit(paddle, box);
             }
         }
@@ -63,7 +63,7 @@ export class ServerBall {
 
     private resolvePaddleHit(paddle: ServerPaddle, box: any) {
         this.isColliding = true;
-        
+
         // Push ball out of paddle to prevent sticking
         if (paddle.side === 'left') {
             this.pos.x = box.right + this.radius + 0.1;
@@ -80,7 +80,7 @@ export class ServerBall {
         // Ricochet Angle based on impact point
         const hitOffset = this.pos.z - paddle.pos.z;
         this.angle = normalizeAngle180(this.angle + (hitOffset * 0.5));
-        
+
         // Increase speed slightly
         this.velocity = Math.min(this.velocity * 1.05, this.original_speed * 2);
     }
@@ -113,7 +113,6 @@ export class ServerBall {
     public resetSize() {
         this.radius = this.original_radius;
     }
-
     public setSpeedModifier(mod: number) {
         this.speedModifier = mod;
     }
@@ -122,7 +121,7 @@ export class ServerBall {
     }
 
     public throwBall(table: ServerTable) {
-        this.pos.x = randomFloat2(table.width * -0.1, table.width * 0.1); 
+        this.pos.x = randomFloat2(table.width * -0.1, table.width * 0.1);
         this.pos.z = randomFloat2(table.depth * -0.1, table.depth * 0.1);
         this.resetSpeedModifier();
         this.velocity = this.original_speed;

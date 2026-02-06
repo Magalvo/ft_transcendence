@@ -21,6 +21,8 @@ import {
 export function renderGame(dt: number, data: GameData) {
   const visualDt = Math.min(dt, 0.1);
   updateCountdownUI(visualDt);
+  updateMusic(data);
+  
   // 1. Handle Pause Requests
   if (data.flags.pause_screen) {
     data.socket?.emit('pauseGame');
@@ -65,9 +67,6 @@ function updateActiveGameElements(data: GameData) {
   updateTimerLabel(data);
   updateHellTimerLabel(data);
   updateWarningMessages(data.mods.step);
-
-  // --- Audio ---
-  updateMusic(data);
 
   // --- Input Handling ---
   handleKeyboardEvents(data);

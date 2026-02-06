@@ -55,7 +55,7 @@ function init() {
     w.startGame = () => socket.emit('lobby_start');
     w.setDuration = (d: string) => socket.emit('lobby_setDuration', d);
     w.togglePowerUps = () => socket.emit('lobby_setPowerUps', !currentPowerUpsState);
-    
+
     w.selectBenchPlayer = (id: string) => {
         if (!isLeader) return;
         selectedBenchPlayer = id;
@@ -87,7 +87,7 @@ function renderLobby(state: any) {
     // Leader Visibility
     leaderControls.style.display = isLeader ? 'flex' : 'none';
     leaderMsg.style.display = isLeader ? 'block' : 'none';
-    
+
     updateButtonStates(state);
 
     // Start Button State
@@ -95,8 +95,8 @@ function renderLobby(state: any) {
     btnStart.disabled = !ready;
     btnStart.style.opacity = ready ? "1" : "0.5";
     btnStart.style.cursor = ready ? "pointer" : "not-allowed";
-    btnStart.innerText = isLeader 
-        ? (ready ? "START GAME" : "Fill all slots to start") 
+    btnStart.innerText = isLeader
+        ? (ready ? "START GAME" : "Fill all slots to start")
         : "Waiting for Leader...";
 
     // Render Lists
@@ -162,13 +162,13 @@ function renderTeamSlots(container: HTMLElement, slots: any[], side: string) {
         if (slot.content === 'empty') {
             div.innerHTML = `<span>[ Empty Slot ]</span>`;
             if (isLeader) div.onclick = () => (window as any).clickSlot(side, slot.index, 'empty');
-        } 
+        }
         else if (slot.content === 'human') {
             div.innerHTML = `
                 <span>👤 ${slot.playerName}</span>
                 ${isLeader ? `<button class="mini" onclick="selectBenchPlayer('${slot.socketId}')">To Bench</button>` : ''} 
             `;
-        } 
+        }
         else if (slot.content === 'bot') {
             div.innerHTML = `
                 <span>🤖 Bot Lvl ${slot.botLevel}</span>

@@ -11,9 +11,6 @@ import type { GameData } from "../../index.js";
 export function handleKeyboardEvents(data: GameData) {
     cameraMov(data);
     gamePause(data);
-    // if (data.mods.hell_mode == hellMode.inverted_keys)
-    //     invertedPlayersMove(data);
-    // else
     normalPlayersMove(data);
 }
 
@@ -41,13 +38,13 @@ function normalPlayersMove(data: GameData) {
 }
 
 function cameraMov(data: GameData) {
-    // Switch camera presets with 'Z', 'X', 'C'
+    // Switch camera presets with 'Z', 'X'
     if (data.input.keysPressed[keyCode.Z]) data.flags.camera_pos = 2;
     if (data.input.keysPressed[keyCode.X]) data.flags.camera_pos = 1;
 }
 
 function gamePause(data: GameData) {
-    // Put game on pause with 'P'
+    // Put game on pause with 'ESC', 'P'
     if (data.input.keysPressed[keyCode.P]) data.flags.pause_screen = true;
     if (data.input.keysPressed[keyCode.ESC]) data.flags.pause_screen = true;
 }

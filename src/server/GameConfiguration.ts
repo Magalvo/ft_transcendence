@@ -25,7 +25,7 @@ export class GameConfiguration {
     private _paddle = { ...this._base_paddle };
     private _ball = { ...this._base_ball };
     private _table = { ...this._base_table };
-    
+
     private _magic_ball = {
         effect_duration: 10,
         min_interval: 3, max_interval: 7, max_balls: 5
@@ -62,7 +62,7 @@ export class GameConfiguration {
      */
     public setGameDuration(duration: "fast" | "normal" | "long") {
         this._duration_label = duration;
-        
+
         switch (duration) {
             case "fast": this._hell_rounds_amount = 2; break;
             case "normal": this._hell_rounds_amount = 4; break;
@@ -85,23 +85,24 @@ export class GameConfiguration {
 
         if (type === "one_for_one") {
             this._players_per_side = 1;
-        } 
+        }
         else if (type === "two_for_two") {
             this._players_per_side = 2;
-            this.applyMultipliers(1.5, 1.5, 1.7, 3, 8);
-        } 
+            this.applyMultipliers(1.5, 1.5, 1.7, 3, 8, 1.5);
+        }
         else if (type === "three_for_three") {
             this._players_per_side = 3;
-            this.applyMultipliers(2.0, 2.0, 2.2, 5, 10);
+            this.applyMultipliers(2.0, 2.0, 2.2, 5, 10, 2);
         }
     }
 
-    private applyMultipliers(speed: number, width: number, depth: number, minBalls: number, maxBalls: number) {
+    private applyMultipliers(speed: number, width: number, depth: number, minBalls: number, maxBalls: number, knockback_recover: number) {
         this._ball.speed *= speed;
         this._table.width *= width;
         this._table.depth *= depth;
         this._ball.min_amount = minBalls;
         this._ball.max_amount = maxBalls;
+        this.paddle.knockback_recover *= knockback_recover;
     }
 
     public toJSON() {

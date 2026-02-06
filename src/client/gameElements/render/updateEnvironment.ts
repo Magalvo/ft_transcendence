@@ -14,7 +14,6 @@ export function updateEnvironment(data: GameData) {
     env.sky_box.rotation.y += rotationSpeed;
 
     // 2. Environmental Flames (Torches)
-    // Only start/stop if the state actually changed to prevent resetting particles every frame
     if (isHell) {
         if (!env.flame_L1.isStarted()) env.flame_L1.start();
         if (!env.flame_L2.isStarted()) env.flame_L2.start();

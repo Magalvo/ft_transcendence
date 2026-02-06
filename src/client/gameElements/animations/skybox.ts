@@ -15,7 +15,7 @@ export function createSkybox(scene: BABYLON.Scene): BABYLON.Mesh {
     skyMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
     skyMaterial.diffuseColor = new Color3(0, 0, 0);
     skyMaterial.specularColor = new Color3(0, 0, 0);
-    let skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 500.0 }, scene);
+    let skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 700.0 }, scene);
     skybox.material = skyMaterial;
     return skybox;
 }

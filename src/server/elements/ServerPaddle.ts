@@ -45,7 +45,6 @@ export class ServerPaddle {
         this.speed = data.configs.paddle.speed;
         this.side = side;
         this.baseX = data.table.width / 2 * (0.9 - nb * 0.2) * (side == 'left' ? -1 : 1);
-        // this.baseX = data.table.width / 0.4 * nb * (side == 'left' ? -1 : 1);
         this.pos = new Vector3(this.baseX, 3, 0);
         this.playerType = playerType;
         if (playerType == 'bot')
@@ -54,17 +53,12 @@ export class ServerPaddle {
 
     // --- MAIN UPDATE ---
     public update(dt: number, data: IGameData) {
-        // 1. Effects
         if (this.effectTimer > 0) {
             this.effectTimer -= dt;
             if (this.effectTimer <= 0) this.resetEffects();
         }
-
-        // 2. Movement
         const command = this.getCommand(data);
         this.applyMovement(dt, command);
-
-        // 3. Constraints
         this.clampPosition(data.table);
     }
 

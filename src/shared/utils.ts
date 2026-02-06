@@ -42,9 +42,6 @@ export function normalizeAngle180(angle: number): number {
  * @returns The rounded number.
  */
 export function roundTo(num: number, decimalPlaces: number): number {
-  // Create the power factor (e.g., 10^2 = 100 for 2 decimal places)
   const factor = 10 ** decimalPlaces;
-
-  // Multiply, round, and divide to achieve the desired precision
   return Math.round(num * factor) / factor;
 }

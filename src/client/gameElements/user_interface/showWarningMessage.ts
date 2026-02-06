@@ -24,26 +24,24 @@ interface ActiveMessage {
     fading: boolean;
 }
 
-// Removemos 'big' daqui
 const activeMessages: { [key: string]: ActiveMessage | null } = {
     left: null,
     right: null,
     center: null
 };
 
-// Removemos a opção "big" do tipo pos
 export function showWarningMessage(
-    { scene, message, pos, duration = 3, color = "red" }: 
-    { scene: BABYLON.Scene, message: string, pos: "left" | "right" | "center", duration?: number, color?: "red" | "green" | "blue" }
+    { scene, message, pos, duration = 3, color = "red" }:
+        { scene: BABYLON.Scene, message: string, pos: "left" | "right" | "center", duration?: number, color?: "red" | "green" | "blue" }
 ) {
     if (activeMessages[pos]) {
-        try { activeMessages[pos]!.guiTexture.dispose(); } catch (e) {}
+        try { activeMessages[pos]!.guiTexture.dispose(); } catch (e) { }
         activeMessages[pos] = null;
     }
 
     try {
         const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Message", true, scene);
-        const rect = createUIContainer(color); // Função simplificada abaixo
+        const rect = createUIContainer(color);
         positionContainer(rect, pos);
 
         const textBlock = new GUI.TextBlock();
@@ -74,7 +72,7 @@ export function updateWarningMessages(dt: number) {
         if (msg.timer <= 0.5 && !msg.fading) msg.fading = true;
         if (msg.fading) msg.rect.alpha = Math.max(0, msg.rect.alpha - (dt * 2));
         if (msg.timer <= 0) {
-            try { msg.guiTexture.dispose(); } catch (e) {}
+            try { msg.guiTexture.dispose(); } catch (e) { }
             activeMessages[pos] = null;
         }
     });
@@ -84,7 +82,7 @@ export function clearAllNotifications() {
     ["left", "right", "center"].forEach(side => {
         const msg = activeMessages[side];
         if (msg) {
-            try { msg.guiTexture.dispose(); } catch (e) {}
+            try { msg.guiTexture.dispose(); } catch (e) { }
             activeMessages[side] = null;
         }
     });

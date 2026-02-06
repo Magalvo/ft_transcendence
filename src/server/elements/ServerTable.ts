@@ -13,7 +13,6 @@ export class ServerTable {
         this.depth = config.table.depth;
     }
 
-    // --- MAIN UPDATE ---
     public update() {
     }
 }

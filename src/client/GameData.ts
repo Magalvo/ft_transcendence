@@ -64,11 +64,9 @@ export interface MagicBallControl {
 export interface GameData {
     // Core
     scene: BABYLON.Scene;
-    socket: Socket; // <--- ADICIONADO: Essencial para enviar input no render loop
+    socket: Socket;
     mySide: Side;
     myIndex: number;
-
-    // Configurações vindas do Servidor
     gameConfigs: GameConfiguration;
 
     // Game Elements

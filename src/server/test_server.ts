@@ -17,8 +17,6 @@ console.log("--- LOBBY SERVER STARTED ---");
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
-    
-    // Adiciona ao Lobby assim que conecta
     lobby.addClient(socket.id);
 
     // --- LOBBY EVENTS ---
@@ -35,19 +33,19 @@ io.on('connection', (socket) => {
         lobby.setPowerUps(socket.id, enabled);
     });
 
-    socket.on('lobby_movePlayer', (data: { targetId: string, side: 'left'|'right', slotIndex: number }) => {
+    socket.on('lobby_movePlayer', (data: { targetId: string, side: 'left' | 'right', slotIndex: number }) => {
         lobby.movePlayerToSlot(socket.id, data.targetId, data.side, data.slotIndex);
     });
 
-    socket.on('lobby_addBot', (data: { side: 'left'|'right', slotIndex: number }) => {
+    socket.on('lobby_addBot', (data: { side: 'left' | 'right', slotIndex: number }) => {
         lobby.addBot(socket.id, data.side, data.slotIndex);
     });
 
-    socket.on('lobby_removeBot', (data: { side: 'left'|'right', slotIndex: number }) => {
+    socket.on('lobby_removeBot', (data: { side: 'left' | 'right', slotIndex: number }) => {
         lobby.removeBot(socket.id, data.side, data.slotIndex);
     });
 
-    socket.on('lobby_botLevel', (data: { side: 'left'|'right', slotIndex: number, delta: number }) => {
+    socket.on('lobby_botLevel', (data: { side: 'left' | 'right', slotIndex: number, delta: number }) => {
         lobby.changeBotLevel(socket.id, data.side, data.slotIndex, data.delta);
     });
 

@@ -86,7 +86,6 @@ export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boo
 export function syncMagicBalls(data: GameData, serverBalls: any[]) {
     const localBalls = data.magicBalls.magic_balls_ref as any[];
 
-    // 1. Remove stale
     for (let i = localBalls.length - 1; i >= 0; i--) {
         const ball = localBalls[i];
         if (!ball?.metadata) { ball?.dispose(); localBalls.splice(i, 1); continue; }
@@ -98,7 +97,6 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
         }
     }
 
-    // 2. Update/Create
     serverBalls.forEach((sb: any) => {
         const local = localBalls.find((lb: any) => lb.metadata && lb.metadata.id === sb.id);
         const visualX = getVisualX(data, sb.x);
@@ -123,13 +121,6 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
 
 export function syncTable(data: GameData) {
     const table = data.obj3D.table;
-
-    // Sync Dimensions
-    // const serverZ = serverTable.sizeZ;
-    // const serverX = serverTable.sizeX;
-
-    // table.mesh.scaling.z = serverZ / SCENE_CONFIG.TABLE_BASE_DEPTH;
-    // table.mesh.scaling.x = serverX / SCENE_CONFIG.TABLE_BASE_WIDTH;
     table.update(data);
 }
 

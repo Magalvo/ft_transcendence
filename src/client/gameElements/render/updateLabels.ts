@@ -1,28 +1,25 @@
 import { type GameData } from "../../index.js";
 
 export function updateTimerLabel(data: GameData) {
-    // get total time rounded to to seconds
-    const total_seconds = Math.max(0, Math.floor(data.gameConfigs.game_duration - data.mods.time));
-    // separate minutes and seconds
-    const min = Math.floor(total_seconds / 60);
-    const seconds = total_seconds % 60;
-    // put a '0' if needed
-    const formatted_min = String(min).padStart(2, '0');
-    const formatted_seconds = String(seconds).padStart(2, '0');
-    // update label
-    data.obj2D.timer_label.text = formatted_min + ":" + formatted_seconds;
+    const totalSeconds = Math.max(0, Math.floor(data.gameConfigs.game_duration - data.mods.time));
+
+    const min = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const sec = String(totalSeconds % 60).padStart(2, '0');
+
+    data.obj2D.timer_label.text = `${min}:${sec}`;
 }
 
 export function updateScoreLabels(data: GameData) {
-    data.obj2D.left_score_label.text = String(data.mods.score.me);
-    data.obj2D.right_score_label.text = String(data.mods.score.rival);
+    data.obj2D.left_score_label.text = data.mods.score.me.toString();
+    data.obj2D.right_score_label.text = data.mods.score.rival.toString();
 }
 
 export function updateHellTimerLabel(data: GameData) {
-    if (!data.mods.phaseTimer) return;
-    let string = "";
-    for (let i = 1; i < data.mods.phaseTimer; i++) string += "_";
-    data.obj2D.devil_timer_label.text = string;
-    // Color label based on active side
-    data.obj2D.devil_timer_label.color = data.mods.is_hell ? "red" : "blue";
+    const label = data.obj2D.devil_timer_label;
+    if (!label) return;
+
+    const ticks = Math.max(0, Math.floor(data.mods.phaseTimer));
+    label.text = "_".repeat(ticks);
+
+    label.color = data.mods.is_hell ? "red" : "blue";
 }

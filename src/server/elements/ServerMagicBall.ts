@@ -12,8 +12,6 @@ export class ServerMagicBall {
     public radius: number = 1.5;
     public active: boolean = true;
     public effectType: MagicEffect;
-
-    // Movimento
     private velocity: Vector3;
 
     constructor(id: number, effectType: MagicEffect) {
@@ -32,11 +30,8 @@ export class ServerMagicBall {
     }
 
     public update(dt: number, data: IGameData) {
-        // Movimento simples
         this.pos.x += this.velocity.x * dt;
         this.pos.z += this.velocity.z * dt;
-
-        // Ressalto nas paredes (Manter dentro da mesa)
         const halfWidth = data.table.width / 2;
         const halfDepth = data.table.depth / 2;
 
@@ -47,8 +42,6 @@ export class ServerMagicBall {
             this.velocity.z *= -1;
         }
     }
-
-    // Para enviar ao cliente
     public getData() {
         return {
             id: this.id,

@@ -161,7 +161,7 @@ export class Lobby {
 
     private clearPlayerFromSlots(socketId: string) {
         this.bench = this.bench.filter(id => id !== socketId);
-        
+
         (['left', 'right'] as const).forEach(side => {
             this.slots[side].forEach(slot => {
                 if (slot.socketId === socketId) this.resetSlot(slot);

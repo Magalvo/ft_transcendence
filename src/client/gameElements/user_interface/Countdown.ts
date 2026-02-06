@@ -1,83 +1,60 @@
 import { GUI, BABYLON } from "../../index.js";
 
-// Estado interno do Countdown
-let countdownTexture: GUI.AdvancedDynamicTexture | null = null;
-let countdownTextControl: GUI.TextBlock | null = null;
-let lifeTime = 0;
-let maxLifeTime = 1.0; // Cada número dura 1 segundo (exceto o GO/EndGame que pode durar mais)
+/* --- STATE --- */
+const state = {
+    texture: null as GUI.AdvancedDynamicTexture | null,
+    text: null as GUI.TextBlock | null,
+    life: 0,
+    maxLife: 1
+};
 
-/**
- * Mostra um texto gigante no centro do ecrã.
- * Reinicia automaticamente se já houver um lá.
- */
+/* --- PUBLIC API --- */
+
 export function showCountdownDisplay(scene: BABYLON.Scene, text: string, color: string, duration: number = 1.0) {
-    // 1. Limpar anterior se existir
     disposeCountdown();
 
-    // 2. Criar Nova UI
     try {
-        countdownTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Countdown", true, scene);
-        
-        const textBlock = new GUI.TextBlock();
-        textBlock.text = text;
-        textBlock.color = color;
-        textBlock.fontSize = 150; // Tamanho base gigante
-        textBlock.fontWeight = "bold";
-        textBlock.fontFamily = "monospace";
-        
-        // Sombra para melhor leitura
-        textBlock.shadowColor = "black";
-        textBlock.shadowOffsetX = 5;
-        textBlock.shadowOffsetY = 5;
+        state.texture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI_Countdown", true, scene);
 
-        countdownTexture.addControl(textBlock);
-        countdownTextControl = textBlock;
+        const t = new GUI.TextBlock();
+        Object.assign(t, {
+            text: text,
+            color: color,
+            fontSize: 150,
+            fontWeight: "bold",
+            fontFamily: "monospace",
+            shadowColor: "black",
+            shadowOffsetX: 5,
+            shadowOffsetY: 5
+        });
 
-        // 3. Configurar Timer
-        lifeTime = duration;
-        maxLifeTime = duration;
+        state.texture.addControl(t);
+        state.text = t;
 
+        state.life = duration;
+        state.maxLife = duration;
     } catch (e) {
-        console.error("Failed to create countdown UI", e);
+        console.error("Countdown creation failed", e);
     }
 }
 
-/**
- * Atualiza a animação do countdown.
- * Deve ser chamado no render loop.
- */
 export function updateCountdownUI(dt: number) {
-    if (!countdownTexture || !countdownTextControl) return;
+    if (!state.texture || !state.text) return;
 
-    lifeTime -= dt;
+    state.life -= dt;
+    if (state.life <= 0) return disposeCountdown();
 
-    // --- ANIMAÇÃO ---
-    // Efeito de "Pulse": Começa grande e diminui ligeiramente
-    // Ratio vai de 1.0 (inicio) a 0.0 (fim)
-    const ratio = lifeTime / maxLifeTime;
-    
-    // Scale: Vai de 1.5x até 1.0x
-    const scale = 1.0 + (ratio * 0.5); 
-    countdownTextControl.scaleX = scale;
-    countdownTextControl.scaleY = scale;
+    // Pulse Animation (1.5x -> 1.0x) & Fade Out
+    const ratio = state.life / state.maxLife;
+    const scale = 1.0 + (ratio * 0.5);
 
-    // Alpha: Fade out rápido nos últimos 20% do tempo
-    if (ratio < 0.2) {
-        countdownTextControl.alpha = ratio * 5; // 0.2 * 5 = 1.0
-    } else {
-        countdownTextControl.alpha = 1;
-    }
-
-    // Cleanup
-    if (lifeTime <= 0) {
-        disposeCountdown();
-    }
+    state.text.scaleX = scale;
+    state.text.scaleY = scale;
+    state.text.alpha = ratio < 0.2 ? ratio * 5 : 1;
 }
 
 export function disposeCountdown() {
-    if (countdownTexture) {
-        try { countdownTexture.dispose(); } catch (e) {}
-        countdownTexture = null;
-        countdownTextControl = null;
-    }
+    state.texture?.dispose();
+    state.texture = null;
+    state.text = null;
 }
