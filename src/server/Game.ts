@@ -154,6 +154,8 @@ export class Game {
             if (data.countdownTimer <= 0) {
                 this.io.emit('endGame', { count: 0 });
                 this.engine.resetGame();
+                // SEND RESULTS TO SERVER
+                // RETURN TO THE MAIN PAGE
             }
             this.io.emit('gameState', this.engine.getSnapshot());
             return;

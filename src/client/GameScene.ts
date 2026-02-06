@@ -22,12 +22,12 @@ export class GameScene {
   private data: GameData;
   private handleEvents: HandleEvents;
   private scene!: BABYLON.Scene;
-  public socket!: Socket; 
+  public socket!: Socket;
 
   constructor() {
     this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
     this.engine = new BABYLON.Engine(this.canvas, true);
-    window.addEventListener("resize", () => { this.engine.resize(); });   
+    window.addEventListener("resize", () => { this.engine.resize(); });
     this.data = {} as GameData;
     this.handleEvents = new HandleEvents(this);
   }
@@ -49,15 +49,16 @@ export class GameScene {
     this.scene = new BABYLON.Scene(this.engine);
     this.initializeGameData(serverConfigs);
     this.data.obj3D = createObjects3D(this.scene, serverConfigs);
-    this.data.obj2D = createObjects2D(); 
+    this.data.obj2D = createObjects2D();
     this.data.env3D = createEnvironment3D(this.data.obj3D, this.scene);
     defineKeyEvents(this.data);
-    
+
     this.scene.registerBeforeRender(() => {
       const dt = this.engine.getDeltaTime() / 1000;
       renderGame(dt, this.data);
+      if (this.data.flags.return_main_menu) { /* RETURN MAIN PAGE */ };
     });
-    this.engine.resize(); 
+    this.engine.resize();
   }
 
   private initializeGameData(configs: any): void {
