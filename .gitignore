@@ -6,6 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+# Prerequisites
+*.d
+*.env
 
 node_modules
 dist
@@ -27,3 +30,34 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Linker files
+*.ilk
+
+# Debugger Files
+*.pdb
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# debug information files
+*.dwo
+
+# Node modules
+**/node_modules/

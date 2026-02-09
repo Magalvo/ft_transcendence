@@ -20,7 +20,6 @@ io.on('connection', (socket) => {
     lobby.addClient(socket.id);
 
     // --- LOBBY EVENTS ---
-
     socket.on('lobby_setMode', (mode) => {
         lobby.setGameMode(socket.id, mode);
     });
