@@ -6,7 +6,7 @@ import {
     ServerTable,
     randomFloat2,
     GameConfiguration
-} from "../index.js";
+} from "../game/index.js";
 
 export class ServerBall {
     public pos: Vector3;

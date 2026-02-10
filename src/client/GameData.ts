@@ -1,5 +1,5 @@
 import { Socket } from "socket.io-client"; // Import necessário
-import type { GameConfiguration } from "../server/index.js";
+import type { GameConfiguration } from "./GameConfiguration.js";
 import {
     BABYLON,
     Ball,

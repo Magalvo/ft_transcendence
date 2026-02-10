@@ -1,4 +1,4 @@
-import { mov, type Mov } from "./index";
+import { mov, type Mov } from "./index.js";
 
 export class GamePlayer {
 

@@ -1,4 +1,4 @@
-import type { GameConfiguration, GamePlayer, GameStatus, Mov, ServerBall, ServerMagicBall, ServerPaddle, ServerTable } from "./index";
+import type { GameConfiguration, GamePlayer, GameStatus, Mov, ServerBall, ServerMagicBall, ServerPaddle, ServerTable } from "./index.js";
 
 export interface IGameData {
     // Flow

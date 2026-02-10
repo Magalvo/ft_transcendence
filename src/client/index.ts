@@ -1,6 +1,6 @@
 //
 export * from "../shared/utils.js";
-export * from "../server/GameConfiguration.js";
+export * from "./GameConfiguration.js";
 export * from "../shared/strings.js";
 export * from "../shared/types.js";
 //

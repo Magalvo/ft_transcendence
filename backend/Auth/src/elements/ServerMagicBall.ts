@@ -4,7 +4,7 @@ import {
     randomFloat2,
     type MagicEffect,
     type IGameData,
-} from "../index.js";
+} from "../game/index.js";
 
 export class ServerMagicBall {
     public id: number;

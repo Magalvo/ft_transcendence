@@ -1,4 +1,4 @@
-import { hellMode, magicEffect, mov, type Mov } from './index.js';
+import { hellMode, magicEffect, mov, type Mov } from '../game/index.js';
 
 /**
  * Inverts input command (e.g., Up becomes Down).

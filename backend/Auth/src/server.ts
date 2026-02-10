@@ -9,7 +9,9 @@ import healthRoutes from "./routes/health.js";
 import authRoutes from "./routes/auth.js";
 import { sendSuccess } from "./utils/respond.js";
 import "reflect-metadata";
-
+import { create } from "domain";
+import { setupSocketIO } from "./socket/index.js";
+import { createServer } from "http";
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -52,8 +54,17 @@ app.get("/", async (request, reply) => {
 const start = async () => {
   try {
     const port = Number(process.env.PORT || 3000);
-    await app.listen({ port, host: "0.0.0.0" });
-    console.log(`Server running on port ${port}`);
+
+    await app.ready();
+
+    const httpServer = createServer(app.server);
+
+    setupSocketIO(httpServer);
+
+    httpServer.listen(port, "0.0.0.0", () => {
+      console.log(`Server running on port ${port}`);
+    });
+
   } catch (err) {
     console.error("Server failed to start:", err);
     process.exit(1);

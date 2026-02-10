@@ -1,7 +1,7 @@
 import {
     GameConfiguration,
     Vector3
-} from "../index.js";
+} from "../game/index.js";
 
 export class ServerTable {
     public pos: Vector3 = new Vector3(0, 0, 0);
