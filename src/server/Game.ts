@@ -43,7 +43,6 @@ export class Game {
 
     public start() {
         console.log("Initializing Game Entities...");
-
         this.engine.initGameEntities();
         this.setupInputs();
 
@@ -65,7 +64,7 @@ export class Game {
         if (!socket) return;
 
         const teamPlayers = this.engine.data.players.filter(p => p.side === player.side);
-        const myIndex = teamPlayers.indexOf(player);
+        const myIndex = (player.side === 'spectator') ? -1 : teamPlayers.indexOf(player);
 
         socket.on('requestGameInit', () => {
             console.log(`Sending Init to player ${player.socket_id}`);
@@ -83,30 +82,32 @@ export class Game {
                 this.startGameLoop();
         });
 
-        socket.on('input', (data) => {
-            if (this.engine.data.status !== GameStatus.RUNNING) return;
-            if (data.side === player.side) {
-                if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
-                else this.engine.data.inputs.right[myIndex] = data.cmd;
-            }
-        });
+        if (player.side !== 'spectator') {
+            socket.on('input', (data) => {
+                if (this.engine.data.status !== GameStatus.RUNNING) return;
+                if (data.side === player.side) {
+                    if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
+                    else this.engine.data.inputs.right[myIndex] = data.cmd;
+                }
+            });
 
-        socket.on('pauseGame', () => {
-            const data = this.engine.data;
-            const now = Date.now();
-            const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
+            socket.on('pauseGame', () => {
+                const data = this.engine.data;
+                const now = Date.now();
+                const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
 
-            if (now - data.lastPauseToggle < cooldown) return;
-            data.lastPauseToggle = now;
+                if (now - data.lastPauseToggle < cooldown) return;
+                data.lastPauseToggle = now;
 
-            if (data.status === GameStatus.RUNNING) {
-                data.status = GameStatus.PAUSED;
-                this.io.emit('gamePaused');
-            } else if (data.status === GameStatus.PAUSED) {
-                data.status = GameStatus.RUNNING;
-                this.io.emit('gameResumed');
-            }
-        });
+                if (data.status === GameStatus.RUNNING) {
+                    data.status = GameStatus.PAUSED;
+                    this.io.emit('gamePaused');
+                } else if (data.status === GameStatus.PAUSED) {
+                    data.status = GameStatus.RUNNING;
+                    this.io.emit('gameResumed');
+                }
+            });
+        }
     }
 
     private startGameLoop() {

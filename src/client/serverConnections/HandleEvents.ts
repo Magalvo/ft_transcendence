@@ -56,7 +56,6 @@ export class HandleEvents {
 
     public onCountdown(count: number) {
         if (this.queueEvent(() => this.onCountdown(count))) return;
-
         const msg = (COUNTDOWN_MESSAGES as any)[count];
         if (msg && this.data.scene)
             showCountdownDisplay(this.data.scene, msg.text, msg.color, 1.0);
@@ -70,8 +69,13 @@ export class HandleEvents {
         // Determine Match Result
         if (count === 1 && this.data.mods?.score) {
             const { me, rival } = this.data.mods.score;
-            const result = me > rival ? 'WON' : me < rival ? 'LOST' : 'DRAW';
-            msg = (ENDGAME_MESSAGES as any)[result];
+            if (this.data.mySide === 'spectator') {
+                const res = me > rival ? "LEFT WINS" : me < rival ? "RIGHT WINS" : "DRAW";
+                msg = { text: res, color: "gold" };
+            } else {
+                const result = me > rival ? 'WON' : me < rival ? 'LOST' : 'DRAW';
+                msg = (ENDGAME_MESSAGES as any)[result];
+            }
         }
 
         if (count === 0 && this.data.flags) this.data.flags.return_main_menu = true;
@@ -100,7 +104,7 @@ export class HandleEvents {
     public gamePaused() {
         if (this.queueEvent(() => this.gamePaused())) return;
         if (this.data.flags) {
-            this.data.flags.game_running = true; // Enable briefly for snapshot
+            this.data.flags.game_running = true;
             pauseScreen(this.data);
             this.data.flags.game_running = false;
         }
@@ -125,7 +129,6 @@ export class HandleEvents {
 
     private flushQueue() {
         if (!this.queue.length) return;
-        console.log(`Processing ${this.queue.length} queued events...`);
         this.queue.forEach(fn => fn());
         this.queue = [];
     }

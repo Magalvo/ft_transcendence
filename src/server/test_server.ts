@@ -37,6 +37,10 @@ io.on('connection', (socket) => {
         lobby.movePlayerToSlot(socket.id, data.targetId, data.side, data.slotIndex);
     });
 
+    socket.on('lobby_moveToBench', (targetId: string) => {
+        lobby.movePlayerToBench(socket.id, targetId);
+    });
+
     socket.on('lobby_addBot', (data: { side: 'left' | 'right', slotIndex: number }) => {
         lobby.addBot(socket.id, data.side, data.slotIndex);
     });

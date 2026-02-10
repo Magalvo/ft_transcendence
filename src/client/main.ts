@@ -64,6 +64,12 @@ function init() {
         if (el) el.style.borderColor = 'cyan';
     };
 
+    w.moveToBench = (id: string) => {
+        if (!isLeader) return;
+        socket.emit('lobby_moveToBench', id);
+        if (selectedBenchPlayer === id) selectedBenchPlayer = null;
+    };
+
     w.clickSlot = (side: string, idx: number, content: string) => {
         if (!isLeader) return;
         if (selectedBenchPlayer) {
@@ -166,7 +172,7 @@ function renderTeamSlots(container: HTMLElement, slots: any[], side: string) {
         else if (slot.content === 'human') {
             div.innerHTML = `
                 <span>👤 ${slot.playerName}</span>
-                ${isLeader ? `<button class="mini" onclick="selectBenchPlayer('${slot.socketId}')">To Bench</button>` : ''} 
+                ${isLeader ? `<button class="mini" onclick="moveToBench ('${slot.socketId}')">To Bench</button>` : ''} 
             `;
         }
         else if (slot.content === 'bot') {

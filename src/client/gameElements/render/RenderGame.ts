@@ -22,7 +22,7 @@ export function renderGame(dt: number, data: GameData) {
   const visualDt = Math.min(dt, 0.1);
   updateCountdownUI(visualDt);
   updateMusic(data);
-  
+
   // 1. Handle Pause Requests
   if (data.flags.pause_screen) {
     data.socket?.emit('pauseGame');
@@ -39,7 +39,8 @@ export function renderGame(dt: number, data: GameData) {
   }
 
   // 3. Running State
-  data.env3D.camera.detachControl();
+  if (data.mySide != "spectator")
+    data.env3D.camera.detachControl();
   data.obj2D.guiGame.rootContainer.isVisible = true;
 
   // Fixed Time Step: Splits large frame times into smaller chunks
