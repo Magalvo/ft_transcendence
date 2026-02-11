@@ -19,23 +19,6 @@ body {
 	row-gap: 1rem;
 }
 
-.username {
-	display: grid;
-	row-gap: 0.5rem;
-	width: 300px;
-
-	& > span {
-		font-size: var(--font-size-sm);
-		color: var(--colors-gray-600);
-	}
-
-	& > input {
-		border: 1px solid var(--color-gray-200);
-		border-radius: var(--round-md);
-		padding: 0.5rem;
-	}
-}
-
 .chat {
 	display: flex;
 	flex-direction: column;

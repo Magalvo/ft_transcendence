@@ -40,7 +40,7 @@ export type ChatMessage = {
 	sender_name: string;
 	content: string;
 	timestamp: number;
-	type: 'group' | 'private';
+	type: 'group' | 'private' | 'game_invite';
 	group_id?: number;
 	private_chat_id?: number;
 };
@@ -49,4 +49,5 @@ export type ChatMessage = {
 export type WSMessage =
 	| { type: 'group_message'; data: HistGroup; sender_name: string }
 	| { type: 'private_message'; data: HistPrivateChat; sender_name: string }
+	| { type: 'game_invite'; data: { id_session: string; url: string; id_group?: number; id_privatechat?: number; id_usersender: number; sender_name: string } }
 	| { type: 'error'; error: string };

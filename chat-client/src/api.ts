@@ -63,10 +63,23 @@ const mockMessages = {
 	chat_2: [],
 };
 
+// Mock game sessions store
+const mockSessions: Array<{ id_session: string; url: string; creatorId: number; options?: any; createdAt: number }> = [];
+
 // Mock implementation
 const mockClient = {
 	async getCurrentUser() {
 		await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+
+		// Search for the parameter ?userId=2 in the URL
+		const urlParams = new URLSearchParams(window.location.search);
+		const userIdParam = urlParams.get('userId');
+		if (userIdParam) {
+			const id = parseInt(userIdParam);
+			const user = mockUsers.find(u => u.id === id);
+			if (user) return user;
+		}
+
 		return mockUsers[0]; // Return first user as current
 	},
 
@@ -150,6 +163,16 @@ const mockClient = {
 		}
 		(mockMessages as any)[key].push(msg);
 		return msg;
+	},
+
+	// Game session (mock)
+	async createGameSession(creatorId: number, options?: any) {
+		await new Promise(resolve => setTimeout(resolve, 200));
+		const id_session = `game_${Date.now()}`;
+		const url = `${location.origin}/game?session=${id_session}`; // local stub URL
+		const session = { id_session, url, creatorId, options, createdAt: Date.now() };
+		mockSessions.push(session);
+		return session;
 	},
 };
 
@@ -235,6 +258,18 @@ export const apiClient = USE_MOCK ? mockClient : {
 			body: JSON.stringify({ id_usersender: userId, messagem: content }),
 		});
 		if (!response.ok) throw new Error('Failed to create private message');
+		return response.json();
+	},
+
+	// Game session endpoints
+	async createGameSession(creatorId: number, options?: any) {
+		const response = await fetch(`${API_BASE}/games/sessions`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ creatorId, options }),
+		});
+		if (!response.ok) throw new Error('Failed to create game session');
 		return response.json();
 	},
 };

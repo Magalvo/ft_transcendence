@@ -5,7 +5,7 @@ import { apiClient } from './api';
 import type { ChatMessage, User } from './types';
 
 // Log mock mode
-console.log('🧪 Mock API Mode Enabled');
+console.log('Mock API Mode Enabled');
 
 // 1. State Management
 const state = {
@@ -13,7 +13,7 @@ const state = {
   currentChatType: null as 'group' | 'private' | null,
   currentGroupId: null as number | null,
   currentPrivateChatId: null as number | null,
-  groups: [] as any[], // Тут краще використати ваші типи з types.ts
+  groups: [] as any[], // Тут використати типи з types.ts
   privateChats: [] as any[],
   ws: null as WebSocket | null,
 };
@@ -52,7 +52,26 @@ function appendMsgNode(msg: ChatMessage) {
   const msgContent = document.createElement("div");
   msgContent.classList.add("msg__content");
   if (isMine) msgContent.classList.add("mine");
-  msgContent.textContent = msg.content;
+
+  // Render game invite as clickable link
+  if (msg.type === 'game_invite') {
+    const a = document.createElement('a');
+    a.href = msg.content;
+    // a.target = '_blank'; // new tab
+    a.target = '_self'; // same tab
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Join game';
+    msgContent.appendChild(a);
+
+    // Optionally, you can also show the URL in smaller text below the link
+    // const small = document.createElement('div');
+    // small.style.fontSize = '11px';
+    // small.style.color = 'white';
+    // small.textContent = msg.content;
+    // msgContent.appendChild(small);
+  } else {
+    msgContent.textContent = msg.content;
+  }
 
   if (!prevSenderName || prevSenderName !== msg.sender_name) {
     const senderContainer = document.createElement("div");
@@ -78,12 +97,12 @@ function appendMsgNode(msg: ChatMessage) {
 function handleIncomingMessage(wsMessage: any) {
   // Creating a message object from WebSocket data
   const msg: ChatMessage = {
-    id_message: wsMessage.id_message,
+    id_message: wsMessage.id_message || wsMessage.id_session || `msg_${Date.now()}`,
     sender_id: wsMessage.id_usersender,
     sender_name: wsMessage.sender_name,
-    content: wsMessage.messagem,
+    content: wsMessage.messagem || wsMessage.url || '',
     timestamp: wsMessage.timestamp || Date.now(),
-    type: wsMessage.type === 'group_message' ? 'group' : 'private',
+    type: wsMessage.type === 'group_message' ? 'group' : (wsMessage.type === 'game_invite' ? 'game_invite' : 'private'),
     group_id: wsMessage.id_group,
     private_chat_id: wsMessage.id_privatechat,
   };
@@ -136,6 +155,67 @@ async function loadChatUI(closePopover: () => void) {
   state.privateChats = await apiClient.getPrivateChats();
 
   await renderChatSelector(elements.chatSelector);
+
+  // Add Invite button in header
+  const header = document.querySelector('.header') as HTMLDivElement | null;
+  if (header) {
+    let inviteBtn = document.getElementById('invite-btn') as HTMLButtonElement | null;
+    if (!inviteBtn) {
+      inviteBtn = document.createElement('button');
+      inviteBtn.id = 'invite-btn';
+      inviteBtn.style.cssText = "margin-left: auto; padding: 6px 12px; border: 1px solid #ccc; border-radius: 14px; cursor: pointer; font-size: 14px; background: #93C572;";
+      inviteBtn.textContent = 'Invite to Game';
+      header.appendChild(inviteBtn);
+    }
+
+    inviteBtn.onclick = async () => {
+      const { currentChatType, currentGroupId, currentPrivateChatId, currentUser, ws } = state;
+
+      if (!currentChatType || !currentUser) {
+        return alert('Select s chat or group first to invite');
+      }
+
+      const targetId = currentChatType === 'group' ? currentGroupId : currentPrivateChatId;
+
+      if (targetId === null) {
+        return alert(`Target ${currentChatType} ID is missing`)
+      }
+
+      try {
+        const session = await apiClient.createGameSession(currentUser.id, { kind: 'default' });
+        // Build message payload
+        const payload: any = {
+          type: 'game_invite',
+          id_session: session.id_session,
+          url: session.url,
+          id_usersender: currentUser.id,
+          sender_name: currentUser.username,
+          target: currentChatType,
+          [currentChatType ===  'group' ? 'groupId' : 'chatId']: targetId
+        };
+        // send via websocket
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        }
+
+        // local render
+        appendMsgNode({
+          id_message: session.id_session,
+          sender_id: state.currentUser!.id,
+          sender_name: state.currentUser!.username,
+          content: session.url,
+          timestamp: Date.now(),
+          type: 'game_invite',
+          group_id: currentChatType === 'group' ? (targetId as number) : undefined,
+          private_chat_id: currentChatType === 'private' ? (targetId as number) : undefined,
+        });
+        scrollToEnd();
+      } catch (err) {
+        console.error('Failed to create game session', err);
+        alert('Failed to create game session');
+      }
+    };
+  }
 
   formElm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -239,13 +319,13 @@ async function renderChatSelector(container: HTMLDivElement | null) {
   // Groups
   if (state.groups.length > 0) {
     const groupsLabel = document.createElement("div");
-    groupsLabel.style.cssText = "width: 100%; font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px;";
+    groupsLabel.style.cssText = "width: 100%; font-size: 12px; color: #666; font-weight: bold; margin-bottom: 5px;";
     groupsLabel.textContent = "Groups:";
     container.appendChild(groupsLabel);
 
     state.groups.forEach(g => {
       const b = document.createElement("button");
-      b.style.cssText = "padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 12px; background: #f0f0f0;";
+      b.style.cssText = "padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 13px; background: #f0f0f0;";
       b.textContent = g.name;
       b.onclick = (e) => {
         e.preventDefault();
@@ -259,7 +339,7 @@ async function renderChatSelector(container: HTMLDivElement | null) {
   // Private chats
   if (state.privateChats.length > 0) {
     const privateLabel = document.createElement("div");
-    privateLabel.style.cssText = "width: 100%; font-size: 11px; color: #666; font-weight: bold; margin-top: 8px; margin-bottom: 5px;";
+    privateLabel.style.cssText = "width: 100%; font-size: 12px; color: #666; font-weight: bold; margin-top: 8px; margin-bottom: 5px;";
     privateLabel.textContent = "Direct Messages:";
     container.appendChild(privateLabel);
 
@@ -267,7 +347,7 @@ async function renderChatSelector(container: HTMLDivElement | null) {
       const otherUserId = chat.id_user1 === state.currentUser?.id ? chat.id_user2 : chat.id_user1;
       const otherUser = await apiClient.getUser(otherUserId);
       const b = document.createElement("button");
-      b.style.cssText = "padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 12px; background: #f0f0f0;";
+      b.style.cssText = "padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 13px; background: #f0f0f0;";
       b.textContent = `${otherUser?.username || `User ${otherUserId}`}`;
       b.onclick = (e) => {
         e.preventDefault();

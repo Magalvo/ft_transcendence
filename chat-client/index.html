@@ -8,10 +8,6 @@
   </head>
   <body>
     <div class="app">
-      <label class="username">
-        <span>Your name</span>
-        <input id="username" placeholder="Type any name you wanna be" />
-      </label>
       <div id="popover" class="popover">
         <button
           id="popover-trigger"
@@ -50,9 +46,9 @@
                 </svg>
               </button>
             </header>
-            <!-- Селектор групи/чатів -->
+            <!-- Group/chat selector -->
             <div id="chat-selector" style="display: flex; gap: 5px; padding: 10px; flex-wrap: wrap; border-bottom: 1px solid #ddd; max-height: 150px; overflow-y: auto; background: #fafafa;">
-              <small style="color: #999; width: 100%;">Завантаження чатів...</small>
+              <small style="color: #999; width: 100%;">Loading chats....</small>
             </div>
             <ol class="msg-list"></ol>
             <form id="msg-form">

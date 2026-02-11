@@ -54,6 +54,22 @@ wss.on("connection", (ws) => {
 					broadcastToPrivateChat(message.chatId, message, ws);
 					break;
 
+				case "game_invite":
+					// message should include target: 'group' | 'private' and the corresponding id
+					if (message.target === 'group' && typeof message.groupId === 'number') {
+						broadcastToGroup(message.groupId, message, ws);
+					} else if (message.target === 'private' && typeof message.chatId === 'number') {
+						broadcastToPrivateChat(message.chatId, message, ws);
+					} else {
+						console.warn('game_invite without valid target, broadcasting to all subscribers');
+						clients.forEach((client) => {
+							if (client.ws !== ws && client.ws.readyState === WebSocket.OPEN) {
+								client.ws.send(JSON.stringify({ ...message, type: 'game_invite' }));
+							}
+						});
+					}
+					break;
+
 				default:
 					console.warn("Unknown message type:", message.type);
 			}
