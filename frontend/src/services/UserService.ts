@@ -1,39 +1,54 @@
-// Define types to ensure strictness
-export interface Match {
-  id: number;
-  opponent: string;
-  result: 'WIN' | 'LOSS';
-  score: string;
-  date: string;
+// Define types based on Subject IV.3 [cite: 214, 221, 222]
+export interface User {
+    id: number;
+    username: string;
+    email: string;
+    avatar: string;
+    status: 'online' | 'offline' | 'ingame';
+    stats: {
+        wins: number;
+        losses: number;
+        rank: string;
+    };
 }
 
-export interface UserProfile {
-  username: string;
-  avatarUrl: string; // Default or uploaded
-  wins: number;
-  losses: number;
-  status: 'online' | 'offline' | 'ingame';
-  matches: Match[];
-  friends: { username: string; status: 'online' | 'offline' }[];
+export interface MatchHistory {
+    id: number;
+    date: string;
+    opponent: string;
+    score: string;
+    result: 'WIN' | 'LOSS';
 }
 
 export class UserService {
- 
-  public static async getProfile(): Promise<UserProfile> {
-    return {
-      username: 'PongMaster42',
-      avatarUrl: 'https://cdn.intra.42.fr/users/264153a7c38d3a37161dd2dd387b1103/dde-maga.JPG',
-      wins: 42,
-      losses: 5,
-      status: 'online',
-      matches: [
-        { id: 1, opponent: 'BitHunter', result: 'WIN', score: '5 - 3', date: '2023-10-25' },
-        { id: 2, opponent: 'NullPointer', result: 'LOSS', score: '4 - 5', date: '2023-10-24' },
-      ],
-      friends: [
-        { username: 'Alice', status: 'online' },
-        { username: 'Bob', status: 'offline' },
-      ]
+    // Mock Data - Replace with fetch('/api/users/me') later
+    private static currentUser: User = {
+        id: 1,
+        username: "PongMaster42",
+        email: "student@42.fr",
+        avatar: "https://ui-avatars.com/api/?name=Pong+Master&background=0D8ABC&color=fff",
+        status: "online",
+        stats: { wins: 42, losses: 7, rank: "Gold" }
     };
-  }
+
+    private static history: MatchHistory[] = [
+        { id: 101, date: "2023-10-25", opponent: "BitHunter", score: "5-3", result: "WIN" },
+        { id: 102, date: "2023-10-24", opponent: "NullPointer", score: "1-5", result: "LOSS" },
+        { id: 103, date: "2023-10-20", opponent: "SegFault", score: "5-4", result: "WIN" }
+    ];
+
+    public static async getProfile(): Promise<User> {
+        // Simulate network delay
+        return new Promise(resolve => setTimeout(() => resolve(this.currentUser), 300));
+    }
+
+    public static async getHistory(): Promise<MatchHistory[]> {
+        return this.history;
+    }
+
+    public static async updateAvatar(file: File): Promise<string> {
+        console.log("Uploading file:", file.name);
+        // Simulate upload and return a fake new URL [cite: 219]
+        return URL.createObjectURL(file); 
+    }
 }

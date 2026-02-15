@@ -7,13 +7,17 @@ import { LoginPage } from './pages/Login';
 import { DashboardPage } from './pages/Dashboard';
 import { GamePage } from './pages/Game';
 import { TournamentPage } from './pages/Tournament';
+import { HomePage } from './pages/Home';
+import { ProfilePage } from './pages/Profile';
 
 //? Initialize Router
 const router = new Router('#app');
 
 //? Define Routes
+router.addRoute('/', HomePage);
+router.addRoute('/profile', ProfilePage);
 router.addRoute('/login', LoginPage);
-router.addRoute('/', DashboardPage);
+router.addRoute('/dashboard', DashboardPage);
 router.addRoute('/game', GamePage);
 router.addRoute('/tournament', TournamentPage);
 

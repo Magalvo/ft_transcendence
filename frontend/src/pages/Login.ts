@@ -123,6 +123,7 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { AuthService } from '../services/AuthService';
 import image  from "../assets/image.png";
+import { GridScanWrapper } from '../components/ui/GridScanWrapper';
 
 
 export class LoginPage extends AbstractComponent {
@@ -134,8 +135,8 @@ export class LoginPage extends AbstractComponent {
   private emailInput: Input;
 
   constructor() {
-    super('section', 'w-full h-screen bg-cover bg-center flex justify-center items-center');
-    this.element.style.backgroundImage = `url('${image}')`;
+    super('section', 'w-full h-screen flex justify-center items-center relative overflow-hidden');
+    //this.element.style.backgroundImage = `url('${image}')`;
     
     this.authService = new AuthService();
 
@@ -145,15 +146,29 @@ export class LoginPage extends AbstractComponent {
   }
 
   public render(): void {
-    this.element.innerHTML = ''; 
+    this.element.innerHTML = '';
 
-    const card = new Card('w-full max-w-md bg-white/95 backdrop-blur-sm');
+    const background = new GridScanWrapper({
+
+        enableWebcam: true,
+        //scanColor: "#00ff88",    
+        //linesColor: "#4e4e52",
+        bloomIntensity: 1.5
+    });
+    
+    background.render();
+    this.element.appendChild(background.getElement());
+
+    // 2. Render Login Card (floating on top)
+    const card = new Card('w-full max-w-md bg-white/10 backdrop-blur-sm');
 
     const header = document.createElement('div');
     header.className = 'text-center mb-8';
     header.innerHTML = `
-      <h2 class="text-3xl font-bold text-gray-800">Pong Game</h2>
-      <p class="text-gray-500 mt-2">
+      <h2 class="text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600 leading-normal inline-block">
+            Pong Game
+        </h2>
+      <p class="text-gray-500 mt-4">
         ${this.isRegisterMode ? 'Create an account to join the arena' : 'Sign in to access the best ping-pong game'}
       </p>
     `;
