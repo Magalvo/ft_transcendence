@@ -1,6 +1,6 @@
 // --- CONFIGURATION ---
 export const CONFIG = {
-    PORT: 3000,
+    PORT: 3001,
     TICK_RATE: 60,
     PAUSE_COOLDOWN_MS: 500,
     SPEED_MOD_FAST: 4,

@@ -21,7 +21,7 @@ const leaderMsg = document.getElementById('leader-msg')!;
 const game = new GameScene();
 
 function init() {
-    socket = io("http://localhost:3000");
+    socket = io("http://localhost:3001");
 
     socket.on('connect', () => {
         console.log("Connected to Lobby");

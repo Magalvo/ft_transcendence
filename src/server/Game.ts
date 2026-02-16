@@ -156,7 +156,9 @@ export class Game {
                 this.io.emit('endGame', { count: 0 });
                 this.engine.resetGame();
                 // SEND RESULTS TO SERVER
+                this.sendResultsServer();
                 // RETURN TO THE MAIN PAGE
+
             }
             this.io.emit('gameState', this.engine.getSnapshot());
             return;
@@ -164,5 +166,44 @@ export class Game {
 
         this.engine.update(dt);
         this.io.emit('gameState', this.engine.getSnapshot());
+    }
+
+    private async sendResultsServer() {
+        const eData = this.engine.data;
+        const teamA_IDs = eData.players
+            .filter(p => p.side === "left")
+            .map(p => {
+                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
+            });
+
+        const teamB_IDs = eData.players
+            .filter(p => p.side === "right")
+            .map(p => {
+                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
+            });
+        const res = await fetch("http://localhost:3000/api/games", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + userJwtToken
+            },
+            body: JSON.stringify({
+                duration: eData.configs.duration_label,
+                powerups: eData.configs.power_ups,
+                mode: eData.configs.players_per_side,
+                teamA: teamA_IDs,
+                teamB: teamB_IDs,
+                teamAScore: eData.score.left,
+                teamBScore: eData.score.right
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error("Failed to save game:", data.message || res.status);
+        } else {
+            console.log("Game saved with ID:", data.gameId);
+        }
     }
 }
