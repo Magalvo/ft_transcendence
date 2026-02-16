@@ -12,6 +12,7 @@ import "reflect-metadata";
 import { create } from "domain";
 import { setupSocketIO } from "./socket/index.js";
 import { createServer } from "http";
+import gameRoutes from "./routes/games.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -34,6 +35,13 @@ try {
   app.register(authRoutes, { prefix: "/api" });
 } catch (err) {
   console.error("Failed to register authRoutes:", err);
+  process.exit(1);
+}
+
+try {
+  app.register(gameRoutes, { prefix: "/api" });
+} catch (err) {
+  console.error("Failed to register gameRoutes:", err);
   process.exit(1);
 }
 
