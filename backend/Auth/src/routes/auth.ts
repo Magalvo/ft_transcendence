@@ -114,5 +114,38 @@ app.post("/login", async (req, reply) => {
     return await faVerify(req,reply);
   });
 
+  // --- GET CURRENT USER ---
+  app.get("/me", async (req, reply) => {
+    try {
+      const authHeader = req.headers.authorization;
 
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return sendError(reply, "Missing or invalid Authorization header", 401);
+      }
+
+      const token = authHeader.split(" ")[1];
+
+      const decoded = jwt.verify(token, JWT_SECRET) as {
+        userId: string;
+        email: string;
+      };
+
+      const rawUser: any = await db.raw(
+        "SELECT id, username, email, online FROM users WHERE id = ? LIMIT 1",
+        [decoded.userId]
+      );
+
+      const user =
+        Array.isArray(rawUser[0]) ? rawUser[0][0] : rawUser[0];
+
+      if (!user) {
+        return sendError(reply, "User not found", 404);
+      }
+
+      return user;
+    } catch (err) {
+      app.log.error(err);
+      return sendError(reply, "Invalid or expired token", 401);
+    }
+});
 }

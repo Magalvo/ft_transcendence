@@ -1,19 +1,15 @@
 import { IsEmail, Length } from "class-validator";
 
-
-
 class UserRegisterDTO {
 
-
-    userId : string;
     @Length(5)
-    username: string;
+    username!: string;
 
     @Length(8)
-    password: string;
+    password!: string;
 
     @IsEmail()
-    email: string;
+    email!: string;
 
 }
 

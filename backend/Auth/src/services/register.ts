@@ -24,7 +24,7 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
                 return erro.constraints ? Object.values(erro.constraints)[0] : 'Unknow Error'; 
             });
             const finalMsg = erroMsg.join('; ');
-            return sendError(reply, `: ${finalMsg}`, 400);
+            return sendError(reply, finalMsg, 400);
         }
 
 
@@ -56,6 +56,7 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
         // Return token + QR in same response
         sendSuccess(reply, { token, refreshToken, message: "User registered successfully. Scan the QR for 2FA." }, 201);
   } catch (err: any) {
+        console.error("REGISTER ERROR:", err);
         sendError(reply, "Internal server error", 500);
   }
 }
