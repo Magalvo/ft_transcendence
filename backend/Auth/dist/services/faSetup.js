@@ -20,10 +20,10 @@ const faSetup = async (req, reply) => {
             encoding: "base32",
         });
         const qr = await qrcode.toDataURL(otpauthUrl);
-        sendSuccess(reply, { qr, secret: secret.base32, message: "Scan this QR code with your authenticator app" });
+        return sendSuccess(reply, { qr, secret: secret.base32, message: "Scan this QR code with your authenticator app" });
     }
     catch (err) {
-        sendError(reply, "Internal server error", 500);
+        return sendError(reply, "Internal server error", 500);
     }
 };
 export default faSetup;

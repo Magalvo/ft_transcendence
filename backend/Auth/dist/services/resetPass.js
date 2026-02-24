@@ -1,19 +1,25 @@
 import { sendSuccess, sendError } from "../utils/respond.js";
 import db from '../db.js';
 import bcrypt from "bcrypt";
+import { plainToInstance } from "class-transformer";
+import userResetPassDTO from "../dto/userResetPass.dto.js";
+import { validate } from "class-validator";
 const resetPass = async (req, reply) => {
     try {
-        const { token, newPassword } = req.body;
-        if (!token || !newPassword)
-            return sendError(reply, "Token and new password are required", 400);
-        const rawUser = await db.raw("SELECT * FROM users WHERE resetToken = ? LIMIT 1", [token]);
-        const user = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
-        if (!user)
-            return sendError(reply, "Invalid token", 400);
-        if (!user.resetExpires || new Date(user.resetExpires) < new Date())
-            return sendError(reply, "Token expired", 400);
-        const passwordHash = await bcrypt.hash(newPassword, 10);
-        await db.raw("UPDATE users SET passwordHash = ?, resetToken = NULL, resetExpires = NULL WHERE id = ?", [passwordHash, user.id]);
+        const acessInfo = req.cookies['refreshToken'];
+        if (!acessInfo)
+            return sendError(reply, "Token is required", 400);
+        const user = plainToInstance(userResetPassDTO, req.body);
+        const erros = await validate(user);
+        if (erros.length > 0) {
+            const erroMsg = erros.map(erro => {
+                return erro.constraints ? Object.values(erro.constraints)[0] : 'Unknow Error';
+            });
+            const finalMsg = erroMsg.join('; ');
+            return sendError(reply, `: ${finalMsg}`, 400);
+        }
+        const passwordHash = await bcrypt.hash(user.newPassword, 10);
+        await db.raw("UPDATE users SET passwordHash = ? WHERE id = ?", [passwordHash, user.userId]);
         sendSuccess(reply, { message: "Password has been reset successfully" });
     }
     catch (err) {
