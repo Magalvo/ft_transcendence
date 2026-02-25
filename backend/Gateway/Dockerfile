@@ -9,9 +9,9 @@ WORKDIR /apiGateway
 
 COPY ./ .
 
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 CMD ["npm", "run", "start"]
 
 
-EXPOSE 333  
+EXPOSE 3333

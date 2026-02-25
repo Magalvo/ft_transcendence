@@ -2,10 +2,10 @@ services:
   gateway:
     container_name: ApiGateWay
     build:
-      context: ./Gateway  
+      context: ./backend/Gateway  
       dockerfile: Dockerfile
     ports: 
-      - "333:333"
+      - "3333:3333"
     networks:
       - transcendencenet
     restart: on-failure
@@ -14,14 +14,23 @@ services:
   auth:
       container_name: Auth
       build:
-        context: ./Auth
+        context: ./backend/Auth
         dockerfile: Dockerfile
       ports:
         - "3000:3000"
       networks:
         - transcendencenet
       restart: on-failure
-
+  frontend:
+     container_name: Frontend
+     build:
+       context: ./frontend
+       dockerfile: Dockerfile
+     ports:
+       - "5173:5173"
+     networks:
+       - transcendencenet
+     restart: on-failure
 
 networks:
   transcendencenet:
