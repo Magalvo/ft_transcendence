@@ -10,22 +10,23 @@ import authenticate from "../middleware/authenticate.js";
 const faSetup =  async (req: FastifyRequest, reply : FastifyReply) => {
     
   try {
-    const decoded = await authenticate(req, reply);
-    if (!decoded)
-       return;
+    await authenticate(req, reply);
+    const user = (req as any).user;
+    
+    if (!user || !user.id) 
+      return sendError(reply, "Unauthorized", 401);
 
-    const rawUser: any = await db.raw("SELECT * FROM users WHERE username = ? LIMIT 1", [decoded.username]);
-    const user: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
-   
-    if (!user) 
+    const rawUser: any = await db.raw("SELECT * FROM users WHERE id = ? LIMIT 1", [user.id]);
+    const userData: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
+    if (!userData) 
       return sendError(reply, "User not found", 404);
 
-    const secret = speakeasy.generateSecret({ name: `FT Transcendence (${user.username})` });
-    await db.raw("UPDATE users SET tempTwoFactorSecret = ? WHERE username = ?", [secret.base32, user.username]);
+    const secret = speakeasy.generateSecret({ name: `FT Transcendence (${userData.username})` });
+    await db.raw("UPDATE users SET tempTwoFactorSecret = ? WHERE id = ?", [secret.base32, userData.id]);
 
     const otpauthUrl = secret.otpauth_url ?? speakeasy.otpauthURL({
       secret: secret.base32,
-      label: `FT Transcendence (${user.username})`,
+      label: `FT Transcendence (${userData.username})`,
       encoding: "base32",
     });
 

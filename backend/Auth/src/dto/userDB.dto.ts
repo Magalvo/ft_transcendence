@@ -5,6 +5,8 @@ class userDBDTO {
     id: string;
 
     username: string;
+
+    email: string;
     
     passwordHash: string;
 

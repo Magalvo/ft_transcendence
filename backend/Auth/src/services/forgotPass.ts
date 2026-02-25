@@ -19,9 +19,9 @@ const forgotPass = async (req: FastifyRequest, reply : FastifyReply) => {
       const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
       await db.raw("UPDATE users SET resetToken = ?, resetExpires = ? WHERE email = ?", [token, expires, email]);
-     // Dont make sense we see the local host , wee need put this in env, anywhere if use localhost we need change to a .env variable
-     // Its dont make sense we can`t send this route... 
-      const link = `http://localhost:3000/reset-password.html?token=${token}`;
+      
+      const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+      const link = `${FRONTEND_URL}/reset-password?token=${token}`;
       await sendMail(email, "Password Reset", `<p>Click here to reset your password:</p><a href="${link}">${link}</a>`);
 
       return  sendSuccess(reply, { message: "Password reset email sent" });

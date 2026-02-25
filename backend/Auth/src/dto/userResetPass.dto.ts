@@ -1,10 +1,11 @@
 
-import { Length } from "class-validator";
+import { Length, IsNotEmpty } from "class-validator";
 
 
 class userResetPassDTO {
 
-    userId: string;
+    @IsNotEmpty()
+    resetToken: string;
 
     @Length(8)
     newPassword: string;

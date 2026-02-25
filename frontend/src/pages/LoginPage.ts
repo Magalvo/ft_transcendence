@@ -140,14 +140,23 @@ export class LoginPage{
         const password = passwordEl?.value;
         const email = emailEl?.value;
 
-        if(!username || username.length < 3)
-            return this.erroLogin(usernameEl);
+        if(!username || username.length < 3) {
+            this.erroLogin(usernameEl);
+            button.disabled = false;
+            return;
+        }
 
-        if(!password || password.length < 8)
-            return this.erroLogin(passwordEl);
+        if(!password || password.length < 8) {
+            this.erroLogin(passwordEl);
+            button.disabled = false;
+            return;
+        }
         
-        if(!this.authService.parseEmail(email))
-            return this.erroLogin(emailEl);
+        if(!this.authService.parseEmail(email)) {
+            this.erroLogin(emailEl);
+            button.disabled = false;
+            return;
+        }
 
         try{
             const { token, refreshToken } = await this.authService.register({username, password, email});
@@ -155,7 +164,7 @@ export class LoginPage{
             console.log('Redirect to home');
             this.authService.redirectToHomePage(token, refreshToken);
         }  catch (error: any){
-            if(error.response?.status === 400){
+            if(error.response?.status === 400 || error.response?.status === 409){
                 this.erroLogin(usernameEl);
                 this.erroLogin(passwordEl);
                 this.erroLogin(emailEl);  
@@ -187,20 +196,79 @@ export class LoginPage{
             return this.erroLogin(passwordEl);
             
         try{
-           const { token, refreshToken } = await this.authService.login(username, password);
+                     const result = await this.authService.login(username, password);
            
-           this.authService.redirectToHomePage(token, refreshToken);
-        }catch (error: any){
-          if(error.response?.status === 401){
+                     if (result.twoFactorRequired) {
+                         sessionStorage.setItem('temp_username', username);
+                         sessionStorage.setItem('temp_password', password);
+                         this.show2FAModal(username);
+                     } else if (result.token && result.refreshToken) {
+                         this.authService.redirectToHomePage(result.token, result.refreshToken);
+                     }
+                } catch (error: any) {
+                    const errorMsg = error.message || 'Login failed';
+                    if (errorMsg.includes('2FA')) {
+                        sessionStorage.setItem('temp_username', username);
+                        sessionStorage.setItem('temp_password', password);
+                        this.show2FAModal(username);
+                    } else if(error.response?.status === 401){
             this.erroLogin(usernameEl);
             this.erroLogin(passwordEl);
-        }
-       }finally{
+                    } else {
+                        this.erroLogin(usernameEl);
+                        this.erroLogin(passwordEl);
+                    }
+                } finally {
             button.disabled = false;
-       }
+                }
     
     }
 
+        private show2FAModal(username: string) {
+            const modal = document.createElement('div');
+            modal.id = '2fa-modal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-8 max-w-md w-full">
+                    <h3 class="text-xl font-bold mb-4">Two-Factor Authentication</h3>
+                    <p class="text-gray-600 mb-6">Enter the 6-digit code from your authenticator app</p>
+                    <input type="text" id="2fa-code" placeholder="000000" maxlength="6" class="w-full border border-gray-300 rounded px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <div class="flex gap-2">
+                        <button id="2fa-cancel" class="flex-1 bg-gray-300 text-gray-800 py-2 rounded hover:bg-gray-400">Cancel</button>
+                        <button id="2fa-submit" class="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">Verify</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const submitBtn = document.getElementById('2fa-submit') as HTMLButtonElement;
+            const cancelBtn = document.getElementById('2fa-cancel') as HTMLButtonElement;
+            const codeInput = document.getElementById('2fa-code') as HTMLInputElement;
+            submitBtn.addEventListener('click', async () => {
+                const code = codeInput.value;
+                if (!code || code.length !== 6) {
+                    alert('Please enter a valid 6-digit code');
+                    return;
+                }
+                try {
+                    const u = sessionStorage.getItem('temp_username') || '';
+                    const p = sessionStorage.getItem('temp_password') || '';
+                    const result = await this.authService.login(u, p, code);
+                    if (result.token && result.refreshToken) {
+                        sessionStorage.removeItem('temp_username');
+                        sessionStorage.removeItem('temp_password');
+                        modal.remove();
+                        this.authService.redirectToHomePage(result.token, result.refreshToken);
+                    }
+                } catch (error: any) {
+                    alert('Invalid code. Please try again.');
+                }
+            });
+            cancelBtn.addEventListener('click', () => {
+                sessionStorage.removeItem('temp_username');
+                sessionStorage.removeItem('temp_password');
+                modal.remove();
+            });
+        }
 
     afterRender(){
 

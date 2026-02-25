@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyCookie from "@fastify/cookie";
 import dotenv from "dotenv";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -26,6 +27,7 @@ app.get("/ok", (req, reply) => {
 });
 
 app.register(cors, { origin: true });
+app.register(fastifyCookie);
 app.register(fastifyStatic, { root: path.join(process.cwd(), "public"), prefix: "/" });
 
 app.register(healthRoutes);

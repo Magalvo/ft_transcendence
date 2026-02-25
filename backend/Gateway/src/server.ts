@@ -1,39 +1,28 @@
-
 import fastify from 'fastify'
+import cors from '@fastify/cors'
+import proxy from '@fastify/http-proxy'
 
-const app = fastify();
+const app = fastify()
 
+app.register(cors, {
+  origin: true,
+  credentials: true,
+})
 
-
-
-
-import proxy from '@fastify/http-proxy';
-
-
-
-
-
+const upstream = process.env.AUTH_UPSTREAM || 'http://localhost:3000'
 
 app.register(proxy, {
-  upstream: 'http://192.168.1.4:3000',
-  prefix: '/auth', // Prefixo no Gateway que vai dispaarar esse proxy
-  
-  // Opcional: Se o microsserviço espera '/api/register' mas o gateway recebeu '/auth/register',
-  // usamos o rewritePrefix para ajustar.
-  rewritePrefix: '/api', 
-  
- 
-  http2: false 
-});
+  upstream,
+  // Frontend calls /api/auth/*, rewrite to /api/* on Auth service
+  prefix: '/api/auth',
+  rewritePrefix: '/api',
+  http2: false,
+})
 
 app.ready(() => {
-  console.log('OPa');
-  console.log(app.printRoutes());
-});
-
-
-
+  console.log(app.printRoutes())
+})
 
 app
-  .listen({ port: 3333 })
-  .then(() => console.log('Server running on http://localhost:333'))
+  .listen({ port: 3333, host: '0.0.0.0' })
+  .then(() => console.log('Server running on http://localhost:3333'))

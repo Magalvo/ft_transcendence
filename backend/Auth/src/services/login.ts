@@ -31,7 +31,7 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
         }
        
        
-        const rawUser: any = await db.raw("SELECT id,username ,passwordHash ,twoFactorSecret  FROM users WHERE username = ? LIMIT 1", [user.username]);
+        const rawUser: any = await db.raw("SELECT id, username, email, passwordHash, twoFactorSecret FROM users WHERE username = ? LIMIT 1", [user.username]);
         const userDB : userDBDTO | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
 
         if (!userDB || !userDB.passwordHash) 
@@ -52,19 +52,24 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
         }
 
         const userId = userDB.id;
+        const userEmail = userDB.email;
    
-        const token = jwt.sign({ userId : userId }, JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ userId: userId, email: userEmail }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = crypto.randomBytes(64).toString("hex");
         const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const last_update = new Date().toISOString();
 
+        // Try to update existing refresh token, or insert if not exists
+        const existingToken = await db.raw("SELECT id FROM refresh_tokens WHERE userId = ? LIMIT 1", [userId]);
+        if (Array.isArray(existingToken[0]) && existingToken[0][0]) {
+          await db.raw("UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?", [refreshToken, expires_at, last_update, userId]);
+        } else {
+          const username = userDB.username;
+          await db.raw("INSERT INTO refresh_tokens (username, userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)", [username, userId, refreshToken, expires_at, last_update]);
+        }
 
-
-        await db.raw("UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?", [refreshToken, expires_at,last_update, userId])
-
-      
-        // Maybe we don`t will user online
-        await db.raw("UPDATE users SET online = ? , last_request = ? WHERE id = ?", [true, userId, last_update]);
+        // Update user status
+        await db.raw("UPDATE users SET online = ?, last_request = ? WHERE id = ?", [true, last_update, userId]);
 
         sendSuccess(reply, { token, refreshToken });
     } catch (err: any) {

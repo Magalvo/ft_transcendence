@@ -22,7 +22,7 @@ const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
             if(!refreshtoken)
                 return sendError(reply,'Invalid or expired token',401);
             
-            const rawStored: any = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userID = ? LIMIT 1", [userId]);
+            const rawStored: any = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userId = ? LIMIT 1", [userId]);
             const stored: RefreshToken | undefined = Array.isArray(rawStored[0]) ? rawStored[0][0] : undefined;
     
             if (!stored || new Date(stored.expires_at) < new Date()) 

@@ -17,8 +17,15 @@
     "vite": "^7.2.2"
   },
   "dependencies": {
+    "@babylonjs/core": "^8.52.1",
+    "@babylonjs/gui": "^8.52.1",
+    "@babylonjs/loaders": "^8.52.1",
     "@tailwindcss/vite": "^4.1.17",
-    "axios": "^1.13.2",
-    "react-dom": "^19.2.4"
+    "axios": "^1.13.5",
+    "face-api.js": "^0.22.2",
+    "postprocessing": "^6.38.3",
+    "react-dom": "^19.2.4",
+    "socket.io-client": "^4.8.3",
+    "three": "^0.183.1"
   }
 }
