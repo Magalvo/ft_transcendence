@@ -1,5 +1,5 @@
-import { keyCode, mov } from "../../index.js";
-import type { GameData } from "../../index.js";
+import { keyCode, mov } from "../../../shared/types.js";
+import type { GameData } from "../../GameData.js";
 
 /**
  * Handles keyboard input to:

@@ -42,7 +42,7 @@ function init() {
 
         // Resize Engine (Support custom method or direct engine access)
         if (typeof (game as any).resize === 'function') (game as any).resize();
-        else game['engine'].resize();
+        else if (game['engine']) game['engine'].resize();
 
         game.startConnection(socket);
         console.log("Requesting Game Init...");
@@ -62,6 +62,12 @@ function init() {
         document.querySelectorAll('.bench-player').forEach(el => (el as HTMLElement).style.borderColor = 'transparent');
         const el = document.getElementById(`bench-${id}`);
         if (el) el.style.borderColor = 'cyan';
+    };
+
+    w.moveToBench = (id: string) => {
+        if (!isLeader) return;
+        socket.emit('lobby_moveToBench', id);
+        if (selectedBenchPlayer === id) selectedBenchPlayer = null;
     };
 
     w.clickSlot = (side: string, idx: number, content: string) => {
@@ -166,7 +172,7 @@ function renderTeamSlots(container: HTMLElement, slots: any[], side: string) {
         else if (slot.content === 'human') {
             div.innerHTML = `
                 <span>👤 ${slot.playerName}</span>
-                ${isLeader ? `<button class="mini" onclick="selectBenchPlayer('${slot.socketId}')">To Bench</button>` : ''} 
+                ${isLeader ? `<button class="mini" onclick="moveToBench ('${slot.socketId}')">To Bench</button>` : ''} 
             `;
         }
         else if (slot.content === 'bot') {

@@ -1,4 +1,8 @@
-import { BABYLON, GameObject, Color3, Color4, type GameData, type GameObjectOptions, type Side } from "../../index.js";
+import * as BABYLON from "@babylonjs/core";
+import { Color3, Color4 } from "@babylonjs/core";
+import { GameObject, type GameObjectOptions } from "./AGameObject.js";
+import type { GameData } from "../../GameData.js";
+import type { Side } from "../../../shared/types.js";
 
 type PaddleOptions = GameObjectOptions & { side: Side };
 

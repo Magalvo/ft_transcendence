@@ -54,12 +54,15 @@ export function createEnvironment3D(
 function createAudio(nb: number): HTMLAudioElement {
   let audio_name: string = "";
   switch (nb) {
-    case 1: audio_name = "audio/hell.mp3"; break;
-    case 2: audio_name = "audio/heaven.mp3"; break;
+    case 1: audio_name = "/audio/hell.mp3"; break;
+    case 2: audio_name = "/audio/heaven.mp3"; break;
   }
-  const audio = new Audio(audio_name);
+  const audio = new Audio();
+  audio.src = audio_name;
   audio.loop = true;
   audio.volume = 0.3;
+  const canPlay = audio.canPlayType('audio/mpeg') || audio.canPlayType('audio/mp3');
+  if (!canPlay) console.warn('Browser cannot play audio source', audio_name);
   return audio;
 }
 

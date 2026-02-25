@@ -1,4 +1,4 @@
-import { GameScene } from "./index.js";
+import { GameScene } from "./GameScene.js";
 import { io, Socket } from "socket.io-client";
 
 /* --- STATE --- */

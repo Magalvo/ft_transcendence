@@ -1,4 +1,6 @@
-import { type GameData, hellMode, Vec3 } from "../../index.js";
+import type { GameData } from "../../GameData.js";
+import { hellMode } from "../../../shared/types.js";
+import { Vector3 as Vec3 } from "@babylonjs/core";
 /**
  * Smoothly updates the camera's position and orientation based on the game state.
  * @param data - Scene/game state

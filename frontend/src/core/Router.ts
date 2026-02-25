@@ -46,8 +46,10 @@ export class Router {
 
     if (route) {
       const pageInstance = new route.component();
-      pageInstance.render(); 
+      // Attach element to DOM first so page `render()` can query document elements
       this.rootElement.appendChild(pageInstance.getElement());
+      pageInstance.render();
+      this.currentComponent = pageInstance;
     } else {
       
       this.rootElement.innerHTML = '<h1>404 - Page Not Found</h1>';

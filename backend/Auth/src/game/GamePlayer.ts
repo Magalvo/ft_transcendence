@@ -6,22 +6,26 @@ export class GamePlayer {
     private _type: "human" | "bot";
     private _socket_id?: string;
     private _level?: number;
-    private _side: "left" | "right";
+    private _side: "left" | "right" | "spectator";
     private _state: "waiting" | "ready" = "waiting";
     public id: number = -1;
     public input: Mov = mov.null;
     public nick: string;
 
     /* --- CONSTRUCTORS --- */
-    constructor(type: "human", socket_id: string, side: "left" | "right", name: string);
+    constructor(type: "human", socket_id: string, side: "left" | "right" | "spectator", name: string);
     constructor(type: "bot", level: number, side: "left" | "right", name: string);
-    constructor(type: "human" | "bot", idOrLevel: string | number, side: "left" | "right", nick: string) {
+    constructor(type: "human" | "bot", idOrLevel: string | number, side: "left" | "right" | "spectator", nick: string) {
         this._type = type;
         if (type == "human") {
             this._socket_id = idOrLevel as string;
         }
-        else {
+        else if (type == "bot") {
             this._level = idOrLevel as number;
+            this.setReady();
+        }
+        else {
+            this._socket_id = idOrLevel as string;
             this.setReady();
         }
         this.nick = nick;

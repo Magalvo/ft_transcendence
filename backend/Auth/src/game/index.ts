@@ -11,8 +11,8 @@ export * from "./IGameData.js";
 export * from "./utils.js";
 export * from "./config.js";
 
-export * from "../elements/ServerBall.js";
-export * from "../elements/ServerMagicBall.js";
-export * from "../elements/ServerPaddle.js";
-export * from "../elements/smartBot.js";
-export * from "../elements/ServerTable.js";
+export * from "./elements/ServerBall.js";
+export * from "./elements/ServerMagicBall.js";
+export * from "./elements/ServerPaddle.js";
+export * from "./elements/ServerTable.js";
+export * from "./elements/smartBot.js";

@@ -1,4 +1,5 @@
-import { BABYLON, Color3 } from "../../index.js";
+import * as BABYLON from "@babylonjs/core";
+import { Color3 } from "@babylonjs/core";
 
 /**
  * Creates the skybox mesh and material.

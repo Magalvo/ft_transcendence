@@ -1,4 +1,5 @@
-import { BABYLON, Color3, Color4, Vec3 } from "../../index.js";
+import * as BABYLON from "@babylonjs/core";
+import { Color3, Color4, Vector3 as Vec3 } from "@babylonjs/core";
 
 /**
  * Spawns a burst of particles at the given position (e.g., when the ball hits a side).

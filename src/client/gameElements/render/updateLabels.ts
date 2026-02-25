@@ -1,4 +1,4 @@
-import { type GameData } from "../../index.js";
+import type { GameData } from "../../GameData.js";
 
 export function updateTimerLabel(data: GameData) {
     const totalSeconds = Math.max(0, Math.floor(data.gameConfigs.game_duration - data.mods.time));

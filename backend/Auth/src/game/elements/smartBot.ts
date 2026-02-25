@@ -6,7 +6,7 @@ import {
     type IGameData,
     type Mov,
     hellMode,
-} from '../game/index.js';
+} from '../index.js';
 
 // Threat definition now includes a priority flag
 interface Threat {

@@ -17,19 +17,16 @@ import {
 import { io, Socket } from "socket.io-client";
 
 export class GameScene {
-  private canvas: HTMLCanvasElement;
-  private engine: BABYLON.Engine;
+  private canvas: HTMLCanvasElement | null;
+  private engine?: BABYLON.Engine;
   private data: GameData;
   private handleEvents: HandleEvents;
+  private resizeHandler: (() => void) | null = null;
   private scene!: BABYLON.Scene;
-  private readonly onResize: () => void;
   public socket!: Socket;
 
   constructor() {
-    this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-    this.engine = new BABYLON.Engine(this.canvas, true);
-    this.onResize = () => { this.engine.resize(); };
-    window.addEventListener("resize", this.onResize);
+    this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement | null;
     this.data = {} as GameData;
     this.handleEvents = new HandleEvents(this);
   }
@@ -37,6 +34,19 @@ export class GameScene {
   public startConnection(existingSocket?: Socket): void {
     this.socket = existingSocket || io(SERVER_URL);
     setupSocketListeners(this.socket, this.handleEvents);
+
+    if (!this.canvas) {
+      this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement | null;
+      if (!this.canvas) {
+        throw new Error('renderCanvas element not found when starting GameScene');
+      }
+    }
+
+    if (!this.engine) {
+      this.engine = new BABYLON.Engine(this.canvas, true);
+      this.resizeHandler = () => { this.engine && this.engine.resize(); };
+      window.addEventListener("resize", this.resizeHandler);
+    }
 
     this.engine.runRenderLoop(() => {
       if (this.scene) {
@@ -48,6 +58,7 @@ export class GameScene {
   public resetScene(serverConfigs: GameConfiguration): void {
     undefineKeyEvents();
     if (this.scene) this.scene.dispose();
+    if (!this.engine) throw new Error('Engine not initialized before resetScene');
     this.scene = new BABYLON.Scene(this.engine);
     this.initializeGameData(serverConfigs);
     this.data.obj3D = createObjects3D(this.scene, serverConfigs);
@@ -56,11 +67,11 @@ export class GameScene {
     defineKeyEvents(this.data);
 
     this.scene.registerBeforeRender(() => {
-      const dt = this.engine.getDeltaTime() / 1000;
+      const dt = this.engine!.getDeltaTime() / 1000;
       renderGame(dt, this.data);
       if (this.data.flags.return_main_menu) { /* RETURN MAIN PAGE */ };
     });
-    this.engine.resize();
+    this.engine!.resize();
   }
 
   private initializeGameData(configs: any): void {
@@ -97,12 +108,34 @@ export class GameScene {
   }
 
   public dispose(): void {
-    undefineKeyEvents();
-    if (this.scene) {
-      this.scene.dispose();
+    try {
+      undefineKeyEvents();
+    } catch (e) {
+      // ignore if not registered
     }
-    this.engine.stopRenderLoop();
-    window.removeEventListener("resize", this.onResize);
-    this.engine.dispose();
+
+    try {
+      if (this.scene) this.scene.dispose();
+    } catch (e) {
+      // ignore disposal errors
+    }
+
+    try {
+      if (this.engine) this.engine.stopRenderLoop();
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      if (this.engine) this.engine.dispose();
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler);
+    } catch (e) {
+      // ignore
+    }
   }
 }

@@ -1,9 +1,11 @@
-import {
-    COUNTDOWN_MESSAGES, ENDGAME_MESSAGES, GameScene, GameStatus, type GameData,
-    pauseScreen, resumeGame, showWarningMessage, clearAllNotifications,
-    syncGameStats, syncMagicBalls, syncPaddles, syncPlayingBalls, syncTable,
-    disposeCountdown, showCountdownDisplay
-} from "../index.js";
+import { COUNTDOWN_MESSAGES, ENDGAME_MESSAGES } from "../../shared/strings.js";
+import { GameScene } from "../GameScene.js";
+import { GameStatus } from "../../shared/types.js";
+import type { GameData } from "../GameData.js";
+import { pauseScreen, resumeGame } from "../gameElements/user_interface/pauseScreen.js";
+import { showWarningMessage, clearAllNotifications } from "../gameElements/user_interface/showWarningMessage.js";
+import { syncGameStats, syncMagicBalls, syncPaddles, syncPlayingBalls, syncTable } from "./syncFunctions.js";
+import { disposeCountdown, showCountdownDisplay } from "../gameElements/user_interface/Countdown.js";
 
 export class HandleEvents {
     private data: GameData = {} as GameData;

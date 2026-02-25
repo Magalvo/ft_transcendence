@@ -1,16 +1,12 @@
-import { Socket } from "socket.io-client"; // Import necessário
+import { Socket } from "socket.io-client";
 import type { GameConfiguration } from "./GameConfiguration.js";
-import {
-    BABYLON,
-    Ball,
-    Paddle,
-    Table,
-    type HellMode,
-    type Mov,
-    type Objects2D,
-    type Environment3D,
-    type Side,
-} from "./index.js";
+import * as BABYLON from "@babylonjs/core";
+import type { Ball } from "./gameElements/meshes/Ball.js";
+import type { Paddle } from "./gameElements/meshes/Paddle.js";
+import type { Table } from "./gameElements/meshes/Table.js";
+import type { HellMode, Mov, Side } from "../shared/types.js";
+import type { Objects2D } from "./gameElements/initializations/createObjects2D.js";
+import type { Environment3D } from "./gameElements/initializations/environment3D.js";
 
 // --- Main Objects (Meshes) ---
 export interface GameObjects {

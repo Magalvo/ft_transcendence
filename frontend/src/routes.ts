@@ -2,6 +2,7 @@ import { Route } from "./interfaces/routeConf";
 import { LoginPage } from "./pages/LoginPage"
 import { HomePage } from "./pages/HomePage";
 import { GamePage } from "./pages/Game";
+import { LobbyPage } from "./pages/Lobby";
 
 export const AppRoutes:Route[] = [
     {
@@ -15,5 +16,10 @@ export const AppRoutes:Route[] = [
     {
         path: "/game",
         pageComponent: GamePage
+    }
+
+    ,{
+        path: "/lobby",
+        pageComponent: LobbyPage
     }
 ]

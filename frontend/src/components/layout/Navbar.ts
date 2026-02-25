@@ -18,7 +18,7 @@ export class Navbar extends AbstractComponent {
 
     
     const links = [
-      { label: 'Game', path: '/game' },
+      { label: 'Game', path: '/lobby' },
       { label: 'Tournament', path: '/tournament' },
       { label: 'Chat', path: '/chat' }, 
     ];

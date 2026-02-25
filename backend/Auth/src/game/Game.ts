@@ -43,7 +43,6 @@ export class Game {
 
     public start() {
         console.log("Initializing Game Entities...");
-
         this.engine.initGameEntities();
         this.setupInputs();
 
@@ -65,7 +64,7 @@ export class Game {
         if (!socket) return;
 
         const teamPlayers = this.engine.data.players.filter(p => p.side === player.side);
-        const myIndex = teamPlayers.indexOf(player);
+        const myIndex = (player.side === 'spectator') ? -1 : teamPlayers.indexOf(player);
 
         socket.on('requestGameInit', () => {
             console.log(`Sending Init to player ${player.socket_id}`);
@@ -83,30 +82,32 @@ export class Game {
                 this.startGameLoop();
         });
 
-        socket.on('input', (data) => {
-            if (this.engine.data.status !== GameStatus.RUNNING) return;
-            if (data.side === player.side) {
-                if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
-                else this.engine.data.inputs.right[myIndex] = data.cmd;
-            }
-        });
+        if (player.side !== 'spectator') {
+            socket.on('input', (data) => {
+                if (this.engine.data.status !== GameStatus.RUNNING) return;
+                if (data.side === player.side) {
+                    if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
+                    else this.engine.data.inputs.right[myIndex] = data.cmd;
+                }
+            });
 
-        socket.on('pauseGame', () => {
-            const data = this.engine.data;
-            const now = Date.now();
-            const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
+            socket.on('pauseGame', () => {
+                const data = this.engine.data;
+                const now = Date.now();
+                const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
 
-            if (now - data.lastPauseToggle < cooldown) return;
-            data.lastPauseToggle = now;
+                if (now - data.lastPauseToggle < cooldown) return;
+                data.lastPauseToggle = now;
 
-            if (data.status === GameStatus.RUNNING) {
-                data.status = GameStatus.PAUSED;
-                this.io.emit('gamePaused');
-            } else if (data.status === GameStatus.PAUSED) {
-                data.status = GameStatus.RUNNING;
-                this.io.emit('gameResumed');
-            }
-        });
+                if (data.status === GameStatus.RUNNING) {
+                    data.status = GameStatus.PAUSED;
+                    this.io.emit('gamePaused');
+                } else if (data.status === GameStatus.PAUSED) {
+                    data.status = GameStatus.RUNNING;
+                    this.io.emit('gameResumed');
+                }
+            });
+        }
     }
 
     private startGameLoop() {
@@ -155,7 +156,9 @@ export class Game {
                 this.io.emit('endGame', { count: 0 });
                 this.engine.resetGame();
                 // SEND RESULTS TO SERVER
+                this.sendResultsServer();
                 // RETURN TO THE MAIN PAGE
+
             }
             this.io.emit('gameState', this.engine.getSnapshot());
             return;
@@ -163,5 +166,44 @@ export class Game {
 
         this.engine.update(dt);
         this.io.emit('gameState', this.engine.getSnapshot());
+    }
+
+    private async sendResultsServer() {
+        const eData = this.engine.data;
+        const teamA_IDs = eData.players
+            .filter(p => p.side === "left")
+            .map(p => {
+                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
+            });
+
+        const teamB_IDs = eData.players
+            .filter(p => p.side === "right")
+            .map(p => {
+                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
+            });
+        const res = await fetch("http://localhost:3000/api/games", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + userJwtToken
+            },
+            body: JSON.stringify({
+                duration: eData.configs.duration_label,
+                powerups: eData.configs.power_ups,
+                mode: eData.configs.players_per_side,
+                teamA: teamA_IDs,
+                teamB: teamB_IDs,
+                teamAScore: eData.score.left,
+                teamBScore: eData.score.right
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error("Failed to save game:", data.message || res.status);
+        } else {
+            console.log("Game saved with ID:", data.gameId);
+        }
     }
 }

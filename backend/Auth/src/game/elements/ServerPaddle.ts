@@ -10,7 +10,7 @@ import {
     type IGameData,
     type MagicEffect,
     type Mov,
-} from "../game/index.js";
+} from "../index.js";
 
 export class ServerPaddle {
     public pos: Vector3;

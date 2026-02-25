@@ -1,4 +1,5 @@
-import { BABYLON, type GameData } from "../../index.js";
+import * as BABYLON from "@babylonjs/core";
+import type { GameData } from "../../GameData.js";
 
 const TEXTURE_URL = "https://www.babylonjs-playground.com/textures/flare.png";
 const FIRE_CAPACITY = 2000;

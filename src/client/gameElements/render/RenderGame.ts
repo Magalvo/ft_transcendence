@@ -1,16 +1,11 @@
-import {
-  handleKeyboardEvents,
-  updateCamera,
-  updateScoreLabels,
-  updateEnvironment,
-  rotateCamera,
-  updateTimerLabel,
-  updateMusic,
-  updateHellTimerLabel,
-  updateWarningMessages,
-  updateCountdownUI,
-  type GameData,
-} from "../../index.js";
+import { handleKeyboardEvents } from "./handleKeyboard.js";
+import { updateCamera, rotateCamera } from "./updateCamera.js";
+import { updateScoreLabels, updateTimerLabel, updateHellTimerLabel } from "./updateLabels.js";
+import { updateEnvironment } from "./updateEnvironment.js";
+import { updateMusic } from "./updateMusic.js";
+import { updateWarningMessages } from "../user_interface/showWarningMessage.js";
+import { updateCountdownUI } from "../user_interface/Countdown.js";
+import type { GameData } from "../../GameData.js";
 
 /**
  * Main game loop logic.

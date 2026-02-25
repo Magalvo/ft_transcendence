@@ -1,4 +1,4 @@
-import { type GameData } from "../../index.js";
+import type { GameData } from "../../GameData.js";
 
 export function updateMusic(data: GameData) {
     if (!data.flags.game_running) {

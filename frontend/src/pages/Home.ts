@@ -59,7 +59,7 @@ export class HomePage extends AbstractComponent {
         return card;
     };
 
-    const playCard = createActionCard('Quick Match', 'Jump straight into a classic 1v1 pong game against AI or Local.', 'PLAY NOW', '/game', 'border-blue-500');
+    const playCard = createActionCard('Quick Match', 'Jump straight into a classic 1v1 pong game against AI or Local.', 'PLAY NOW', '/lobby', 'border-blue-500');
     const tournCard = createActionCard('Tournament', 'Create a bracket and challenge 3 friends to a championship.', 'ORGANIZE', '/tournament', 'border-purple-500');
     const profileCard = createActionCard('Your Profile', 'Check your stats, match history, and customize your avatar.', 'VIEW PROFILE', '/profile', 'border-green-500');
 

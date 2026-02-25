@@ -1,4 +1,5 @@
-import { hellMode, type GameData } from "../../index.js";
+import { hellMode } from "../../../shared/types.js";
+import type { GameData } from "../../GameData.js";
 
 /**
  * Updates the environment (e.g., flames, skybox) based on the current side.

@@ -1,7 +1,5 @@
-import {
-  BABYLON,
-  Vec3,
-} from "../../index.js";
+import * as BABYLON from "@babylonjs/core";
+import { Vector3 as Vec3 } from "@babylonjs/core";
 
 export type GameObjectOptions = {
   scene: BABYLON.Scene;

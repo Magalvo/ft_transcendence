@@ -13,6 +13,7 @@ import "reflect-metadata";
 import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
 import chatRoutes from './routes/chat.js';
+import { CONFIG } from './game/config.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -73,7 +74,7 @@ app.get('/api/test', async () => {
 
 const start = async () => {
   try {
-    const port = Number(process.env.PORT || 3000);
+    const port = Number(process.env.PORT ?? CONFIG.PORT);
 
     await app.ready();
 

@@ -1,20 +1,15 @@
-import {
-  BABYLON,
-  createObjects3D,
-  createEnvironment3D,
-  createObjects2D,
-  renderGame,
-  defineKeyEvents,
-  undefineKeyEvents,
-  HandleEvents,
-  setupSocketListeners,
-  type GameData,
-  SERVER_URL,
-  hellMode,
-  mov,
-  GameConfiguration,
-} from "./index.js";
+import * as BABYLON from "@babylonjs/core";
 import { io, Socket } from "socket.io-client";
+import { createObjects3D } from "./gameElements/initializations/createObjects3D.js";
+import { createEnvironment3D } from "./gameElements/initializations/environment3D.js";
+import { createObjects2D } from "./gameElements/initializations/createObjects2D.js";
+import { renderGame } from "./gameElements/render/RenderGame.js";
+import { defineKeyEvents, undefineKeyEvents } from "./gameElements/initializations/defineEvents.js";
+import { HandleEvents } from "./serverConnections/HandleEvents.js";
+import { setupSocketListeners } from "./serverConnections/socketListeners.js";
+import type { GameData } from "./GameData.js";
+import { SERVER_URL } from "./configs.js";
+import { hellMode, mov, type GameConfiguration } from "./index.js";
 
 export class GameScene {
   private canvas: HTMLCanvasElement;

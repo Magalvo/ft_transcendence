@@ -86,6 +86,14 @@ export class Lobby {
         this.broadcastState();
     }
 
+    public movePlayerToBench(leaderId: string, targetId: string) {
+        if (!this.isLeader(leaderId)) return;
+        if (!this.clients.includes(targetId)) return;
+        this.clearPlayerFromSlots(targetId);
+        this.bench.push(targetId);
+        this.broadcastState();
+    }
+
     public addBot(id: string, side: 'left' | 'right', idx: number) {
         if (!this.isLeader(id)) return;
         const slot = this.slots[side][idx];
@@ -124,9 +132,12 @@ export class Lobby {
             else if (s.content === 'bot' && s.botLevel)
                 players.push(new GamePlayer('bot', s.botLevel, s.side, `Bot Lvl ${s.botLevel}`));
         };
-
         this.slots.left.forEach(process);
         this.slots.right.forEach(process);
+
+        this.bench.forEach(socketId => {
+            players.push(new GamePlayer('human', socketId, 'spectator' as any, `Spectator ${socketId.slice(0, 4)}`));
+        });
 
         this.gameInstance = new Game(this.io, this.config, players);
         this.gameInstance.start();
@@ -136,10 +147,9 @@ export class Lobby {
     /* --- HELPERS --- */
 
     private canStart(): boolean {
-        const sides = [this.slots.left, this.slots.right];
-        const allSlotsFilled = sides.every(side => side.every(s => s.content !== 'empty'));
-        const benchEmpty = this.bench.length === 0;
-        return allSlotsFilled && benchEmpty;
+        return [this.slots.left, this.slots.right].every(side => 
+            side.every(s => s.content !== 'empty')
+        );
     }
 
     private resizeSlots() {
