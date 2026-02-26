@@ -21,6 +21,12 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET is not defined. Authentication will not work.");
+  process.exit(1);
+}
+
 const app = Fastify({ logger: true });
 
 app.get("/ok", (req, reply) => {
