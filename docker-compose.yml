@@ -18,6 +18,8 @@ services:
         dockerfile: Dockerfile
       ports:
         - "3000:3000"
+      environment:
+        - JWT_SECRET=${JWT_SECRET}
       networks:
         - transcendencenet
       restart: on-failure

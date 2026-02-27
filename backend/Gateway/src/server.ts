@@ -9,7 +9,7 @@ app.register(cors, {
   credentials: true,
 })
 
-const upstream = process.env.AUTH_UPSTREAM || 'http://localhost:3000'
+const upstream = process.env.AUTH_UPSTREAM || 'http://auth:3000';
 
 app.register(proxy, {
   upstream,

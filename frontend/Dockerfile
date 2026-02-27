@@ -11,6 +11,6 @@ COPY ./ .
 
 RUN npm install --legacy-peer-deps
 
-CMD ["npm", "run", "dev", "--", "host"]
+CMD ["npm", "run", "dev", "--", "--host"]
 
 EXPOSE 5173
