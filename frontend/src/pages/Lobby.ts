@@ -17,7 +17,8 @@ interface LobbyState {
     leader: string;
     isReadyToStart: boolean;
     config: {
-        players_per_side: number;
+        players_per_side?: number;
+        paddles_per_side?: number; // Fallback caso o backend envie este nome
         duration_label: string;
         power_ups: boolean;
     };
@@ -44,6 +45,16 @@ export class LobbyPage extends AbstractComponent {
     private leaderMsg: HTMLElement | null = null;
     private powerUpsButton: HTMLButtonElement | null = null;
 
+    // mode buttons
+    private btnMode1: HTMLButtonElement | null = null;
+    private btnMode2: HTMLButtonElement | null = null;
+    private btnMode3: HTMLButtonElement | null = null;
+
+    // duration buttons
+    private btnDurFast: HTMLButtonElement | null = null;
+    private btnDurNormal: HTMLButtonElement | null = null;
+    private btnDurLong: HTMLButtonElement | null = null;
+
     constructor() {
         super('div', 'flex flex-col h-screen bg-black overflow-auto');
     }
@@ -65,9 +76,9 @@ export class LobbyPage extends AbstractComponent {
                 </div>
 
                 <div class="flex gap-3" id="leader-controls">
-                    <button id="btn-mode-1" class="rounded bg-neutral-700 px-4 py-2">1 vs 1</button>
-                    <button id="btn-mode-2" class="rounded bg-neutral-700 px-4 py-2">2 vs 2</button>
-                    <button id="btn-mode-3" class="rounded bg-neutral-700 px-4 py-2">3 vs 3</button>
+                    <button id="btn-mode-1" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">1 vs 1</button>
+                    <button id="btn-mode-2" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">2 vs 2</button>
+                    <button id="btn-mode-3" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">3 vs 3</button>
                 </div>
 
                 <div class="w-full max-w-5xl rounded bg-neutral-800 p-4">
@@ -75,11 +86,11 @@ export class LobbyPage extends AbstractComponent {
                     <div class="flex flex-wrap justify-center gap-4" id="settings-controls">
                         <div class="flex items-center gap-2">
                             <span>Duration:</span>
-                            <button id="btn-dur-fast" class="rounded bg-neutral-700 px-3 py-2">Fast</button>
-                            <button id="btn-dur-normal" class="rounded bg-neutral-700 px-3 py-2">Normal</button>
-                            <button id="btn-dur-long" class="rounded bg-neutral-700 px-3 py-2">Long</button>
+                            <button id="btn-dur-fast" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">Fast</button>
+                            <button id="btn-dur-normal" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">Normal</button>
+                            <button id="btn-dur-long" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">Long</button>
                         </div>
-                        <button id="btn-powerups" class="rounded bg-green-700 px-4 py-2">Power Ups: ON</button>
+                        <button id="btn-powerups" class="rounded bg-green-700 px-4 py-2 transition ring-offset-2">Power Ups: ON</button>
                     </div>
                 </div>
 
@@ -115,29 +126,57 @@ export class LobbyPage extends AbstractComponent {
         this.leaderMsg = container.querySelector('#leader-msg');
         this.powerUpsButton = container.querySelector('#btn-powerups');
 
-        this.bindUiActions(container);
+        this.btnMode1 = container.querySelector('#btn-mode-1');
+        this.btnMode2 = container.querySelector('#btn-mode-2');
+        this.btnMode3 = container.querySelector('#btn-mode-3');
+
+        this.btnDurFast = container.querySelector('#btn-dur-fast');
+        this.btnDurNormal = container.querySelector('#btn-dur-normal');
+        this.btnDurLong = container.querySelector('#btn-dur-long');
+
+        this.bindUiActions();
 
         this.element.appendChild(container);
 
         this.initSocket();
     }
 
-    private bindUiActions(container: HTMLElement): void {
-        const mode1 = container.querySelector<HTMLButtonElement>('#btn-mode-1');
-        const mode2 = container.querySelector<HTMLButtonElement>('#btn-mode-2');
-        const mode3 = container.querySelector<HTMLButtonElement>('#btn-mode-3');
-        const durFast = container.querySelector<HTMLButtonElement>('#btn-dur-fast');
-        const durNormal = container.querySelector<HTMLButtonElement>('#btn-dur-normal');
-        const durLong = container.querySelector<HTMLButtonElement>('#btn-dur-long');
+    private bindUiActions(): void {
+        this.btnMode1?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setMode', 'one_for_one');
+        });
+        this.btnMode2?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setMode', 'two_for_two');
+        });
+        this.btnMode3?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setMode', 'three_for_three');
+        });
 
-        mode1?.addEventListener('click', () => this.socket?.emit('lobby_setMode', 'one_for_one'));
-        mode2?.addEventListener('click', () => this.socket?.emit('lobby_setMode', 'two_for_two'));
-        mode3?.addEventListener('click', () => this.socket?.emit('lobby_setMode', 'three_for_three'));
-        durFast?.addEventListener('click', () => this.socket?.emit('lobby_setDuration', 'fast'));
-        durNormal?.addEventListener('click', () => this.socket?.emit('lobby_setDuration', 'normal'));
-        durLong?.addEventListener('click', () => this.socket?.emit('lobby_setDuration', 'long'));
-        this.powerUpsButton?.addEventListener('click', () => this.socket?.emit('lobby_setPowerUps', !this.currentPowerUpsState));
-        this.btnStart?.addEventListener('click', () => this.socket?.emit('lobby_start'));
+        this.btnDurFast?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setDuration', 'fast');
+        });
+        this.btnDurNormal?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setDuration', 'normal');
+        });
+        this.btnDurLong?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setDuration', 'long');
+        });
+
+        this.powerUpsButton?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_setPowerUps', !this.currentPowerUpsState);
+        });
+
+        this.btnStart?.addEventListener('click', () => {
+            if (!this.isLeader) return;
+            this.socket?.emit('lobby_start');
+        });
     }
 
     private initSocket(): void {
@@ -150,7 +189,6 @@ export class LobbyPage extends AbstractComponent {
         this.socket.on('lobbyState', (state: LobbyState) => this.renderLobby(state));
 
         this.socket.on('gameStarted', () => {
-            // Navigate to game route without reloading
             window.history.pushState({}, '', '/game');
             window.dispatchEvent(new PopStateEvent('popstate'));
         });
@@ -164,16 +202,51 @@ export class LobbyPage extends AbstractComponent {
         this.isLeader = state.leader === this.myId;
         this.currentPowerUpsState = state.config.power_ups;
 
+        // UI do Leader
         this.leaderControls.classList.toggle('hidden', !this.isLeader);
         this.leaderMsg.classList.toggle('hidden', !this.isLeader);
 
+        // UI do Botão Start
         const ready = this.isLeader && state.isReadyToStart;
         this.btnStart.disabled = !ready;
-        this.btnStart.textContent = this.isLeader
-            ? (ready ? 'START GAME' : 'Fill all slots to start')
-            : 'Waiting for Leader...';
+        this.btnStart.textContent = this.isLeader ? (ready ? 'START GAME' : 'Fill all slots to start') : 'Waiting for Leader...';
         this.btnStart.classList.toggle('opacity-50', !ready);
         this.btnStart.classList.toggle('cursor-not-allowed', !ready);
+
+        // Desativar visualmente botões de settings para não líderes
+        const settingsBtns = [this.btnMode1, this.btnMode2, this.btnMode3, this.btnDurFast, this.btnDurNormal, this.btnDurLong, this.powerUpsButton];
+        settingsBtns.forEach(btn => {
+            if (btn) {
+                btn.disabled = !this.isLeader;
+                btn.classList.toggle('opacity-50', !this.isLeader);
+                btn.classList.toggle('cursor-not-allowed', !this.isLeader);
+            }
+        });
+
+        // HIGHLIGHT DOS MODOS
+        const players = state.config.players_per_side || state.config.paddles_per_side;
+        this.btnMode1?.classList.toggle('ring-2', players === 1);
+        this.btnMode1?.classList.toggle('ring-yellow-400', players === 1);
+        this.btnMode2?.classList.toggle('ring-2', players === 2);
+        this.btnMode2?.classList.toggle('ring-yellow-400', players === 2);
+        this.btnMode3?.classList.toggle('ring-2', players === 3);
+        this.btnMode3?.classList.toggle('ring-yellow-400', players === 3);
+
+        // HIGHLIGHT DAS DURAÇÕES
+        const dur = state.config.duration_label;
+        this.btnDurFast?.classList.toggle('ring-2', dur === 'fast');
+        this.btnDurFast?.classList.toggle('ring-yellow-400', dur === 'fast');
+        this.btnDurNormal?.classList.toggle('ring-2', dur === 'normal');
+        this.btnDurNormal?.classList.toggle('ring-yellow-400', dur === 'normal');
+        this.btnDurLong?.classList.toggle('ring-2', dur === 'long');
+        this.btnDurLong?.classList.toggle('ring-yellow-400', dur === 'long');
+
+        // BOTÃO DE POWER UPS
+        if (this.powerUpsButton) {
+            this.powerUpsButton.textContent = `Power Ups: ${this.currentPowerUpsState ? 'ON' : 'OFF'}`;
+            this.powerUpsButton.classList.toggle('bg-green-700', this.currentPowerUpsState);
+            this.powerUpsButton.classList.toggle('bg-red-700', !this.currentPowerUpsState);
+        }
 
         this.renderTeamSlots(this.slotsLeftEl, state.slots.left, 'left');
         this.renderTeamSlots(this.slotsRightEl, state.slots.right, 'right');
@@ -182,20 +255,20 @@ export class LobbyPage extends AbstractComponent {
 
     private renderBench(bench: string[]): void {
         if (!this.benchListEl) return;
-
         this.benchListEl.innerHTML = '';
+
         bench.forEach((playerId) => {
             const player = document.createElement('button');
             player.type = 'button';
             player.id = `bench-${playerId}`;
-            player.className = 'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left';
+            player.className = 'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left transition';
             player.textContent = `Player ${playerId.slice(0, 4)}`;
 
             if (playerId === this.myId) player.classList.add('ring-1', 'ring-yellow-400');
 
             if (this.selectedBenchPlayer === playerId) {
                 player.classList.remove('border-transparent');
-                player.classList.add('border-cyan-400');
+                player.classList.add('border-cyan-400', 'bg-neutral-600');
             }
 
             if (this.isLeader) {
@@ -217,16 +290,17 @@ export class LobbyPage extends AbstractComponent {
 
         slots.forEach((slot) => {
             const row = document.createElement('div');
-            row.className = 'flex items-center justify-between rounded border-2 border-neutral-600 bg-neutral-700 px-3 py-3';
+            row.className = 'flex items-center justify-between rounded border-2 border-neutral-600 bg-neutral-700 px-3 py-3 h-[52px]';
 
             if (slot.content === 'empty') {
                 row.classList.add('border-dashed', 'opacity-70');
                 row.textContent = '[ Empty Slot ]';
                 if (this.isLeader) {
-                    row.classList.add('cursor-pointer');
+                    row.classList.add('cursor-pointer', 'hover:bg-neutral-600');
                     row.addEventListener('click', () => {
-                        if (!this.socket || !this.selectedBenchPlayer) {
-                            this.socket?.emit('lobby_addBot', { side, slotIndex: slot.index });
+                        if (!this.socket) return;
+                        if (!this.selectedBenchPlayer) {
+                            this.socket.emit('lobby_addBot', { side, slotIndex: slot.index });
                             return;
                         }
 
@@ -246,11 +320,11 @@ export class LobbyPage extends AbstractComponent {
                 if (this.isLeader && slot.socketId) {
                     const action = document.createElement('button');
                     action.type = 'button';
-                    action.className = 'rounded bg-neutral-800 px-2 py-1 text-xs';
+                    action.className = 'rounded bg-neutral-800 hover:bg-neutral-600 px-2 py-1 text-xs transition';
                     action.textContent = 'To Bench';
                     action.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        console.debug('Lobby: To Bench clicked for', slot.socketId);
+                        // Isto envia corretamente o pedido para o Backend
                         this.socket?.emit('lobby_moveToBench', slot.socketId);
                     });
                     row.appendChild(action);
@@ -267,31 +341,20 @@ export class LobbyPage extends AbstractComponent {
                     const actions = document.createElement('div');
                     actions.className = 'flex gap-1';
 
-                    const minus = document.createElement('button');
-                    minus.type = 'button';
-                    minus.className = 'rounded bg-neutral-800 px-2 py-1 text-xs';
-                    minus.textContent = '-';
-                    minus.addEventListener('click', () => {
-                        this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: -1 });
-                    });
+                    const createBtn = (text: string, colorClass: string, onClick: () => void) => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = `rounded ${colorClass} hover:opacity-80 px-2 py-1 text-xs transition`;
+                        btn.textContent = text;
+                        btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+                        return btn;
+                    };
 
-                    const plus = document.createElement('button');
-                    plus.type = 'button';
-                    plus.className = 'rounded bg-neutral-800 px-2 py-1 text-xs';
-                    plus.textContent = '+';
-                    plus.addEventListener('click', () => {
-                        this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: 1 });
-                    });
-
-                    const remove = document.createElement('button');
-                    remove.type = 'button';
-                    remove.className = 'rounded bg-red-700 px-2 py-1 text-xs';
-                    remove.textContent = 'X';
-                    remove.addEventListener('click', () => {
-                        this.socket?.emit('lobby_removeBot', { side, slotIndex: slot.index });
-                    });
-
-                    actions.append(minus, plus, remove);
+                    actions.append(
+                        createBtn('-', 'bg-neutral-800', () => this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: -1 })),
+                        createBtn('+', 'bg-neutral-800', () => this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: 1 })),
+                        createBtn('X', 'bg-red-700', () => this.socket?.emit('lobby_removeBot', { side, slotIndex: slot.index }))
+                    );
                     row.appendChild(actions);
                 }
             }
@@ -304,7 +367,6 @@ export class LobbyPage extends AbstractComponent {
         if (this.socket) {
             this.socket.removeAllListeners('lobbyState');
             this.socket.removeAllListeners('gameStarted');
-            // keep socket connected so GamePage can reuse it
         }
     }
 }
