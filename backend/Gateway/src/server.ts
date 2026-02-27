@@ -19,6 +19,10 @@ app.register(proxy, {
   http2: false,
 })
 
+app.get('/', async () => {
+  return { ok: true, service: 'gateway' };
+})
+
 app.ready(() => {
   console.log(app.printRoutes())
 })
