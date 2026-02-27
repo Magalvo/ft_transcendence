@@ -61,6 +61,80 @@ if (!chatGroupsExists) {
   console.log("Table 'chat_groups' already exists");
 }
 
+if (!(await db.schema.hasColumn("chat_groups", "owner_id"))) {
+  await db.schema.alterTable("chat_groups", (table) => {
+    table.uuid("owner_id").nullable().references("id").inTable("users").onDelete("CASCADE");
+  });
+}
+if (!(await db.schema.hasColumn("chat_groups", "visibility"))) {
+  await db.schema.alterTable("chat_groups", (table) => {
+    table.string("visibility").notNullable().defaultTo("public");
+  });
+}
+if (!(await db.schema.hasColumn("chat_groups", "password_hash"))) {
+  await db.schema.alterTable("chat_groups", (table) => {
+    table.string("password_hash").nullable();
+  });
+}
+if (!(await db.schema.hasColumn("chat_groups", "created_at"))) {
+  await db.schema.alterTable("chat_groups", (table) => {
+    table.bigInteger("created_at").notNullable().defaultTo(db.raw("(strftime('%s','now') * 1000)"));
+  });
+}
+await db("chat_groups").whereNull("owner_id").update({ owner_id: db.ref("admin_id") as any });
+await db("chat_groups").whereNull("visibility").update({ visibility: "public" });
+
+const chatGroupAdminsExists = await db.schema.hasTable("chat_group_admins");
+if (!chatGroupAdminsExists) {
+  await db.schema.createTable("chat_group_admins", (table) => {
+    table.integer("id_group").notNullable();
+    table.uuid("user_id").notNullable();
+    table.bigInteger("created_at").notNullable();
+    table.primary(["id_group", "user_id"]);
+    table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+    table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+  });
+}
+
+const chatGroupBansExists = await db.schema.hasTable("chat_group_bans");
+if (!chatGroupBansExists) {
+  await db.schema.createTable("chat_group_bans", (table) => {
+    table.integer("id_group").notNullable();
+    table.uuid("user_id").notNullable();
+    table.uuid("banned_by").notNullable();
+    table.bigInteger("created_at").notNullable();
+    table.primary(["id_group", "user_id"]);
+    table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+    table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+  });
+}
+
+const chatGroupMutesExists = await db.schema.hasTable("chat_group_mutes");
+if (!chatGroupMutesExists) {
+  await db.schema.createTable("chat_group_mutes", (table) => {
+    table.integer("id_group").notNullable();
+    table.uuid("user_id").notNullable();
+    table.uuid("muted_by").notNullable();
+    table.bigInteger("expires_at").notNullable();
+    table.bigInteger("created_at").notNullable();
+    table.primary(["id_group", "user_id"]);
+    table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+    table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+  });
+}
+
+const blockedUsersExists = await db.schema.hasTable("blocked_users");
+if (!blockedUsersExists) {
+  await db.schema.createTable("blocked_users", (table) => {
+    table.uuid("blocker_id").notNullable();
+    table.uuid("blocked_id").notNullable();
+    table.bigInteger("created_at").notNullable();
+    table.primary(["blocker_id", "blocked_id"]);
+    table.foreign("blocker_id").references("id").inTable("users").onDelete("CASCADE");
+    table.foreign("blocked_id").references("id").inTable("users").onDelete("CASCADE");
+  });
+}
+
 const chatGroupMembersExists = await db.schema.hasTable("chat_group_members");
 
 if (!chatGroupMembersExists) {

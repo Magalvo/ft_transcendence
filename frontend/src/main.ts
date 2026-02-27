@@ -10,6 +10,7 @@ import { TournamentPage } from './pages/Tournament';
 import { HomePage } from './pages/Home';
 import { ProfilePage } from './pages/Profile';
 import { LobbyPage } from './pages/Lobby';
+import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
 
 //? Initialize Router
@@ -22,6 +23,7 @@ router.addRoute('/login', LoginPage);
 router.addRoute('/dashboard', DashboardPage);
 router.addRoute('/game', GamePage);
 router.addRoute('/lobby', LobbyPage);
+router.addRoute('/chat', ChatPage);
 router.addRoute('/tournament', TournamentPage);
 
 const publicRoutes = ['/login', '/404'];

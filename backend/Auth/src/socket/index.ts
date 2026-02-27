@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
-import { Lobby } from "../game/Lobby.js"; 
+import { Lobby } from "../game/Lobby.js";
+import { attachChatRealtime } from "./chatRealtime.js";
 
 export function setupSocketIO(httpServer: any) {
   const io = new Server(httpServer, {
@@ -16,6 +17,7 @@ export function setupSocketIO(httpServer: any) {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
     lobby.addClient(socket.id);
+    attachChatRealtime(io, socket);
 
     socket.on("lobby_setMode", (mode) =>
       lobby.setGameMode(socket.id, mode)

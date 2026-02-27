@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/LoginPage"
 import { HomePage } from "./pages/HomePage";
 import { GamePage } from "./pages/Game";
 import { LobbyPage } from "./pages/Lobby";
+import { ChatPage } from "./pages/Chat";
 
 export const AppRoutes:Route[] = [
     {
@@ -21,5 +22,9 @@ export const AppRoutes:Route[] = [
     ,{
         path: "/lobby",
         pageComponent: LobbyPage
+    },
+    {
+        path: "/chat",
+        pageComponent: ChatPage
     }
 ]

@@ -7,7 +7,13 @@ const authenticate = async (
   req: FastifyRequest,
   reply: FastifyReply
 ) => {
-  const accessToken: string | undefined = req.cookies["token"];
+  const cookieToken: string | undefined = req.cookies["token"];
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    authHeader && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : undefined;
+  const accessToken = cookieToken || bearerToken;
 
   if (!accessToken) {
     return sendError(reply, "Invalid or expired token", 401);
