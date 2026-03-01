@@ -4,6 +4,8 @@ import { HomePage } from "./pages/HomePage";
 import { GamePage } from "./pages/Game";
 import { LobbyPage } from "./pages/Lobby";
 import { ChatPage } from "./pages/Chat";
+import { FindGamePage } from "./pages/FindGame";
+import { DashboardPage } from "./pages/Dashboard"
 
 export const AppRoutes:Route[] = [
     {
@@ -22,6 +24,14 @@ export const AppRoutes:Route[] = [
     ,{
         path: "/lobby",
         pageComponent: LobbyPage
+    },
+    {
+        path: "/dashboard",
+        pageComponent: DashboardPage
+    },
+    {
+        path: "/find-game",
+        pageComponent: FindGamePage
     },
     {
         path: "/chat",

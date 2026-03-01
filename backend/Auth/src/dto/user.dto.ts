@@ -1,16 +1,22 @@
-import { Length } from "class-validator";
+import { IsString, IsOptional, MinLength } from "class-validator";
 
+/**
+ * DTO for user login input validation
+ * Represents data sent by frontend to /login endpoint
+ */
+class UserLoginDTO {
 
-class userDTO {
-
-    @Length(5)
-    username: string;
+    @IsString()
+    @MinLength(3, { message: 'Username must be provided' })
+    username!: string;
     
-    @Length(8)
-    password: string;
+    @IsString()
+    @MinLength(8, { message: 'Password must be at least 8 characters' })
+    password!: string;
 
-    twoFactorCode?:string;
+    @IsOptional()
+    @IsString()
+    twoFactorCode?: string;
 }
 
-
-export default userDTO;
+export default UserLoginDTO;

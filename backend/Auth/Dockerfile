@@ -11,6 +11,8 @@ COPY ./ .
 
 RUN npm install
 
+RUN npm rebuild
+
 CMD ["npm", "run", "dev"]
 
 

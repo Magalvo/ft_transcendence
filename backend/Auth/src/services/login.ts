@@ -5,10 +5,10 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
-import userDTO from "../dto/user.dto.js";
+import UserLoginDTO from "../dto/user.dto.js";
 import { plainToInstance } from "class-transformer";
 import { validate, ValidationError } from "class-validator";
-import userDBDTO from "../dto/userDB.dto.js";
+import UserDBDTO from "../dto/userDB.dto.js";
 
 
 
@@ -18,7 +18,7 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
 
   try {
         const JWT_SECRET = process.env.JWT_SECRET as string;
-        const user : userDTO = plainToInstance(userDTO,req.body);
+        const user : UserLoginDTO = plainToInstance(UserLoginDTO, req.body);
 
         // Isto pode se tornar uma funcao utilitaria verifica no register que tem uma igual
         const erros: ValidationError[] = await validate(user);
@@ -32,7 +32,7 @@ const Login = async (req: FastifyRequest, reply : FastifyReply) => {
        
        
         const rawUser: any = await db.raw("SELECT id, username, email, passwordHash, twoFactorSecret FROM users WHERE username = ? LIMIT 1", [user.username]);
-        const userDB : userDBDTO | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
+        const userDB : UserDBDTO | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
 
         if (!userDB || !userDB.passwordHash) 
             return sendError(reply, "Invalid credentials", 401);

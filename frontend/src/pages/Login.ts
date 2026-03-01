@@ -84,7 +84,7 @@ export class LoginPage extends AbstractComponent {
     // Main action button
     const actionBtn = new Button(
       this.isRegisterMode ? 'Sign Up' : 'Sign In',
-      (e) => this.handleSubmit(e),
+      (e) => { this.handleSubmit(e); },
       'primary'
     );
     actionBtn.getElement().classList.add('w-full', 'mb-4');
@@ -180,40 +180,51 @@ export class LoginPage extends AbstractComponent {
         const email = this.emailInput.getValue();
         await AuthService.register({ username, password, email });
         
-        // Show success message and redirect
-        this.showSuccessMessage('Registration successful! Redirecting...');
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
-      } else {
-        await AuthService.login(username, password);
+        // Show success message - wait for user profile to be fully loaded
+        this.showSuccessMessage('Registration successful! Loading profile...');
         
-        // Check if 2FA is enabled (if login doesn't throw error, 2FA not required)
-        this.showSuccessMessage('Login successful! Redirecting...');
-        setTimeout(() => {
+        // Wait a bit for profile fetch to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        window.location.href = '/';
+      } else {
+        const loginResult = await AuthService.login(username, password);
+        
+        // Check if 2FA is required
+        if (loginResult.twoFactorRequired) {
+          this.show2FAModal = true;
+          this.render2FAModal();
+        } else {
+          // Login successful - wait for user profile to be fully loaded
+          this.showSuccessMessage('Login successful! Loading profile...');
+          
+          // Wait a bit for profile fetch to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           window.location.href = '/';
-        }, 2000);
+        }
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
+      const errorMessage = error?.response?.data?.error || error?.message || 'Authentication failed. Please try again.';
       
       // Handle specific error types
       if (error.response?.status === 409) {
         this.usernameInput.setError(true);
-        alert('Username or email already exists');
+        alert(errorMessage);
       } else if (error.response?.status === 401) {
         this.usernameInput.setError(true);
         this.passwordInput.setError(true);
-        alert('Invalid credentials');
+        alert(errorMessage);
       } else if (error.response?.status === 400) {
-        if (error.response.data.error.includes('2FA')) {
+        if ((error.response?.data?.error || '').includes('2FA')) {
           this.show2FAModal = true;
           this.render2FAModal();
         } else {
-          alert(`Error: ${error.response.data.error}`);
+          alert(`Error: ${errorMessage}`);
         }
       } else {
-        alert('Authentication failed. Please try again.');
+        alert(errorMessage);
       }
     }
   }
@@ -239,11 +250,12 @@ export class LoginPage extends AbstractComponent {
 
   private render2FAModal(): void {
     const twoFAPage = new TwoFactorPage(
-      () => {
+      async () => {
         this.showSuccessMessage('2FA verified! Redirecting...');
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
+        
+        // Give user time to see the message, then redirect
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        window.location.href = '/';
       },
       () => {
         this.show2FAModal = false;

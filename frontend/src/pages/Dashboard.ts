@@ -2,13 +2,15 @@ import { AbstractComponent } from "../core/Component";
 import { Navbar } from "../components/layout/Navbar";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { UserService, UserProfile } from "../services/UserService";
-import { HyperspeedWrapper } from '../components/ui/HyperspeedWrapper';
-import { hyperspeedPresets } from '../components/react/HyperspeedPresets';
+import { UserService } from "../services/UserService";
+import type { UserProfile } from "../core/UserStore";
+import { HyperspeedWrapper } from "../components/ui/HyperspeedWrapper";
+import { hyperspeedPresets } from "../components/react/HyperspeedPresets";
+import { router } from "../main";
 
 export class DashboardPage extends AbstractComponent {
   constructor() {
-    super("div", "min-h-screen relative overflow-hidden text-white");
+    super("div", "min-h-screen relative text-white");
   }
 
   public async render(): Promise<void> {
@@ -23,10 +25,35 @@ export class DashboardPage extends AbstractComponent {
     this.element.appendChild(navbar.getElement());
 
     const container = document.createElement("div");
-    container.className =
-      "container mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6 mt-16";
+    container.className = "container mx-auto p-6 mt-16 relative z-10";
 
-    const user = await UserService.getProfile();
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "flex gap-3 mb-6";
+
+    const findGameBtn = new Button(
+      "🔍 Find Game",
+      () => {
+        router.navigate("/find-game");
+      },
+      "primary",
+    );
+
+    const createLobbyBtn = new Button(
+      "➕ Create Lobby",
+      () => {
+        router.navigate("/find-game");
+      },
+      "secondary",
+    );
+
+    actionsDiv.appendChild(findGameBtn.getElement());
+    actionsDiv.appendChild(createLobbyBtn.getElement());
+    container.appendChild(actionsDiv);
+
+    const gridDiv = document.createElement("div");
+    gridDiv.className = "grid grid-cols-1 md:grid-cols-3 gap-6";
+
+    const user = await UserService.getProfile(true);
 
     const profileCard = this.buildProfileCard(user);
     const statsCard = this.buildStatsCard(user);
@@ -43,10 +70,59 @@ export class DashboardPage extends AbstractComponent {
     rightColumn.appendChild(statsCard.getElement());
     rightColumn.appendChild(historyCard.getElement());
 
-    container.appendChild(leftColumn);
-    container.appendChild(rightColumn);
+    gridDiv.appendChild(leftColumn);
+    gridDiv.appendChild(rightColumn);
+    container.appendChild(gridDiv);
     this.element.appendChild(container);
   }
+
+  createActionCard = (
+    title: string,
+    desc: string,
+    btnText: string,
+    path: string,
+    color: string,
+  ) => {
+    const card = new Card(
+      "hover:transform hover:-translate-y-2 transition duration-300 border-t-4 " +
+        color,
+    );
+
+    const content = document.createElement("div");
+    content.className = "text-center p-4";
+    content.innerHTML = `
+            <h3 class="text-2xl font-bold mb-2">${title}</h3>
+            <p class="text-gray-400 mb-6 h-12">${desc}</p>
+        `;
+
+    const btn = new Button(
+      btnText,
+      () => {
+        router.navigate(path);
+      },
+      "primary",
+    );
+    btn.getElement().classList.add("w-full");
+
+    card.getElement().appendChild(content);
+    card.addChildren(btn);
+    return card;
+  };
+
+  playCard = this.createActionCard(
+    "Find Match",
+    "Jump straight into a classic 1v1 pong game against AI or Local.",
+    "PLAY NOW",
+    "/find-game",
+    "border-blue-500",
+  );
+  tournCard = this.createActionCard(
+    "Create Match",
+    "Create a bracket and challenge 3 friends to a championship.",
+    "ORGANIZE",
+    "/find-game",
+    "border-purple-500",
+  );
 
   // --- Sub-Component Builders ---
 
@@ -54,7 +130,7 @@ export class DashboardPage extends AbstractComponent {
     const card = new Card("flex flex-col items-center text-center space-y-4");
 
     const img = document.createElement("img");
-    img.src = user.avatarUrl;
+    img.src = user.avatarUrl || "https://via.placeholder.com/128";
     img.className =
       "w-32 h-32 rounded-full border-4 border-blue-500 object-cover";
 
@@ -127,28 +203,52 @@ export class DashboardPage extends AbstractComponent {
     const list = document.createElement("ul");
     list.className = "space-y-3";
 
-    user.matches.forEach((match) => {
+    // Show last 5 matches (most recent first)
+    const recentMatches = user.matches.slice().reverse().slice(0, 5);
+
+    recentMatches.forEach((match) => {
       const li = document.createElement("li");
       li.className =
         "flex justify-between items-center bg-gray-800 p-3 rounded hover:bg-gray-700 transition";
       const isWin = match.result === "WIN";
 
+      // Format date to be more readable
+      const matchDate = new Date(match.date);
+      const formattedDate = matchDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
       li.innerHTML = `
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 flex-1">
                 <div class="w-2 h-2 rounded-full ${isWin ? "bg-green-500" : "bg-red-500"}"></div>
-                <span class="font-bold">${match.opponent}</span>
+                <div class="flex flex-col">
+                    <span class="font-bold">${match.opponent}</span>
+                    <span class="text-xs text-gray-500">${formattedDate}</span>
+                </div>
             </div>
-            <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-400">${match.date}</span>
-                <span class="font-mono font-bold ${isWin ? "text-green-400" : "text-red-400"}">
-                    ${match.score}
-                </span>
-            </div>
+            <span class="font-mono font-bold ${isWin ? "text-green-400" : "text-red-400"}">
+                ${match.score}
+            </span>
+            <span class="ml-2 text-sm font-semibold ${isWin ? "text-green-400" : "text-red-400"}">
+                ${isWin ? "W" : "L"}
+            </span>
         `;
       list.appendChild(li);
     });
 
     card.getElement().appendChild(list);
+
+    // Show info if there are more matches
+    if (user.matches.length > 5) {
+      const viewMore = document.createElement("div");
+      viewMore.className = "mt-4 text-center";
+      viewMore.innerHTML = `<span class="text-sm text-gray-400">Showing last 5 of ${user.matches.length} matches</span>`;
+      card.getElement().appendChild(viewMore);
+    }
+
     return card;
   }
 

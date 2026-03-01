@@ -19,6 +19,14 @@ app.register(proxy, {
   http2: false,
 })
 
+
+app.register(proxy, {
+  upstream,
+  prefix: '/avatars',
+  rewritePrefix: '/avatars',
+  http2: false,
+})
+
 app.get('/', async () => {
   return { ok: true, service: 'gateway' };
 })

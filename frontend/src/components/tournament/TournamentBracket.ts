@@ -1,5 +1,6 @@
 import { AbstractComponent } from "../../core/Component";
 import { TournamentMatch } from "../../core/TournamentManager";
+import { router } from "../../main";
 
 export class TournamentBracket extends AbstractComponent {
   private matches: TournamentMatch[];
@@ -51,12 +52,7 @@ export class TournamentBracket extends AbstractComponent {
         playBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition";
         playBtn.textContent = "JOGAR PARTIDA";
         playBtn.onclick = () => {
-          window.history.pushState(
-            {},
-            "",
-            `/game?matchId=${match.id}&p1=${match.p1}&p2=${match.p2}`
-          );
-          window.dispatchEvent(new PopStateEvent("popstate"));
+          router.navigate(`/game?matchId=${match.id}&p1=${match.p1}&p2=${match.p2}`);
         };
         matchCard.appendChild(playBtn);
       }

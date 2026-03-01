@@ -20,4 +20,8 @@ logs:
 clean: down
 	rm -f $(ENV_FILE)
 
+dbre: re \
+    docker volume rm transcendence_auth_database || true \
+    docker compose up -d \
+
 re: clean up

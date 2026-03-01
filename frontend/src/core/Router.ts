@@ -38,20 +38,23 @@ export class Router {
     const path = window.location.pathname;
     const route = this.routes.find((r) => r.path === path);
 
+    
     if (this.currentComponent) {
+      console.log(`🧹 Router: Cleaning up previous page before navigating to ${path}`);
       this.currentComponent.onDestroy();
     }
 
     this.rootElement.innerHTML = ''; 
 
     if (route) {
+      console.log(`📡 Router: Navigating to ${path}`);
       const pageInstance = new route.component();
-      // Attach element to DOM first so page `render()` can query document elements
+      
       this.rootElement.appendChild(pageInstance.getElement());
       pageInstance.render();
       this.currentComponent = pageInstance;
     } else {
-      
+      console.warn(`⚠️ Router: No route found for ${path}`);
       this.rootElement.innerHTML = '<h1>404 - Page Not Found</h1>';
     }
   }

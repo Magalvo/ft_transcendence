@@ -12,6 +12,7 @@ import { ProfilePage } from './pages/Profile';
 import { LobbyPage } from './pages/Lobby';
 import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
+import { FindGamePage } from './pages/FindGame'
 
 //? Initialize Router
 const router = new Router('#app');
@@ -24,6 +25,7 @@ router.addRoute('/dashboard', DashboardPage);
 router.addRoute('/game', GamePage);
 router.addRoute('/lobby', LobbyPage);
 router.addRoute('/chat', ChatPage);
+router.addRoute('/find-game', FindGamePage);
 router.addRoute('/tournament', TournamentPage);
 
 const publicRoutes = ['/login', '/404'];

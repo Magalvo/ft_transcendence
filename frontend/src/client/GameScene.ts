@@ -109,6 +109,57 @@ export class GameScene {
 
   public dispose(): void {
     try {
+      if (this.data?.env3D) {
+        try {
+          if (this.data.env3D.hellMusic) {
+            this.data.env3D.hellMusic.pause();
+            this.data.env3D.hellMusic.currentTime = 0;
+            this.data.env3D.hellMusic.src = '';
+          }
+          if (this.data.env3D.heavenMusic) {
+            this.data.env3D.heavenMusic.pause();
+            this.data.env3D.heavenMusic.currentTime = 0;
+            this.data.env3D.heavenMusic.src = '';
+          }
+        } catch (e) {
+          console.error('Error stopping music:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Error cleaning up audio:', e);
+    }
+
+    try {
+      
+      if (this.socket && this.socket.connected) {
+        try {
+          this.socket.emit('leaveGame', {
+            side: (this.data as any).mySide || 'unknown',
+            reason: 'scene_disposal'
+          });
+        } catch (e) {
+          console.warn('Could not emit leaveGame:', e);
+        }
+        
+        try {
+          this.socket.off('init');
+          this.socket.off('gamePaused');
+          this.socket.off('gameResumed');
+          this.socket.off('gameMessage');
+          this.socket.off('countdown');
+          this.socket.off('endGame');
+          this.socket.off('matchRecorded');
+          this.socket.off('gameState');
+          console.log('🧹 Cleaned up game socket listeners');
+        } catch (e) {
+          console.warn('Error removing socket listeners:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Error in socket cleanup:', e);
+    }
+
+    try {
       undefineKeyEvents();
     } catch (e) {
       // ignore if not registered
@@ -137,5 +188,7 @@ export class GameScene {
     } catch (e) {
       // ignore
     }
+
+    this.data = {} as GameData;
   }
 }

@@ -10,6 +10,7 @@ async function main() {
                 table.string("twoFactorSecret").nullable();
                 table.string("tempTwoFactorSecret").nullable();
                 table.string("email").nullable();
+                table.string("avatarUrl").nullable();
                 table.boolean("online").defaultTo(false);
                 table.dateTime("last_request").nullable();
                 table.string("resetToken").nullable();
@@ -19,6 +20,13 @@ async function main() {
         }
         else {
             console.log("Table 'users' already exists");
+            // Add avatarUrl column if it doesn't exist
+            if (!(await db.schema.hasColumn("users", "avatarUrl"))) {
+                await db.schema.alterTable("users", (table) => {
+                    table.string("avatarUrl").nullable();
+                });
+                console.log("Added avatarUrl column to users table");
+            }
         }
         const refreshExists = await db.schema.hasTable("refresh_tokens");
         if (!refreshExists) {
@@ -52,6 +60,75 @@ async function main() {
         }
         else {
             console.log("Table 'chat_groups' already exists");
+        }
+        if (!(await db.schema.hasColumn("chat_groups", "owner_id"))) {
+            await db.schema.alterTable("chat_groups", (table) => {
+                table.uuid("owner_id").nullable().references("id").inTable("users").onDelete("CASCADE");
+            });
+        }
+        if (!(await db.schema.hasColumn("chat_groups", "visibility"))) {
+            await db.schema.alterTable("chat_groups", (table) => {
+                table.string("visibility").notNullable().defaultTo("public");
+            });
+        }
+        if (!(await db.schema.hasColumn("chat_groups", "password_hash"))) {
+            await db.schema.alterTable("chat_groups", (table) => {
+                table.string("password_hash").nullable();
+            });
+        }
+        if (!(await db.schema.hasColumn("chat_groups", "created_at"))) {
+            await db.schema.alterTable("chat_groups", (table) => {
+                table.bigInteger("created_at").notNullable().defaultTo(db.raw("(strftime('%s','now') * 1000)"));
+            });
+        }
+        await db("chat_groups").whereNull("owner_id").update({ owner_id: db.ref("admin_id") });
+        await db("chat_groups").whereNull("visibility").update({ visibility: "public" });
+        const chatGroupAdminsExists = await db.schema.hasTable("chat_group_admins");
+        if (!chatGroupAdminsExists) {
+            await db.schema.createTable("chat_group_admins", (table) => {
+                table.integer("id_group").notNullable();
+                table.uuid("user_id").notNullable();
+                table.bigInteger("created_at").notNullable();
+                table.primary(["id_group", "user_id"]);
+                table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+                table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+            });
+        }
+        const chatGroupBansExists = await db.schema.hasTable("chat_group_bans");
+        if (!chatGroupBansExists) {
+            await db.schema.createTable("chat_group_bans", (table) => {
+                table.integer("id_group").notNullable();
+                table.uuid("user_id").notNullable();
+                table.uuid("banned_by").notNullable();
+                table.bigInteger("created_at").notNullable();
+                table.primary(["id_group", "user_id"]);
+                table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+                table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+            });
+        }
+        const chatGroupMutesExists = await db.schema.hasTable("chat_group_mutes");
+        if (!chatGroupMutesExists) {
+            await db.schema.createTable("chat_group_mutes", (table) => {
+                table.integer("id_group").notNullable();
+                table.uuid("user_id").notNullable();
+                table.uuid("muted_by").notNullable();
+                table.bigInteger("expires_at").notNullable();
+                table.bigInteger("created_at").notNullable();
+                table.primary(["id_group", "user_id"]);
+                table.foreign("id_group").references("id_group").inTable("chat_groups").onDelete("CASCADE");
+                table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+            });
+        }
+        const blockedUsersExists = await db.schema.hasTable("blocked_users");
+        if (!blockedUsersExists) {
+            await db.schema.createTable("blocked_users", (table) => {
+                table.uuid("blocker_id").notNullable();
+                table.uuid("blocked_id").notNullable();
+                table.bigInteger("created_at").notNullable();
+                table.primary(["blocker_id", "blocked_id"]);
+                table.foreign("blocker_id").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("blocked_id").references("id").inTable("users").onDelete("CASCADE");
+            });
         }
         const chatGroupMembersExists = await db.schema.hasTable("chat_group_members");
         if (!chatGroupMembersExists) {
@@ -185,6 +262,58 @@ async function main() {
         }
         else {
             console.log("Table 'game_players' already exists");
+        }
+        const matchesExists = await db.schema.hasTable("matches");
+        if (!matchesExists) {
+            await db.schema.createTable("matches", (table) => {
+                table.uuid("id").primary().notNullable();
+                table.uuid("player1_id").notNullable();
+                table.uuid("player2_id").notNullable();
+                table.uuid("winner_id").nullable();
+                table.integer("player1_score").notNullable().defaultTo(0);
+                table.integer("player2_score").notNullable().defaultTo(0);
+                table.string("game_mode").defaultTo("1v1"); // 1v1, tournament, etc
+                table.string("status").notNullable().defaultTo("completed"); // completed, abandoned, timeout
+                table.timestamp("started_at").notNullable();
+                table.timestamp("ended_at").nullable();
+                table.integer("duration_seconds").nullable();
+                table.foreign("player1_id").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("player2_id").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("winner_id").references("id").inTable("users").onDelete("SET NULL");
+            });
+            console.log("Table 'matches' created!");
+        }
+        else {
+            console.log("Table 'matches' already exists");
+        }
+        const playerStatsExists = await db.schema.hasTable("player_stats");
+        if (!playerStatsExists) {
+            await db.schema.createTable("player_stats", (table) => {
+                table.uuid("user_id").primary().notNullable();
+                table.integer("total_matches").defaultTo(0);
+                table.integer("wins").defaultTo(0);
+                table.integer("losses").defaultTo(0);
+                table.integer("total_goals_scored").defaultTo(0);
+                table.integer("total_goals_conceded").defaultTo(0);
+                table.decimal("win_percentage", 5, 2).defaultTo(0);
+                table.decimal("avg_goals_per_match", 5, 2).defaultTo(0);
+                table.integer("current_win_streak").defaultTo(0);
+                table.integer("longest_win_streak").defaultTo(0);
+                table.timestamp("last_match_at").nullable();
+                table.timestamp("updated_at").defaultTo(db.fn.now());
+                table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+            });
+            console.log("Table 'player_stats' created!");
+        }
+        else {
+            console.log("Table 'player_stats' already exists");
+            // Add missing columns if needed
+            if (!(await db.schema.hasColumn("player_stats", "current_win_streak"))) {
+                await db.schema.alterTable("player_stats", (table) => {
+                    table.integer("current_win_streak").defaultTo(0);
+                });
+                console.log("Added current_win_streak to player_stats");
+            }
         }
         await db.raw("PRAGMA foreign_keys = ON;");
         console.log("Foreign keys enabled!");

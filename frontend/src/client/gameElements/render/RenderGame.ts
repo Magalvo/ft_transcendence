@@ -23,14 +23,17 @@ export function renderGame(dt: number, data: GameData) {
   updateCountdownUI(visualDt);
   updateMusic(data);
 
-  // 1. Handle Pause Requests
+  // Return to Main Menu
+  if (data.flags.return_main_menu) {
+    handleReturnToMainMenu(data);
+    return;
+  }
+
   if (data.flags.pause_screen) {
     data.socket?.emit('pauseGame');
     data.flags.pause_screen = false;
   }
 
-  // 2. Idle State (Menu/Waiting)
-  // Rotates camera around the table and hides the HUD
   if (!data.flags.game_running) {
     data.env3D.camera.attachControl();
     rotateCamera(data);
@@ -38,13 +41,10 @@ export function renderGame(dt: number, data: GameData) {
     return;
   }
 
-  // 3. Running State
   if (data.mySide != "spectator")
     data.env3D.camera.detachControl();
   data.obj2D.guiGame.rootContainer.isVisible = true;
 
-  // Fixed Time Step: Splits large frame times into smaller chunks
-  // to ensure consistent physics/animation speed even if FPS drops.
   const MAX_DT = 0.05;
   let dtLeft = dt;
 
@@ -53,6 +53,31 @@ export function renderGame(dt: number, data: GameData) {
     updateActiveGameElements(data);
     dtLeft -= data.mods.step;
   }
+}
+
+/**
+ * Handles the return to main menu with proper cleanup
+ * @param data - Global game state
+ */
+function handleReturnToMainMenu(data: GameData) {
+  console.log('🏠 Returning to main menu...');
+
+
+  if (data.socket && data.socket.connected) {
+    try {
+      data.socket.emit('leaveGame', {
+        side: data.mySide,
+        reason: 'user_requested'
+      });
+    } catch (e) {
+      console.error('Error notifying server of game leave:', e);
+    }
+  }
+
+  const returnEvent = new CustomEvent('game-return-to-menu', {
+    detail: { timestamp: Date.now() }
+  });
+  window.dispatchEvent(returnEvent);
 }
 
 /**
@@ -72,7 +97,6 @@ function updateActiveGameElements(data: GameData) {
   // --- Input Handling ---
   handleKeyboardEvents(data);
 
-  // Send input to server (only if player is active)
   if (data.socket && data.mySide && data.mySide !== 'spectator') {
     data.socket.emit('input', {
       side: data.mySide,

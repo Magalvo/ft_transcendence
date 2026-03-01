@@ -7,17 +7,20 @@ import {
     GameConfiguration,
     GamePlayer
 } from './index.js';
+import { recordTeamMatch } from '../services/matchService.js';
 
 export class Game {
     private io: Server;
+    private roomId: string;
     private engine: GameEngine;
     private gameLoopInterval: NodeJS.Timeout | null = null;
 
     private humansReady = 0;
     private totalHumans = 0;
 
-    constructor(io: Server, configurations: GameConfiguration, initialPlayers: GamePlayer[]) {
+    constructor(io: Server, configurations: GameConfiguration, initialPlayers: GamePlayer[], roomId: string) {
         this.io = io;
+        this.roomId = roomId;
         this.engine = new GameEngine(this.io, configurations);
 
         this.totalHumans = 0;
@@ -101,13 +104,38 @@ export class Game {
 
                 if (data.status === GameStatus.RUNNING) {
                     data.status = GameStatus.PAUSED;
-                    this.io.emit('gamePaused');
+                    this.emitToRoom('gamePaused');
                 } else if (data.status === GameStatus.PAUSED) {
                     data.status = GameStatus.RUNNING;
-                    this.io.emit('gameResumed');
+                    this.emitToRoom('gameResumed');
                 }
             });
         }
+
+        // Handle player leaving the game mid-session
+        socket.on('leaveGame', (data: any) => {
+            const reason = data?.reason || 'unknown';
+            console.log(`[Game] Player ${player.socket_id} (${player.side}) requested to leave. Reason: ${reason}`);
+            
+            // Notify other players that this player left
+            this.emitToRoom('gameMessage', {
+                side: player.side,
+                message: `${player.nick || 'Player'} has left the game`,
+                color: 'red',
+                duration: 3
+            });
+            
+            // Remove player from game
+            this.removePlayerBySocket(player.socket_id || '');
+            
+            // If not enough players remain, end the game
+            const activePlayers = this.engine.data.players.filter(p => p.type === 'human').length;
+            if (activePlayers === 0) {
+                console.log('[Game] All human players have left. Ending game.');
+                this.engine.data.status = GameStatus.ENDGAME;
+                this.engine.data.countdownTimer = 0;
+            }
+        });
     }
 
     private startGameLoop() {
@@ -122,7 +150,7 @@ export class Game {
         const data = this.engine.data;
 
         if (data.status === GameStatus.WAITING || data.status === GameStatus.PAUSED) {
-            this.io.emit('gameState', this.engine.getSnapshot());
+            this.emitToRoom('gameState', this.engine.getSnapshot());
             return;
         }
 
@@ -132,16 +160,16 @@ export class Game {
 
             if (currentInt < data.lastCountdownInt) {
                 data.lastCountdownInt = currentInt;
-                if (currentInt > 0) this.io.emit('countdown', { count: currentInt });
+                if (currentInt > 0) this.emitToRoom('countdown', { count: currentInt });
             }
 
             if (data.countdownTimer <= 0) {
                 data.status = GameStatus.RUNNING;
-                this.io.emit('countdown', { count: 0 });
+                this.emitToRoom('countdown', { count: 0 });
                 this.engine.data.balls.forEach(b => { b.throwBall(this.engine.data.table); });
             }
 
-            this.io.emit('gameState', this.engine.getSnapshot());
+            this.emitToRoom('gameState', this.engine.getSnapshot());
             return;
         }
 
@@ -150,60 +178,91 @@ export class Game {
             const currentInt = Math.ceil(data.countdownTimer);
             if (currentInt < data.lastCountdownInt) {
                 data.lastCountdownInt = currentInt;
-                if (currentInt > 0) this.io.emit('endGame', { count: currentInt });
+                if (currentInt > 0) this.emitToRoom('endGame', { count: currentInt });
             }
             if (data.countdownTimer <= 0) {
-                this.io.emit('endGame', { count: 0 });
-                this.engine.resetGame();
-                // SEND RESULTS TO SERVER
+                this.emitToRoom('endGame', { count: 0 });
+                // SEND RESULTS TO SERVER (before resetting!)
                 this.sendResultsServer();
-                // RETURN TO THE MAIN PAGE
-
+                // RESET GAME STATE
+                this.engine.resetGame();
+                // CLEANUP AND END GAME
+                this.cleanup();
             }
-            this.io.emit('gameState', this.engine.getSnapshot());
+            this.emitToRoom('gameState', this.engine.getSnapshot());
             return;
         }
 
         this.engine.update(dt);
-        this.io.emit('gameState', this.engine.getSnapshot());
+        this.emitToRoom('gameState', this.engine.getSnapshot());
     }
 
     private async sendResultsServer() {
         const eData = this.engine.data;
-        const teamA_IDs = eData.players
-            .filter(p => p.side === "left")
-            .map(p => {
-                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
-            });
+        
+        // Find human players on each team
+        const leftPlayers = eData.players.filter(p => p.side === "left" && p.type === 'human');
+        const rightPlayers = eData.players.filter(p => p.side === "right" && p.type === 'human');
 
-        const teamB_IDs = eData.players
-            .filter(p => p.side === "right")
-            .map(p => {
-                return p.type === 'bot' ? `BOT-LVL-${p.id}` : p.socket_id;
-            });
-        const res = await fetch("http://localhost:3000/api/games", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + userJwtToken
-            },
-            body: JSON.stringify({
-                duration: eData.configs.duration_label,
-                powerups: eData.configs.power_ups,
-                mode: eData.configs.players_per_side,
-                teamA: teamA_IDs,
-                teamB: teamB_IDs,
-                teamAScore: eData.score.left,
-                teamBScore: eData.score.right
-            })
-        });
+        console.log(`[Game] Recording match with scores: Left ${eData.score.left} - Right ${eData.score.right}`);
+        console.log(`[Game] Players: ${leftPlayers.length} left, ${rightPlayers.length} right`);
 
-        const data = await res.json();
+        // Only record if there are human players on both teams
+        if (leftPlayers.length > 0 && rightPlayers.length > 0) {
+            try {
+                const matchStartTime = new Date(Date.now() - (eData.gameTime * 1000));
+                const matchEndTime = new Date();
 
-        if (!res.ok) {
-            console.error("Failed to save game:", data.message || res.status);
+                // Use the new team-based match recording function
+                const gameMode = String(eData.configs.players_per_side);
+                const gameId = await recordTeamMatch({
+                    leftTeamPlayers: leftPlayers.map(p => ({
+                        user_id: p.user_id || "",
+                        socket_id: p.socket_id
+                    })),
+                    rightTeamPlayers: rightPlayers.map(p => ({
+                        user_id: p.user_id || "",
+                        socket_id: p.socket_id
+                    })),
+                    leftTeamScore: eData.score.left,
+                    rightTeamScore: eData.score.right,
+                    duration: eData.configs.duration_label,
+                    powerups: eData.configs.power_ups,
+                    gameMode: gameMode,
+                    started_at: matchStartTime,
+                    ended_at: matchEndTime,
+                });
+
+                console.log("✅ Game recorded with ID:", gameId);
+                this.emitToRoom('matchRecorded', {
+                    gameId,
+                    winner: eData.score.left > eData.score.right ? "A" : "B"
+                });
+            } catch (error) {
+                console.error("❌ Error recording game:", error);
+                this.emitToRoom('matchRecordError', { message: 'Failed to record game stats' });
+            }
         } else {
-            console.log("Game saved with ID:", data.gameId);
+            console.warn("⚠️ Not recording game: Missing human players on one or both teams");
+        }
+    }
+
+    private emitToRoom(event: string, payload?: unknown): void {
+        if (payload === undefined) {
+            this.io.to(this.roomId).emit(event);
+            return;
+        }
+
+        this.io.to(this.roomId).emit(event, payload);
+    }
+
+    private cleanup() {
+        console.log('🧹 [Game] Cleaning up game instance');
+        
+        // Stop the game loop
+        if (this.gameLoopInterval) {
+            clearInterval(this.gameLoopInterval);
+            this.gameLoopInterval = null;
         }
     }
 }

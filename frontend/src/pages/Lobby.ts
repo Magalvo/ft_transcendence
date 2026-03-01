@@ -1,6 +1,8 @@
 import { AbstractComponent } from '../core/Component';
 import { Navbar } from '../components/layout/Navbar';
 import { socketService } from '../client/SocketService';
+import { UserStore } from '../core/UserStore';
+import { router } from '../main';
 import type { Socket } from 'socket.io-client';
 
 type SlotContent = 'empty' | 'human' | 'bot';
@@ -13,12 +15,18 @@ interface LobbySlot {
     botLevel?: number;
 }
 
+interface BenchPlayer {
+    socketId: string;
+    username: string;
+    userId?: string;
+}
+
 interface LobbyState {
     leader: string;
     isReadyToStart: boolean;
     config: {
         players_per_side?: number;
-        paddles_per_side?: number; // Fallback caso o backend envie este nome
+        paddles_per_side?: number;
         duration_label: string;
         power_ups: boolean;
     };
@@ -26,7 +34,8 @@ interface LobbyState {
         left: LobbySlot[];
         right: LobbySlot[];
     };
-    bench: string[];
+    bench: BenchPlayer[];
+    playerData?: Record<string, { userId: string; username: string }>;
 }
 
 export class LobbyPage extends AbstractComponent {
@@ -35,8 +44,9 @@ export class LobbyPage extends AbstractComponent {
     private myId = '';
     private selectedBenchPlayer: string | null = null;
     private currentPowerUpsState = true;
+    private isTransitioningToGame = false;
+    private selectedLobbyId: string | null = null;
 
-    private lobbyView: HTMLElement | null = null;
     private slotsLeftEl: HTMLElement | null = null;
     private slotsRightEl: HTMLElement | null = null;
     private benchListEl: HTMLElement | null = null;
@@ -44,16 +54,44 @@ export class LobbyPage extends AbstractComponent {
     private btnStart: HTMLButtonElement | null = null;
     private leaderMsg: HTMLElement | null = null;
     private powerUpsButton: HTMLButtonElement | null = null;
+    private btnLeave: HTMLButtonElement | null = null;
 
-    // mode buttons
+   
     private btnMode1: HTMLButtonElement | null = null;
     private btnMode2: HTMLButtonElement | null = null;
     private btnMode3: HTMLButtonElement | null = null;
 
-    // duration buttons
+    
     private btnDurFast: HTMLButtonElement | null = null;
     private btnDurNormal: HTMLButtonElement | null = null;
     private btnDurLong: HTMLButtonElement | null = null;
+
+    private onSocketConnect = (): void => {
+        this.myId = this.socket?.id ?? '';
+        console.log(' Lobby: Socket connected, joining lobby');
+        this.joinRequestedLobby();
+    };
+
+    private onLobbyState = (state: LobbyState): void => {
+        this.renderLobby(state);
+    };
+
+    private onGameStarted = (): void => {
+        console.log('🎮 Game starting, transitioning to game page');
+        this.isTransitioningToGame = true;
+        router.navigate('/game');
+    };
+
+    private onKicked = (data: { message: string }): void => {
+        alert(data.message);
+        console.log('👢 Player was kicked from lobby');
+        router.navigate('/');
+    };
+
+    private onJoinLobbyError = (data: { message: string }): void => {
+        alert(`Failed to join lobby: ${data.message}`);
+        router.navigate('/find-game');
+    };
 
     constructor() {
         super('div', 'flex flex-col h-screen bg-black overflow-auto');
@@ -114,10 +152,13 @@ export class LobbyPage extends AbstractComponent {
                 <button id="btn-start" class="rounded bg-green-700 px-6 py-3 text-lg font-bold" disabled>
                     START GAME
                 </button>
+
+                <button id="btn-leave" class="rounded bg-red-700 px-6 py-3 text-lg font-bold hover:bg-red-800 transition">
+                    LEAVE LOBBY
+                </button>
             </div>
         `;
 
-        this.lobbyView = container.querySelector('#lobby-view');
         this.slotsLeftEl = container.querySelector('#slots-left');
         this.slotsRightEl = container.querySelector('#slots-right');
         this.benchListEl = container.querySelector('#bench-list');
@@ -133,6 +174,10 @@ export class LobbyPage extends AbstractComponent {
         this.btnDurFast = container.querySelector('#btn-dur-fast');
         this.btnDurNormal = container.querySelector('#btn-dur-normal');
         this.btnDurLong = container.querySelector('#btn-dur-long');
+        this.btnLeave = container.querySelector('#btn-leave');
+
+        const params = new URLSearchParams(window.location.search);
+        this.selectedLobbyId = params.get('id');
 
         this.bindUiActions();
 
@@ -177,21 +222,70 @@ export class LobbyPage extends AbstractComponent {
             if (!this.isLeader) return;
             this.socket?.emit('lobby_start');
         });
+
+        this.btnLeave?.addEventListener('click', () => {
+            console.log('Leaving lobby');
+            if (confirm('Are you sure you want to leave the lobby?')) {
+                this.leaveCurrentLobby();
+               
+                router.navigate('/');
+            }
+        });
+    }
+
+    private joinRequestedLobby(): void {
+        if (!this.socket) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const inviteSession = params.get('inviteSession');
+        const lobbyId = params.get('id');
+
+        if (lobbyId) {
+            this.selectedLobbyId = lobbyId;
+            console.log(`🎮 Joining specific lobby: ${lobbyId}`);
+            this.socket.emit('joinLobbyById', { lobbyId });
+            return;
+        }
+
+        if (inviteSession) {
+            console.log(`🎮 Emitting joinLobby with invitation: ${inviteSession}`);
+            this.socket.emit('joinLobby', { inviteSession });
+            return;
+        }
+
+        this.socket.emit('joinLobby');
+    }
+
+    private leaveCurrentLobby(): void {
+        if (!this.socket) return;
+
+        if (this.selectedLobbyId) {
+            this.socket.emit('leaveLobbyById', { lobbyId: this.selectedLobbyId });
+            return;
+        }
+
+        this.socket.emit('lobby_leave');
     }
 
     private initSocket(): void {
-        this.socket = socketService.init('http://localhost:3000');
+        const currentUser = UserStore.getUser();
+        const userId = currentUser?.id;
+        this.socket = socketService.init('http://localhost:3000', userId);
 
-        this.socket.on('connect', () => {
-            this.myId = this.socket?.id ?? '';
-        });
+        this.myId = this.socket?.id ?? '';
+        console.log(` Lobby: My socket ID is ${this.myId}`);
 
-        this.socket.on('lobbyState', (state: LobbyState) => this.renderLobby(state));
+        this.socket.on('connect', this.onSocketConnect);
+        this.socket.on('lobbyState', this.onLobbyState);
+        this.socket.on('gameStarted', this.onGameStarted);
+        this.socket.on('kicked', this.onKicked);
+        this.socket.on('joinLobbyError', this.onJoinLobbyError);
 
-        this.socket.on('gameStarted', () => {
-            window.history.pushState({}, '', '/game');
-            window.dispatchEvent(new PopStateEvent('popstate'));
-        });
+
+        if (this.socket.connected) {
+            console.log('📡 Lobby: Socket already connected, joining lobby');
+            this.joinRequestedLobby();
+        }
     }
 
     private renderLobby(state: LobbyState): void {
@@ -248,44 +342,44 @@ export class LobbyPage extends AbstractComponent {
             this.powerUpsButton.classList.toggle('bg-red-700', !this.currentPowerUpsState);
         }
 
-        this.renderTeamSlots(this.slotsLeftEl, state.slots.left, 'left');
-        this.renderTeamSlots(this.slotsRightEl, state.slots.right, 'right');
+        this.renderTeamSlots(this.slotsLeftEl, state.slots.left, 'left', state.playerData);
+        this.renderTeamSlots(this.slotsRightEl, state.slots.right, 'right', state.playerData);
         this.renderBench(state.bench);
     }
 
-    private renderBench(bench: string[]): void {
+    private renderBench(bench: BenchPlayer[]): void {
         if (!this.benchListEl) return;
         this.benchListEl.innerHTML = '';
 
-        bench.forEach((playerId) => {
-            const player = document.createElement('button');
-            player.type = 'button';
-            player.id = `bench-${playerId}`;
-            player.className = 'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left transition';
-            player.textContent = `Player ${playerId.slice(0, 4)}`;
+        bench.forEach((player) => {
+            const playerEl = document.createElement('button');
+            playerEl.type = 'button';
+            playerEl.id = `bench-${player.socketId}`;
+            playerEl.className = 'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left transition';
+            playerEl.textContent = `👤 ${player.username}`;
 
-            if (playerId === this.myId) player.classList.add('ring-1', 'ring-yellow-400');
+            if (player.socketId === this.myId) playerEl.classList.add('ring-1', 'ring-yellow-400');
 
-            if (this.selectedBenchPlayer === playerId) {
-                player.classList.remove('border-transparent');
-                player.classList.add('border-cyan-400', 'bg-neutral-600');
+            if (this.selectedBenchPlayer === player.socketId) {
+                playerEl.classList.remove('border-transparent');
+                playerEl.classList.add('border-cyan-400', 'bg-neutral-600');
             }
 
             if (this.isLeader) {
-                player.addEventListener('click', () => {
-                    this.selectedBenchPlayer = playerId;
+                playerEl.addEventListener('click', () => {
+                    this.selectedBenchPlayer = player.socketId;
                     this.renderBench(bench);
                 });
             } else {
-                player.disabled = true;
-                player.classList.add('opacity-80', 'cursor-default');
+                playerEl.disabled = true;
+                playerEl.classList.add('opacity-80', 'cursor-default');
             }
 
-            this.benchListEl?.appendChild(player);
+            this.benchListEl?.appendChild(playerEl);
         });
     }
 
-    private renderTeamSlots(container: HTMLElement, slots: LobbySlot[], side: 'left' | 'right'): void {
+    private renderTeamSlots(container: HTMLElement, slots: LobbySlot[], side: 'left' | 'right', playerData?: Record<string, { userId: string; username: string }>): void {
         container.innerHTML = '';
 
         slots.forEach((slot) => {
@@ -314,20 +408,37 @@ export class LobbyPage extends AbstractComponent {
                 }
             } else if (slot.content === 'human') {
                 const label = document.createElement('span');
-                label.textContent = `👤 ${slot.playerName ?? 'Player'}`;
+                
+                const displayName = slot.playerName || (slot.socketId && playerData?.[slot.socketId]?.username) || 'Player';
+                label.textContent = `👤 ${displayName}`;
                 row.appendChild(label);
 
                 if (this.isLeader && slot.socketId) {
-                    const action = document.createElement('button');
-                    action.type = 'button';
-                    action.className = 'rounded bg-neutral-800 hover:bg-neutral-600 px-2 py-1 text-xs transition';
-                    action.textContent = 'To Bench';
-                    action.addEventListener('click', (e) => {
+                    const actions = document.createElement('div');
+                    actions.className = 'flex gap-1';
+
+                    const toBenchBtn = document.createElement('button');
+                    toBenchBtn.type = 'button';
+                    toBenchBtn.className = 'rounded bg-neutral-800 hover:bg-neutral-600 px-2 py-1 text-xs transition';
+                    toBenchBtn.textContent = 'To Bench';
+                    toBenchBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        // Isto envia corretamente o pedido para o Backend
                         this.socket?.emit('lobby_moveToBench', slot.socketId);
                     });
-                    row.appendChild(action);
+
+                    const kickBtn = document.createElement('button');
+                    kickBtn.type = 'button';
+                    kickBtn.className = 'rounded bg-red-700 hover:bg-red-600 px-2 py-1 text-xs transition';
+                    kickBtn.textContent = 'Kick';
+                    kickBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to kick ${displayName}?`)) {
+                            this.socket?.emit('lobby_kick', { socketId: slot.socketId });
+                        }
+                    });
+
+                    actions.append(toBenchBtn, kickBtn);
+                    row.appendChild(actions);
                 }
             } else {
                 row.classList.replace('bg-neutral-700', 'bg-blue-900');
@@ -364,9 +475,24 @@ export class LobbyPage extends AbstractComponent {
     }
 
     public onDestroy(): void {
+        console.log('🧹 Lobby cleanup: Removing listeners');
+        
         if (this.socket) {
-            this.socket.removeAllListeners('lobbyState');
-            this.socket.removeAllListeners('gameStarted');
+            if (!this.isTransitioningToGame) {
+                console.log('🚪 Leaving lobby (navigating away)');
+                this.leaveCurrentLobby();
+            } else {
+                console.log('🎮 Transitioning to game, keeping lobby state');
+            }
+            
+            this.socket.off('connect', this.onSocketConnect);
+            this.socket.off('lobbyState', this.onLobbyState);
+            this.socket.off('gameStarted', this.onGameStarted);
+            this.socket.off('kicked', this.onKicked);
+            this.socket.off('joinLobbyError', this.onJoinLobbyError);
+            
+           
+            console.log('Lobby listeners removed');
         }
     }
 }

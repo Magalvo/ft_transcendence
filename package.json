@@ -18,6 +18,7 @@
     "@babylonjs/core": "^8.27.1",
     "@babylonjs/gui": "^8.27.1",
     "@babylonjs/loaders": "^8.28.1",
+    "@fastify/multipart": "^9.4.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "socket.io": "^4.8.1",

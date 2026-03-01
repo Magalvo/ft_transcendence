@@ -4,26 +4,36 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { HyperspeedWrapper } from '../components/ui/HyperspeedWrapper';
 import { hyperspeedPresets } from '../components/react/HyperspeedPresets';
+import { UserService } from '../services/UserService';
+import { TokenManager } from '../services/TokenManager';
+import { router } from '../main';
 
 export class HomePage extends AbstractComponent {
   constructor() {
     super("div", "min-h-screen relative overflow-hidden text-white");
   }
 
-  public render(): void {
+  public async render(): Promise<void> {
     this.element.innerHTML = '';
 
     const bg = new HyperspeedWrapper(hyperspeedPresets.one);
     bg.render();
     this.element.appendChild(bg.getElement());
 
+    if (TokenManager.isAuthenticated()) {
+      try {
+        console.log('HomePage: Fetching user profile...');
+        const profile = await UserService.getProfile();
+        console.log('HomePage: User profile loaded:', profile?.username, profile?.avatarUrl);
+      } catch (error) {
+        console.warn('HomePage: Failed to load user profile', error);
+      }
+    }
 
-    // 1. Navbar
     const navbar = new Navbar();
     navbar.render();
     this.element.appendChild(navbar.getElement());
 
-    // 2. Hero Section
     const hero = document.createElement('div');
     hero.className = 'flex flex-col items-center justify-center py-20 bg-gradient-to-b from-gray-800 to-gray-900';
     hero.innerHTML = `
@@ -33,11 +43,9 @@ export class HomePage extends AbstractComponent {
         <p class="text-xl text-gray-400 mb-8">The ultimate retro pong experience.</p>
     `;
 
-    // 3. Action Grid
     const grid = document.createElement('div');
     grid.className = 'container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8 -mt-10';
 
-    // Helper to create action cards
     const createActionCard = (title: string, desc: string, btnText: string, path: string, color: string) => {
         const card = new Card('hover:transform hover:-translate-y-2 transition duration-300 border-t-4 ' + color);
         
@@ -49,8 +57,7 @@ export class HomePage extends AbstractComponent {
         `;
         
         const btn = new Button(btnText, () => {
-            window.history.pushState({}, '', path);
-            window.dispatchEvent(new PopStateEvent('popstate'));
+            router.navigate(path);
         }, 'primary');
         btn.getElement().classList.add('w-full');
 

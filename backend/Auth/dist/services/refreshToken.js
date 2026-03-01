@@ -12,7 +12,7 @@ const refreshToken = async (req, reply) => {
         const refreshtoken = req.cookies['refreshToken'];
         if (!refreshtoken)
             return sendError(reply, 'Invalid or expired token', 401);
-        const rawStored = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userID = ? LIMIT 1", [userId]);
+        const rawStored = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userId = ? LIMIT 1", [userId]);
         const stored = Array.isArray(rawStored[0]) ? rawStored[0][0] : undefined;
         if (!stored || new Date(stored.expires_at) < new Date())
             return sendError(reply, "Invalid or expired token", 401);

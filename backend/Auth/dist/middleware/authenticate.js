@@ -2,7 +2,12 @@ import jwt from "jsonwebtoken";
 import db from "../db.js";
 import { sendError } from "../utils/respond.js";
 const authenticate = async (req, reply) => {
-    const accessToken = req.cookies["token"];
+    const cookieToken = req.cookies["token"];
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.slice("Bearer ".length)
+        : undefined;
+    const accessToken = cookieToken || bearerToken;
     if (!accessToken) {
         return sendError(reply, "Invalid or expired token", 401);
     }

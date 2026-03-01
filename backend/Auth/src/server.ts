@@ -14,6 +14,7 @@ import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
 import chatRoutes from './routes/chat.js';
 import { CONFIG } from './game/config.js';
+import multipart from "@fastify/multipart";
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -35,6 +36,7 @@ app.get("/ok", (req, reply) => {
 
 app.register(cors, { origin: true });
 app.register(fastifyCookie);
+app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 app.register(fastifyStatic, { root: path.join(process.cwd(), "public"), prefix: "/" });
 
 app.register(healthRoutes);

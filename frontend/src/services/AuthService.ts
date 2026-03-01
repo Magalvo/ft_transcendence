@@ -1,5 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { TokenManager } from './TokenManager';
+import { UserService } from './UserService';
 import userRegister from '../interfaces/userRegister';
 
 interface LoginResponse {
@@ -49,6 +50,16 @@ export class AuthService {
       if (response.status === 200 && response.data.success) {
         const { token, refreshToken } = response.data.data;
         TokenManager.setTokens(token, refreshToken, 1); // 1 hour expiration
+        
+        // Fetch and populate user data
+        try {
+          const userProfile = await UserService.getProfile();
+          console.log('User profile loaded:', userProfile.username);
+        } catch (profileError) {
+          console.warn('Failed to load user profile after login:', profileError);
+          // Don't throw - allow login to succeed even if profile fetch fails
+        }
+        
         return response.data.data;
       }
 
@@ -67,6 +78,10 @@ export class AuthService {
       }
 
       const errorMsg = this.handleError(error, 'Login failed');
+      if (error?.response) {
+        error.message = errorMsg;
+        throw error;
+      }
       throw new Error(errorMsg);
     }
   }
@@ -85,13 +100,27 @@ export class AuthService {
       if (response.status === 201 && response.data.success) {
         const { token, refreshToken } = response.data.data;
         TokenManager.setTokens(token, refreshToken, 1); // 1 hour expiration
+        
+        // Fetch and populate user data
+        try {
+          const userProfile = await UserService.getProfile();
+          console.log('New user profile loaded:', userProfile.username);
+        } catch (profileError) {
+          console.warn('Failed to load user profile after registration:', profileError);
+          // Don't throw - allow registration to succeed even if profile fetch fails
+        }
+        
         return response.data.data;
       }
 
       throw new Error('Invalid register response');
     } catch (error: any) {
-      this.handleError(error, 'Registration failed');
-      throw error;
+      const errorMsg = this.handleError(error, 'Registration failed');
+      if (error?.response) {
+        error.message = errorMsg;
+        throw error;
+      }
+      throw new Error(errorMsg);
     }
   }
 
@@ -176,7 +205,7 @@ export class AuthService {
    */
   async getCurrentUser(): Promise<User> {
     try {
-      const response = await ApiClient.get('/api/me');
+      const response = await ApiClient.get('/api/auth/me');
 
       if (response.status === 200) {
         const user = response.data; // Note: /me endpoint returns user directly
@@ -196,11 +225,11 @@ export class AuthService {
    */
   async refreshUserProfile(): Promise<User> {
     try {
-      const response = await ApiClient.get('/api/users/me');
-      if (response.status === 200 && response.data.success) {
-        TokenManager.setUser(response.data.data);
+      const response = await ApiClient.get('/api/auth/me');
+      if (response.status === 200 && response.data) {
+        TokenManager.setUser(response.data);
         TokenManager.refreshUserCacheTime();
-        return response.data.data;
+        return response.data;
       }
       throw new Error('Failed to refresh user profile');
     } catch (error: any) {
@@ -247,14 +276,8 @@ export class AuthService {
    * Logout - clear tokens and invalidate on server
    */
   async logout(): Promise<void> {
-    try {
-      await ApiClient.post('/api/auth/logout', {}).catch(() => {
-        // Ignore errors, logout anyway
-      });
-    } finally {
-      TokenManager.clearTokens();
-      window.location.href = '/login';
-    }
+    TokenManager.clearTokens();
+    window.location.href = '/login';
   }
 
   /**
@@ -285,6 +308,13 @@ export class AuthService {
 
       const refreshToken = params.get('refreshToken') || 'oauth_' + Date.now();
       TokenManager.setTokens(token, refreshToken, 1);
+
+      try {
+        await UserService.getProfile();
+        console.log('Google OAuth: User profile loaded');
+      } catch (profileError) {
+        console.warn('Failed to load user profile from Google callback:', profileError);
+      }
 
       window.history.replaceState({}, document.title, window.location.pathname);
       window.location.href = '/';

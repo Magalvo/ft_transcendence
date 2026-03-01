@@ -22,8 +22,12 @@ services:
         - "3000:3000"
       env_file:
         - ./backend/Auth/.env
-      # environment:
-      #   - JWT_SECRET=${JWT_SECRET}
+      environment:
+        - AVATARS_PATH=/Auth/public/avatars
+        - DB_FILE=/Auth/data/dev.sqlite
+      volumes:
+        - auth_avatars:/Auth/public/avatars
+        - auth_database:/Auth/data
       networks:
         - transcendencenet
       restart: on-failure
@@ -37,6 +41,12 @@ services:
       networks:
         - transcendencenet
       restart: on-failure
+      depends_on:
+        - gateway
+
+volumes:
+  auth_avatars:
+  auth_database:
 
 networks:
   transcendencenet:

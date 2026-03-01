@@ -1,4 +1,6 @@
 import { AbstractComponent } from '../../core/Component';
+import { UserStore } from '../../core/UserStore';
+import { router } from '../../main';
 
 export class Navbar extends AbstractComponent {
   constructor() {
@@ -18,9 +20,11 @@ export class Navbar extends AbstractComponent {
 
     
     const links = [
-      { label: 'Game', path: '/lobby' },
+      { label: 'Create Game', path: '/lobby' },
+      { label: 'Find Game', path: '/find-game' },
       { label: 'Tournament', path: '/tournament' },
-      { label: 'Chat', path: '/chat' }, 
+      { label: 'Chat', path: '/chat' },
+      { label: 'Dashboard', path: '/dashboard' },
     ];
 
     links.forEach(link => {
@@ -48,20 +52,37 @@ export class Navbar extends AbstractComponent {
   }
 
   private buildProfileImage(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relative';
+
     const profileImage = document.createElement('img');
-    profileImage.src = 'https://cdn.intra.42.fr/users/ab00a9d8830ab9f89a054fed2479e9f1/small_dde-maga.JPG';
     profileImage.alt = 'Profile';
     profileImage.className = 'w-8 h-8 rounded-full cursor-pointer border border-gray-700';
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'relative';
-    wrapper.appendChild(profileImage);
+   
+    const user = UserStore.getUser();
+    const initialAvatarUrl = user?.avatarUrl || 'https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff';
+    profileImage.src = initialAvatarUrl;
+    console.log('🎨 Navbar: Initial avatar URL:', initialAvatarUrl);
+
+    const unsubscribe = UserStore.subscribe((updatedUser) => {
+      if (updatedUser) {
+        const newAvatarUrl = updatedUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(updatedUser.username)}&background=0D8ABC&color=fff`;
+        profileImage.src = newAvatarUrl;
+        console.log('🎨 Navbar: Avatar updated:', newAvatarUrl);
+      }
+    });
+
+    this.onDestroy = () => {
+      unsubscribe?.();
+    };
 
     profileImage.addEventListener('click', (e) => {
       e.stopPropagation();
       this.showProfileOptions(wrapper, profileImage);
     });
 
+    wrapper.appendChild(profileImage);
     return wrapper;
   }
 
@@ -124,8 +145,6 @@ export class Navbar extends AbstractComponent {
   }
   
   private navigate(path: string): void {
-    window.history.pushState({}, '', path);
-    
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    router.navigate(path);
   }
 }

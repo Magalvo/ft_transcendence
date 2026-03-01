@@ -4,16 +4,26 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-import { Length } from "class-validator";
-class userDTO {
+import { IsString, IsOptional, MinLength } from "class-validator";
+/**
+ * DTO for user login input validation
+ * Represents data sent by frontend to /login endpoint
+ */
+class UserLoginDTO {
     username;
     password;
     twoFactorCode;
 }
 __decorate([
-    Length(5)
-], userDTO.prototype, "username", void 0);
+    IsString(),
+    MinLength(3, { message: 'Username must be provided' })
+], UserLoginDTO.prototype, "username", void 0);
 __decorate([
-    Length(8)
-], userDTO.prototype, "password", void 0);
-export default userDTO;
+    IsString(),
+    MinLength(8, { message: 'Password must be at least 8 characters' })
+], UserLoginDTO.prototype, "password", void 0);
+__decorate([
+    IsOptional(),
+    IsString()
+], UserLoginDTO.prototype, "twoFactorCode", void 0);
+export default UserLoginDTO;

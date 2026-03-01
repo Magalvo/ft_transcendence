@@ -165,7 +165,7 @@ export class ChatPage extends AbstractComponent {
         return;
       }
 
-      const inviteUrl = `${window.location.origin}/game`;
+      const inviteUrl = `${window.location.origin}/lobby`;
       const inviteSession = `chat_${Date.now()}`;
       const inviteMessage = this.buildInviteMessage(inviteUrl, inviteSession);
 

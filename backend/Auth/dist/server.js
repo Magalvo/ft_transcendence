@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyCookie from "@fastify/cookie";
 import dotenv from "dotenv";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -11,14 +12,23 @@ import "reflect-metadata";
 import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
 import chatRoutes from './routes/chat.js';
+import { CONFIG } from './game/config.js';
+import multipart from "@fastify/multipart";
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error("FATAL: JWT_SECRET is not defined. Authentication will not work.");
+    process.exit(1);
+}
 const app = Fastify({ logger: true });
 app.get("/ok", (req, reply) => {
     sendSuccess(reply, { message: "It works!" });
 });
 app.register(cors, { origin: true });
+app.register(fastifyCookie);
+app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 app.register(fastifyStatic, { root: path.join(process.cwd(), "public"), prefix: "/" });
 app.register(healthRoutes);
 try {
@@ -58,7 +68,7 @@ app.get('/api/test', async () => {
 });
 const start = async () => {
     try {
-        const port = Number(process.env.PORT || 3000);
+        const port = Number(process.env.PORT ?? CONFIG.PORT);
         await app.ready();
         // Get the underlying HTTP server from Fastify
         const httpServer = app.server;

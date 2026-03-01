@@ -30,7 +30,7 @@ const registerUser = async (req, reply) => {
         await db.raw("INSERT INTO users (id, username, passwordHash, email, online, last_request) VALUES (?, ?, ?, ?, ?,?)", [id, user.username, passwordHash, user.email, false, last_update]);
         const username = user.username;
         // JWT & Refresh token
-        const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ userId: id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = crypto.randomBytes(64).toString("hex");
         const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         await db.raw("INSERT INTO refresh_tokens (username,userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)", [username, id, refreshToken, expires_at, last_update]);
