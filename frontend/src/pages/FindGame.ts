@@ -16,7 +16,7 @@ interface GameLobby {
   maxPlayers: number;
   mode: '1v1' | '2v2' | '3v3';
   isPrivate: boolean;
-  code?: string; // For private lobbies
+  code?: string;
   createdAt: number;
   status: 'waiting' | 'ready' | 'playing';
 }
@@ -69,9 +69,16 @@ export class FindGamePage extends AbstractComponent {
   };
   private onLobbyDeleted = (data: { lobbyId: string }): void => {
     console.log('🗑️ Lobby deleted:', data.lobbyId);
+    const deletedLobby = this.lobbies.find((lobby) => lobby.id === data.lobbyId);
+    const wasMyLobby = !!deletedLobby && this.currentUser?.id === deletedLobby.leader.id;
+
     // Remove the lobby from the list
     this.lobbies = this.lobbies.filter(lobby => lobby.id !== data.lobbyId);
     this.renderLobbies();
+
+    if (wasMyLobby) {
+      this.showToast('Lobby removed successfully', 'success');
+    }
   };
   private onLobbyCreated = (data: { lobbyId: string; code?: string }): void => {
     console.log('✅ Lobby created:', data);
@@ -87,6 +94,9 @@ export class FindGamePage extends AbstractComponent {
   };
   private onJoinLobbyError = (data: { message: string }): void => {
     alert(`Failed to join lobby: ${data.message}`);
+  };
+  private onDeleteLobbyError = (data: { message: string }): void => {
+    this.showToast(`Failed to remove lobby: ${data.message}`, 'error');
   };
   private onSocketError = (error: unknown): void => {
     console.error('🚨 Socket error:', error);
@@ -191,6 +201,14 @@ export class FindGamePage extends AbstractComponent {
     this.userStoreSubscription = UserStore.subscribe((user) => {
       this.currentUser = user;
       console.log('👤 User data updated in FindGame:', user?.username);
+
+      if (user?.id) {
+        this.socket = socketService.init(undefined, user.id);
+        if (this.socket?.connected) {
+          this.refreshLobbies();
+        }
+      }
+
       // Re-render to update "my lobbies" indicators if user changed
       this.renderLobbies();
     });
@@ -226,6 +244,7 @@ export class FindGamePage extends AbstractComponent {
     this.socket.on('lobbyCreated', this.onLobbyCreated);
     this.socket.on('joinLobbySuccess', this.onJoinLobbySuccess);
     this.socket.on('joinLobbyError', this.onJoinLobbyError);
+    this.socket.on('deleteLobbyError', this.onDeleteLobbyError);
     this.socket.on('error', this.onSocketError);
 
     if (this.socket.connected) {
@@ -300,13 +319,13 @@ export class FindGamePage extends AbstractComponent {
       </div>
 
       ${
-        isPrivate && lobby.code
+        isPrivate && isMyLobby && this.myLobbies.has(lobby.id)
           ? `
         <div class="mb-3 p-2 bg-neutral-900 rounded border border-neutral-600">
           <div class="text-xs text-neutral-400 mb-1">Code</div>
           <div class="flex items-center gap-2">
-            <code class="flex-1 text-sm font-mono font-bold text-blue-400">${lobby.code}</code>
-            <button class="copy-code-btn px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition" data-code="${lobby.code}">Copy</button>
+            <code class="flex-1 text-sm font-mono font-bold text-blue-400">${this.myLobbies.get(lobby.id) || ''}</code>
+            <button class="copy-code-btn px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition" data-code="${this.myLobbies.get(lobby.id) || ''}">Copy</button>
           </div>
         </div>
       `
@@ -316,7 +335,10 @@ export class FindGamePage extends AbstractComponent {
       <div class="flex gap-2">
         ${
           isMyLobby
-            ? `<button class="flex-1 px-3 py-2 rounded bg-blue-700 hover:bg-blue-600 text-sm font-medium transition" data-action="manage" data-lobby-id="${lobby.id}">Manage</button>`
+            ? `
+              <button class="flex-1 px-3 py-2 rounded bg-blue-700 hover:bg-blue-600 text-sm font-medium transition" data-action="manage" data-lobby-id="${lobby.id}">Manage</button>
+              <button class="flex-1 px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-sm font-medium transition" data-action="remove" data-lobby-id="${lobby.id}">Remove</button>
+            `
             : `<button class="flex-1 px-3 py-2 rounded ${
                 isFull ? 'bg-neutral-700 cursor-not-allowed opacity-50' : 'bg-green-700 hover:bg-green-600'
               } text-sm font-medium transition join-lobby-btn" data-lobby-id="${lobby.id}" ${isFull ? 'disabled' : ''}>
@@ -344,7 +366,7 @@ export class FindGamePage extends AbstractComponent {
     card.querySelector('.join-lobby-btn')?.addEventListener('click', () => {
       const lobbyId = (card.querySelector('.join-lobby-btn') as HTMLElement).dataset.lobbyId;
       if (lobbyId) {
-        this.joinLobby(lobbyId);
+        this.joinLobby(lobby);
       }
     });
 
@@ -353,6 +375,14 @@ export class FindGamePage extends AbstractComponent {
       const lobbyId = (card.querySelector('[data-action="manage"]') as HTMLElement).dataset.lobbyId;
       if (lobbyId) {
         this.navigateToLobby(lobbyId);
+      }
+    });
+
+    // Remove button
+    card.querySelector('[data-action="remove"]')?.addEventListener('click', () => {
+      const lobbyId = (card.querySelector('[data-action="remove"]') as HTMLElement).dataset.lobbyId;
+      if (lobbyId) {
+        this.removeLobby(lobbyId);
       }
     });
 
@@ -429,7 +459,6 @@ export class FindGamePage extends AbstractComponent {
       });
     });
 
-    // Copy code button
     modal.querySelector('#copy-preview')?.addEventListener('click', () => {
       const code = (previewCode as HTMLElement)?.textContent;
       if (code) {
@@ -496,11 +525,23 @@ export class FindGamePage extends AbstractComponent {
     });
   }
 
-  private joinLobby(lobbyId: string): void {
-    console.log(`🎮 Attempting to join lobby ${lobbyId}`);
+  private joinLobby(lobby: GameLobby): void {
+    console.log(`🎮 Attempting to join lobby ${lobby.id}`);
+    let privateCode: string | undefined;
+    if (lobby.isPrivate) {
+      const input = window.prompt('Enter private lobby code:');
+      if (input === null) return;
+      privateCode = input.trim().toUpperCase();
+      if (!privateCode) {
+        alert('Lobby code is required.');
+        return;
+      }
+    }
+
     const user = this.currentUser;
     this.socket?.emit('joinLobbyById', {
-      lobbyId,
+      lobbyId: lobby.id,
+      code: privateCode,
       username: user?.username || 'Unknown',
       avatarUrl: user?.avatarUrl || null,
     });
@@ -509,6 +550,30 @@ export class FindGamePage extends AbstractComponent {
   private navigateToLobby(lobbyId: string): void {
     console.log(`🎮 Navigating to lobby ${lobbyId}`);
     router.navigate(`/lobby?id=${lobbyId}`);
+  }
+
+  private removeLobby(lobbyId: string): void {
+    const confirmed = window.confirm('Remove this lobby?');
+    if (!confirmed) return;
+
+    this.socket?.emit('deleteLobby', { lobbyId });
+  }
+
+  private showToast(message: string, type: 'success' | 'error' = 'success'): void {
+    const toast = document.createElement('div');
+    const baseClasses = 'fixed top-4 right-4 z-[1000] px-4 py-3 rounded-md text-sm font-medium shadow-lg border';
+    const variantClasses =
+      type === 'success'
+        ? 'bg-green-900 text-green-200 border-green-700'
+        : 'bg-red-900 text-red-200 border-red-700';
+
+    toast.className = `${baseClasses} ${variantClasses}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    window.setTimeout(() => {
+      toast.remove();
+    }, 2500);
   }
 
   public onDestroy(): void {
@@ -525,6 +590,7 @@ export class FindGamePage extends AbstractComponent {
       this.socket.off('lobbyCreated', this.onLobbyCreated);
       this.socket.off('joinLobbySuccess', this.onJoinLobbySuccess);
       this.socket.off('joinLobbyError', this.onJoinLobbyError);
+      this.socket.off('deleteLobbyError', this.onDeleteLobbyError);
       this.socket.off('error', this.onSocketError);
     }
     

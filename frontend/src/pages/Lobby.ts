@@ -4,6 +4,7 @@ import { socketService } from '../client/SocketService';
 import { UserStore } from '../core/UserStore';
 import { router } from '../main';
 import type { Socket } from 'socket.io-client';
+import { TokenManager } from '../services/TokenManager';
 
 type SlotContent = 'empty' | 'human' | 'bot';
 
@@ -68,6 +69,10 @@ export class LobbyPage extends AbstractComponent {
 
     private onSocketConnect = (): void => {
         this.myId = this.socket?.id ?? '';
+        const userId = UserStore.getUser()?.id || TokenManager.getUser()?.id;
+        if (userId) {
+            this.socket?.emit('userAuth', { userId });
+        }
         console.log(' Lobby: Socket connected, joining lobby');
         this.joinRequestedLobby();
     };
@@ -268,7 +273,7 @@ export class LobbyPage extends AbstractComponent {
     }
 
     private initSocket(): void {
-        const currentUser = UserStore.getUser();
+        const currentUser = UserStore.getUser() || TokenManager.getUser();
         const userId = currentUser?.id;
         this.socket = socketService.init(undefined, userId);
 

@@ -1,6 +1,7 @@
 import { AbstractComponent } from '../../core/Component';
 import { UserStore } from '../../core/UserStore';
 import { router } from '../../main';
+import AuthService from '../../services/AuthService';
 
 export class Navbar extends AbstractComponent {
   constructor() {
@@ -108,10 +109,9 @@ export class Navbar extends AbstractComponent {
     const logoutLink = document.createElement('a');
     logoutLink.textContent = 'Logout';
     logoutLink.className = 'block px-4 py-2 text-gray-800 hover:bg-gray-200';
-    //logoutLink.addEventListener('click', () => this.logout());
-    logoutLink.addEventListener('click', () => {
+    logoutLink.addEventListener('click', async () => {
+      await this.logout();
       this.removeExistingDropdown(anchor);
-      this.navigate('/login');
     });
 
     optionsContainer.appendChild(profileLink);
@@ -133,9 +133,9 @@ export class Navbar extends AbstractComponent {
     setTimeout(() => document.addEventListener('click', outsideClick, { once: true }), 0);
   }
 
-  private logout(): void {
-    this.removeExistingDropdown(document.createElement('div'));
-    this.navigate('/login');
+  private async logout(): Promise<void> {
+    UserStore.clearUser();
+    await AuthService.logout();
   }
 
   private removeExistingDropdown(anchor: HTMLElement): void {
