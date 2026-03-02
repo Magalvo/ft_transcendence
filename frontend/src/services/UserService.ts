@@ -21,13 +21,13 @@ export class UserService {
         return cached;
       }
 
-      
+
       const userData = await this.fetchCurrentUser();
       console.log('📥 Fetched user data from API:', userData);
-      
+
       const storedUser = TokenManager.getUser();
       const storedAvatarUrl = storedUser?.avatarUrl;
-      
+
       const profile: UserProfile = {
         id: userData.id,
         username: userData.username,
@@ -67,7 +67,7 @@ export class UserService {
       }));
       profile.friends = friends;
 
-      
+
       UserStore.setUser(profile);
       TokenManager.setUser(profile);
 
@@ -75,13 +75,13 @@ export class UserService {
       return profile;
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
-      
+
       const cached = TokenManager.getUser();
       if (cached) {
         UserStore.setUser(cached);
         return cached as UserProfile;
       }
-      
+
       throw error;
     }
   }
@@ -92,11 +92,11 @@ export class UserService {
   static async fetchCurrentUser(): Promise<User> {
     try {
       const response = await ApiClient.get('/api/auth/me');
-      
+
       if (response.status === 200 && response.data) {
         return response.data;
       }
-      
+
       throw new Error('Failed to fetch current user');
     } catch (error) {
       console.error('Error fetching current user:', error);
@@ -110,7 +110,7 @@ export class UserService {
   static async fetchUserStats(userId: string): Promise<{ wins: number; losses: number; rank?: string }> {
     try {
       const response = await ApiClient.get(`/api/auth/users/${userId}/stats`);
-      
+
       if (response.status === 200 && response.data) {
         return {
           wins: Number(response.data.wins ?? 0),
@@ -118,7 +118,7 @@ export class UserService {
           rank: response.data.rank ?? 'Unranked'
         };
       }
-      
+
       // Return defaults if endpoint doesn't exist
       return { wins: 0, losses: 0, rank: 'Unranked' };
     } catch (error) {
@@ -133,7 +133,7 @@ export class UserService {
   static async fetchUserMatches(userId: string): Promise<MatchHistory[]> {
     try {
       const response = await ApiClient.get(`/api/auth/users/${userId}/matches`);
-      
+
       if (response.status === 200 && Array.isArray(response.data)) {
         return response.data.map((match: any) => {
           const perspective = match.user_perspective ?? {};
@@ -150,7 +150,7 @@ export class UserService {
           } as MatchHistory;
         });
       }
-      
+
       return [];
     } catch (error) {
       console.warn('Failed to fetch user matches:', error);
@@ -164,11 +164,11 @@ export class UserService {
   static async fetchUserFriends(userId: string): Promise<Friend[]> {
     try {
       const response = await ApiClient.get(`/api/auth/users/${userId}/friends`);
-      
+
       if (response.status === 200 && Array.isArray(response.data)) {
         return response.data;
       }
-      
+
       return [];
     } catch (error) {
       console.warn('Failed to fetch user friends:', error);
@@ -219,7 +219,7 @@ export class UserService {
     try {
       const formData = new FormData();
       formData.append('avatar', file);
-      
+
       const response = await ApiClient.post('/api/auth/users/avatar', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -227,12 +227,12 @@ export class UserService {
       });
 
       if (response.status === 200 && response.data?.url) {
-       
+
         const profile = UserStore.getUser();
         if (profile) {
           profile.avatarUrl = response.data.url;
           UserStore.setUser(profile);
-          
+
           TokenManager.setUser(profile);
         }
         return response.data.url;
@@ -246,16 +246,59 @@ export class UserService {
   }
 
   /**
+   * Update user username
+   */
+  static async updateUsername(username: string): Promise<string> {
+    try {
+      const response = await ApiClient.post('/api/auth/users/username', {
+        username: username.trim()
+      });
+
+      // Handle response - backend returns { success: true, username: "..." }
+      let newUsername = response.data?.username || response.data?.data?.username;
+
+      if (!newUsername) {
+        throw new Error('Invalid response from server');
+      }
+
+      const profile = UserStore.getUser();
+      if (profile) {
+        profile.username = newUsername;
+        UserStore.setUser(profile);
+        TokenManager.setUser(profile);
+      }
+      return newUsername;
+    } catch (error: any) {
+      console.error('Username update error:', error);
+
+      // Extract meaningful error message
+      let errorMessage = 'Failed to update username';
+
+      if (error?.response?.status === 409) {
+        errorMessage = 'Username already taken';
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Get user by ID (for public profiles)
    */
   static async getUserById(userId: string): Promise<UserProfile | null> {
     try {
       const response = await ApiClient.get(`/api/auth/users/${userId}/profile`);
-      
+
       if (response.status === 200 && response.data) {
         return response.data;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to fetch user:', error);

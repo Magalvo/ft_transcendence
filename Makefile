@@ -20,6 +20,11 @@ logs:
 clean: down
 	rm -f $(ENV_FILE)
 
+eval:
+	docker compose down -v --rmi all --remove-orphans
+	docker volume prune -f
+	docker network prune -f
+
 dbre: re \
     docker volume rm transcendence_auth_database || true \
     docker compose up -d \

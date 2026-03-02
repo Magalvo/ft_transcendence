@@ -7,6 +7,7 @@ const app = fastify()
 app.register(cors, {
   origin: true,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 })
 
 const upstream = process.env.AUTH_UPSTREAM || 'http://127.0.0.1:3000';

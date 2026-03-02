@@ -215,6 +215,52 @@ app.post("/login", async (req, reply) => {
     }
   });
 
+  // --- UPDATE USERNAME ---
+  const updateUsernameHandler = async (req: any, reply: any) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return sendError(reply, "Missing or invalid Authorization header", 401);
+      }
+
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, JWT_SECRET) as {
+        userId: string;
+      };
+
+      const { username } = (req.body ?? {}) as { username?: string };
+      const normalized = String(username ?? "").trim();
+
+      if (!normalized) {
+        return sendError(reply, "Username is required", 400);
+      }
+      if (normalized.length < 3 || normalized.length > 24) {
+        return sendError(reply, "Username must be between 3 and 24 characters", 400);
+      }
+
+      const existing = await db("users")
+        .select("id")
+        .whereRaw("LOWER(username) = LOWER(?)", [normalized])
+        .first();
+
+      if (existing && existing.id !== decoded.userId) {
+        return sendError(reply, "Username is already taken", 409);
+      }
+
+      await db("users")
+        .where({ id: decoded.userId })
+        .update({ username: normalized });
+
+      return { success: true, username: normalized };
+    } catch (err: any) {
+      app.log.error(err);
+      return sendError(reply, err.message || "Failed to update username", 500);
+    }
+  };
+  app.patch("/users/username", updateUsernameHandler);
+  // Compatibility route for environments where PATCH is blocked by proxy/CORS.
+  app.post("/users/username", updateUsernameHandler);
+
   // --- RECORD MATCH ---
   app.post("/matches", async (req, reply) => {
     try {
