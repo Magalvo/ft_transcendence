@@ -22,7 +22,7 @@ export class GameScene {
   private data: GameData;
   private handleEvents: HandleEvents;
   private resizeHandler: (() => void) | null = null;
-  private scene!: BABYLON.Scene;
+  private scene: BABYLON.Scene | null = null;
   public socket!: Socket;
 
   constructor() {
@@ -49,7 +49,7 @@ export class GameScene {
     }
 
     this.engine.runRenderLoop(() => {
-      if (this.scene) {
+      if (this.scene && !this.scene.isDisposed && this.scene.activeCamera) {
         this.scene.render();
       }
     });
@@ -57,12 +57,12 @@ export class GameScene {
 
   public resetScene(serverConfigs: GameConfiguration): void {
     undefineKeyEvents();
-    if (this.scene) this.scene.dispose();
+    if (this.scene && !this.scene.isDisposed) this.scene.dispose();
     if (!this.engine) throw new Error('Engine not initialized before resetScene');
     this.scene = new BABYLON.Scene(this.engine);
     this.initializeGameData(serverConfigs);
     this.data.obj3D = createObjects3D(this.scene, serverConfigs);
-    this.data.obj2D = createObjects2D();
+    this.data.obj2D = createObjects2D(this.scene);
     this.data.env3D = createEnvironment3D(this.data.obj3D, this.scene);
     defineKeyEvents(this.data);
 
@@ -166,15 +166,15 @@ export class GameScene {
     }
 
     try {
-      if (this.scene) this.scene.dispose();
-    } catch (e) {
-      // ignore disposal errors
-    }
-
-    try {
       if (this.engine) this.engine.stopRenderLoop();
     } catch (e) {
       // ignore
+    }
+
+    try {
+      if (this.scene && !this.scene.isDisposed) this.scene.dispose();
+    } catch (e) {
+      // ignore disposal errors
     }
 
     try {
@@ -189,6 +189,7 @@ export class GameScene {
       // ignore
     }
 
+    this.scene = null;
     this.data = {} as GameData;
   }
 }

@@ -22,7 +22,7 @@ function cleanup(data: GameData) {
 
 function buildUI(data: GameData) {
     // 1. Setup UI Texture with fixed scaling
-    const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("PauseUI", true);
+    const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("PauseUI", true, data.scene);
     gui.idealWidth = 1920;
     gui.idealHeight = 1080;
 

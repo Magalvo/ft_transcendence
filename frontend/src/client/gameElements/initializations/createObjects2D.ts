@@ -1,4 +1,4 @@
-import { GUI } from "../../index.js";
+import { GUI, type BABYLON } from "../../index.js";
 import type { Side } from "../../index.js";
 
 /**
@@ -21,12 +21,12 @@ export type Objects2D = {
  * Creates all main 2D UI elements for the game (score labels, UI texture, etc).
  * @returns {Objects2D}
  */
-export function createObjects2D(): Objects2D {
+export function createObjects2D(scene: BABYLON.Scene): Objects2D {
   // Create a fullscreen GUI texture for all UI elements, with a fixed ideal size
   const guiTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
     "interface_GUI",
     true,
-    { width: 1920, height: 1080 }
+    scene
   );
   guiTexture.idealWidth = 1920;
   guiTexture.idealHeight = 1080;

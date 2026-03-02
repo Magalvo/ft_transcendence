@@ -10,6 +10,8 @@ export class HandleEvents {
     private isReady = false;
     private queue: VoidFunction[] = [];
     private gameScene: GameScene;
+    private readyTimeout: number | null = null;
+    private renderReadySent = false;
 
     constructor(gameScene: GameScene) { this.gameScene = gameScene }
 
@@ -21,21 +23,39 @@ export class HandleEvents {
         disposeCountdown();
 
         this.isReady = false;
+        this.renderReadySent = false;
+        if (this.readyTimeout !== null) {
+            window.clearTimeout(this.readyTimeout);
+            this.readyTimeout = null;
+        }
 
-        // 1. Build 3D Scene
-        this.gameScene.resetScene(serverData.configs);
+        try {
+            // 1. Build 3D Scene
+            this.gameScene.resetScene(serverData.configs);
+        } catch (error) {
+            console.error("❌ Failed to reset game scene:", error);
+            this.markReady("resetScene_error");
+            return;
+        }
 
         // 2. Link Data
         this.data = (this.gameScene as any).data;
         Object.assign(this.data, { mySide: serverData.side, myIndex: serverData.index });
 
-        // 3. Wait for GPU compilation before signaling server
+        // 3. Signal server immediately (don't block whole match on one slow client)
+        this.sendRenderReady();
+
+        // 4. Wait for GPU compilation before flushing queued state events
         this.data.scene?.executeWhenReady(() => {
             console.log("✅ GPU READY");
-            this.isReady = true;
-            this.flushQueue();
-            this.data.socket?.emit('renderReady');
+            this.markReady("gpu_ready");
         });
+
+        // 5. Fallback: if executeWhenReady never fires, allow sync anyway
+        this.readyTimeout = window.setTimeout(() => {
+            console.warn("⚠️ GPU ready timeout reached, forcing game sync.");
+            this.markReady("timeout");
+        }, 2000);
     }
 
     /* --- GAME STATE SYNC (60 FPS) --- */
@@ -131,6 +151,24 @@ export class HandleEvents {
         if (!this.queue.length) return;
         this.queue.forEach(fn => fn());
         this.queue = [];
+    }
+
+    private sendRenderReady() {
+        if (this.renderReadySent) return;
+        this.renderReadySent = true;
+        this.data.socket?.emit('renderReady');
+    }
+
+    private markReady(reason: "gpu_ready" | "timeout" | "resetScene_error") {
+        if (this.isReady) return;
+        this.isReady = true;
+        if (this.readyTimeout !== null) {
+            window.clearTimeout(this.readyTimeout);
+            this.readyTimeout = null;
+        }
+        if (reason !== "resetScene_error") {
+            this.flushQueue();
+        }
     }
 
     private checkGameStart(status: GameStatus) {
