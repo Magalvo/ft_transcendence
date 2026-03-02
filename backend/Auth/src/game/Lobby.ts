@@ -38,6 +38,10 @@ export class Lobby {
         return this.clients.includes(socketId);
     }
 
+    public getClientCount(): number {
+        return this.clients.length;
+    }
+
     public addClient(socketId: string) {
         // Prevent duplicate additions
         if (this.clients.includes(socketId)) {

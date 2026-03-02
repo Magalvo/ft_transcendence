@@ -3,20 +3,22 @@ import db from "../db.js";
 import jwt from "jsonwebtoken";
 const refreshToken = async (req, reply) => {
     try {
-        const accesstoken = req.cookies['token'];
-        if (!accesstoken)
+        const body = req.body || {};
+        const refreshTokenFromBody = body.refreshToken;
+        const refreshTokenFromCookie = req.cookies['refreshToken'];
+        const refreshTokenValue = refreshTokenFromCookie || refreshTokenFromBody;
+        if (!refreshTokenValue) {
             return sendError(reply, 'Invalid or expired token', 401);
-        const JWT_SECRET = process.env.JWT_SECRET;
-        const decoded = jwt.verify(accesstoken, JWT_SECRET);
-        const userId = decoded.userId;
-        const refreshtoken = req.cookies['refreshToken'];
-        if (!refreshtoken)
-            return sendError(reply, 'Invalid or expired token', 401);
-        const rawStored = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userId = ? LIMIT 1", [userId]);
-        const stored = Array.isArray(rawStored[0]) ? rawStored[0][0] : undefined;
-        if (!stored || new Date(stored.expires_at) < new Date())
+        }
+        const stored = await db("refresh_tokens")
+            .select("userId", "token", "expires_at")
+            .where({ token: refreshTokenValue })
+            .first();
+        if (!stored || new Date(stored.expires_at) < new Date()) {
             return sendError(reply, "Invalid or expired token", 401);
-        const newToken = jwt.sign({ userId: userId }, JWT_SECRET, { expiresIn: "1h" });
+        }
+        const JWT_SECRET = process.env.JWT_SECRET;
+        const newToken = jwt.sign({ userId: stored.userId }, JWT_SECRET, { expiresIn: "1h" });
         sendSuccess(reply, { token: newToken });
     }
     catch (err) {

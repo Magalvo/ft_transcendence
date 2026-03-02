@@ -1,4 +1,5 @@
 import { AbstractComponent } from './Component';
+import { TokenManager } from '../services/TokenManager';
 
 
 interface Route {
@@ -10,6 +11,7 @@ export class Router {
   private routes: Route[] = [];
   private rootElement: HTMLElement;
   private currentComponent: AbstractComponent | null = null;
+  private readonly publicRoutes = ['/login', '/404'];
 
   constructor(rootSelector: string) {
     const el = document.querySelector(rootSelector);
@@ -36,7 +38,19 @@ export class Router {
   
   private handleRoute(): void {
     const path = window.location.pathname;
-    const route = this.routes.find((r) => r.path === path);
+
+    let targetPath = path;
+    const isAuthenticated = TokenManager.isAuthenticated();
+
+    if (!isAuthenticated && !this.publicRoutes.includes(path)) {
+      targetPath = '/login';
+      window.history.replaceState({}, '', targetPath);
+    } else if (isAuthenticated && path === '/login') {
+      targetPath = '/';
+      window.history.replaceState({}, '', targetPath);
+    }
+
+    const route = this.routes.find((r) => r.path === targetPath);
 
     
     if (this.currentComponent) {
@@ -47,14 +61,14 @@ export class Router {
     this.rootElement.innerHTML = ''; 
 
     if (route) {
-      console.log(`📡 Router: Navigating to ${path}`);
+      console.log(`📡 Router: Navigating to ${targetPath}`);
       const pageInstance = new route.component();
       
       this.rootElement.appendChild(pageInstance.getElement());
       pageInstance.render();
       this.currentComponent = pageInstance;
     } else {
-      console.warn(`⚠️ Router: No route found for ${path}`);
+      console.warn(`⚠️ Router: No route found for ${targetPath}`);
       this.rootElement.innerHTML = '<h1>404 - Page Not Found</h1>';
     }
   }

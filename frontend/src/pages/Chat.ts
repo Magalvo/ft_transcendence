@@ -166,8 +166,8 @@ export class ChatPage extends AbstractComponent {
         return;
       }
 
-      const inviteUrl = `${window.location.origin}/lobby`;
       const inviteSession = `chat_${Date.now()}`;
+      const inviteUrl = this.buildLobbyInviteUrl(inviteSession);
       const inviteMessage = this.buildInviteMessage(inviteUrl, inviteSession);
 
       if (this.chatSocket?.connected && this.realtimeReady) {
@@ -176,6 +176,7 @@ export class ChatPage extends AbstractComponent {
           url: inviteUrl,
           id_session: inviteSession,
         });
+        this.openInviteLobby(inviteUrl);
         return;
       }
 
@@ -189,6 +190,7 @@ export class ChatPage extends AbstractComponent {
           const created = await ChatService.sendPrivateMessage(this.currentPrivateChatId!, inviteMessage);
           this.messages.push({ ...created, sender_name: created.sender_name || this.currentUser!.username });
           this.renderMessages();
+          this.openInviteLobby(inviteUrl);
         } catch (e: any) {
           window.alert(e?.response?.data?.error || e?.message || "Failed to send game invite");
         }
@@ -495,6 +497,16 @@ export class ChatPage extends AbstractComponent {
       time.textContent = new Date(msg.timestamp).toLocaleTimeString();
 
       bubble.append(sender, text);
+      if (inviteData && isMe) {
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium hover:bg-blue-600";
+        openBtn.textContent = "Open Lobby";
+        openBtn.addEventListener("click", () => {
+          window.location.href = this.buildInviteUrl(inviteData.url, inviteData.sessionId);
+        });
+        bubble.appendChild(openBtn);
+      }
       if ((msg.is_game_invite || inviteData) && !isMe) {
         const acceptBtn = document.createElement("button");
         acceptBtn.type = "button";
@@ -528,6 +540,21 @@ export class ChatPage extends AbstractComponent {
 
   private buildInviteMessage(url: string, sessionId: string): string {
     return `${ChatPage.PONG_INVITE_PREFIX}${encodeURIComponent(url)}|${encodeURIComponent(sessionId)}`;
+  }
+
+  private buildLobbyInviteUrl(sessionId: string): string {
+    const url = new URL("/lobby", window.location.origin);
+    url.searchParams.set("inviteSession", sessionId);
+    if (this.currentUser?.id) url.searchParams.set("invitedBy", this.currentUser.id);
+    if (this.currentUser?.username) url.searchParams.set("invitedByName", this.currentUser.username);
+    if (this.currentDmTargetId) url.searchParams.set("invitedUser", this.currentDmTargetId);
+    return url.toString();
+  }
+
+  private openInviteLobby(inviteUrl: string): void {
+    window.setTimeout(() => {
+      window.location.href = inviteUrl;
+    }, 80);
   }
 
   private parsePongInvite(raw: string): { url: string; sessionId: string | null } | null {
