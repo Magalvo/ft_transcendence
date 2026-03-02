@@ -25,8 +25,20 @@ eval:
 	docker volume prune -f
 	docker network prune -f
 
-dbre: re \
-    docker volume rm transcendence_auth_database || true \
-    docker compose up -d \
+dbre:
+	docker volume rm transcendence_auth_database || true
+	$(MAKE) re
 
 re: clean up
+
+build:
+	docker compose build --no-cache
+
+pull:
+	docker compose pull
+
+logs-f:
+	docker compose logs -f
+
+status:
+	docker compose ps

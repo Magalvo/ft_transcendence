@@ -1,16 +1,15 @@
-FROM debian:latest
+FROM node:18-bullseye-slim
 
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get install nodejs npm -y
-RUN apt-get install sqlite3 -y
+WORKDIR /usr/src/frontend
 
+# Cache dependency install
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
-WORKDIR /frontend
+# Copy app source
+COPY . .
 
-COPY ./ .
-
-RUN npm install --legacy-peer-deps
-
-CMD ["npm", "run", "dev", "--", "--host"]
+ENV NODE_ENV=development
 
 EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host"]

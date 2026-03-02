@@ -1,17 +1,24 @@
-FROM debian:latest
+FROM node:18-bullseye-slim
 
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get install nodejs npm -y
-RUN apt-get install sqlite3 -y
+# Install sqlite runtime and build deps if needed
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		sqlite3 \
+		libsqlite3-dev \
+		build-essential \
+		python3 \
+	&& rm -rf /var/lib/apt/lists/*
 
+WORKDIR /usr/src/gateway
 
-WORKDIR /apiGateway
+# Cache dependencies layer
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
-COPY ./ .
+# Copy source
+COPY . .
 
-RUN npm install --legacy-peer-deps
-
-CMD ["npm", "run", "dev"]
-
+ENV NODE_ENV=development
 
 EXPOSE 3333
+CMD ["npm", "run", "dev"]
