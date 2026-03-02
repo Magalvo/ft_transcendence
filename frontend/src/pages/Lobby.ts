@@ -270,7 +270,7 @@ export class LobbyPage extends AbstractComponent {
     private initSocket(): void {
         const currentUser = UserStore.getUser();
         const userId = currentUser?.id;
-        this.socket = socketService.init('http://localhost:3000', userId);
+        this.socket = socketService.init(undefined, userId);
 
         this.myId = this.socket?.id ?? '';
         console.log(` Lobby: My socket ID is ${this.myId}`);

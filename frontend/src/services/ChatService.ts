@@ -48,8 +48,6 @@ export interface ChatListUser {
   online: boolean;
 }
 
-const mockUser: ChatUser = { id: '1', username: 'Player' };
-
 export class ChatService {
   static async getCurrentUser(): Promise<ChatUser> {
     const cached = TokenManager.getUser();
@@ -64,10 +62,9 @@ export class ChatService {
         return { id: String(user.id), username: String(user.username) };
       }
     } catch {
-      // Fallback to mock user when auth profile is unavailable.
+      // Handled below
     }
-
-    return mockUser;
+    throw new Error("Unauthorized");
   }
 
   static async getGroups(): Promise<ChatGroup[]> {

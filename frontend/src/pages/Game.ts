@@ -36,7 +36,7 @@ export class GamePage extends AbstractComponent {
         this.gameScene = new GameScene();
         const currentUser = UserStore.getUser();
         const userId = currentUser?.id;
-        const s: Socket = socketService.getSocket() ?? socketService.init('http://localhost:3000', userId);
+        const s: Socket = socketService.getSocket() ?? socketService.init(undefined, userId);
         this.gameScene.startConnection(s);
         s.emit('requestGameInit');
 

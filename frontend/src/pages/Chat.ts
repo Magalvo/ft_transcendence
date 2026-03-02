@@ -11,6 +11,7 @@ import {
 } from "../services/ChatService";
 import { io, type Socket } from "socket.io-client";
 import { TokenManager } from "../services/TokenManager";
+import { WS_URL } from "../services/RuntimeConfig";
 
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
@@ -203,7 +204,12 @@ export class ChatPage extends AbstractComponent {
   }
 
   private async bootstrap(): Promise<void> {
-    this.currentUser = await ChatService.getCurrentUser();
+    try {
+      this.currentUser = await ChatService.getCurrentUser();
+    } catch {
+      window.location.href = "/login";
+      return;
+    }
     await this.refreshBlockedUsers();
     this.initRealtime();
     this.users = await ChatService.getUsers();
@@ -381,7 +387,7 @@ export class ChatPage extends AbstractComponent {
 
   private initRealtime(): void {
     if (!this.currentUser) return;
-    this.chatSocket = io("http://localhost:3000", {
+    this.chatSocket = io(WS_URL, {
       auth: { token: TokenManager.getAccessToken() || undefined },
       withCredentials: true,
     });

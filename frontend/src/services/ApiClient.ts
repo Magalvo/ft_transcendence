@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { TokenManager } from './TokenManager';
+import { API_URL } from './RuntimeConfig';
 
 /**
  * Custom Axios instance with auth interceptors
@@ -9,12 +10,13 @@ import { TokenManager } from './TokenManager';
 class ApiClientClass {
   private client: AxiosInstance;
   private refreshTokenPromise: Promise<string> | null = null;
+  private baseURL: string;
 
   constructor() {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333';
+    this.baseURL = API_URL;
     
     this.client = axios.create({
-      baseURL: API_URL,
+      baseURL: this.baseURL,
       withCredentials: true, // Send cookies with requests
       headers: {
         'Content-Type': 'application/json',
@@ -90,8 +92,15 @@ class ApiClientClass {
           throw new Error('No refresh token available');
         }
 
-        // POST without adding auth header to avoid loop
-        const response = await this.client.post('/api/auth/token/refresh', {});
+        // Use a plain request without interceptors to avoid refresh recursion on 401.
+        const response = await axios.post(
+          `${this.baseURL}/api/auth/token/refresh`,
+          { refreshToken },
+          {
+            withCredentials: true,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
 
         const newToken = response.data.data.token;
         TokenManager.setTokens(newToken, refreshToken);

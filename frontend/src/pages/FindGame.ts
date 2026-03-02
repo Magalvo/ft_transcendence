@@ -215,7 +215,7 @@ export class FindGamePage extends AbstractComponent {
   private initSocket(): void {
     const currentUser = UserStore.getUser();
     const userId = currentUser?.id;
-    this.socket = socketService.init('http://localhost:3000', userId);
+    this.socket = socketService.init(undefined, userId);
 
     this.socket.on('connect', this.onSocketConnect);
     this.socket.on('disconnect', this.onSocketDisconnect);
@@ -518,9 +518,9 @@ export class FindGamePage extends AbstractComponent {
     if (this.socket) {
       this.socket.off('connect', this.onSocketConnect);
       this.socket.off('disconnect', this.onSocketDisconnect);
-      this.socket.off('availUpdated', this.onLobbyUpdated);
+      this.socket.off('lobbyUpdated', this.onLobbyUpdated);
       this.socket.off('lobbyDeleted', this.onLobbyDeleted);
-      this.socket.off('lobbyableLobbies', this.onAvailableLobbies);
+      this.socket.off('availableLobbies', this.onAvailableLobbies);
       this.socket.off('lobbyListChanged', this.onLobbyListChanged);
       this.socket.off('lobbyCreated', this.onLobbyCreated);
       this.socket.off('joinLobbySuccess', this.onJoinLobbySuccess);

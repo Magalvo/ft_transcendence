@@ -1,4 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
+import { WS_URL } from '../services/RuntimeConfig';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -24,7 +25,7 @@ class SocketService {
     }
   }
 
-  public init(url = 'http://localhost:3000', userId?: string): Socket {
+  public init(url = WS_URL, userId?: string): Socket {
     if (!this.socket) {
       const socketOptions: any = {};
       if (userId) {

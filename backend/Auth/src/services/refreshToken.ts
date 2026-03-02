@@ -8,27 +8,26 @@ import jwt from "jsonwebtoken";
 const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
     
     try {
-            const accesstoken : string | undefined = req.cookies['token'];
-    
-            if(!accesstoken)
-                return sendError(reply,'Invalid or expired token',401);
-            
-            const JWT_SECRET = process.env.JWT_SECRET as string;
-            const decoded: any = jwt.verify(accesstoken, JWT_SECRET);
+            const body = (req.body as any) || {};
+            const refreshTokenFromBody: string | undefined = body.refreshToken;
+            const refreshTokenFromCookie: string | undefined = req.cookies['refreshToken'];
+            const refreshTokenValue = refreshTokenFromCookie || refreshTokenFromBody;
 
-            const userId : string = decoded.userId;
-            
-            const refreshtoken : string | undefined = req.cookies['refreshToken'];
-            if(!refreshtoken)
+            if (!refreshTokenValue) {
                 return sendError(reply,'Invalid or expired token',401);
-            
-            const rawStored: any = await db.raw("SELECT token, expires_at FROM refresh_tokens WHERE userId = ? LIMIT 1", [userId]);
-            const stored: RefreshToken | undefined = Array.isArray(rawStored[0]) ? rawStored[0][0] : undefined;
-    
-            if (!stored || new Date(stored.expires_at) < new Date()) 
+            }
+
+            const stored = await db("refresh_tokens")
+                .select("userId", "token", "expires_at")
+                .where({ token: refreshTokenValue })
+                .first() as (RefreshToken & { userId: string }) | undefined;
+
+            if (!stored || new Date(stored.expires_at) < new Date()) {
                 return sendError(reply, "Invalid or expired token", 401);
-    
-            const newToken = jwt.sign({ userId: userId }, JWT_SECRET, { expiresIn: "1h" });
+            }
+
+            const JWT_SECRET = process.env.JWT_SECRET as string;
+            const newToken = jwt.sign({ userId: stored.userId }, JWT_SECRET, { expiresIn: "1h" });
             sendSuccess(reply, { token: newToken });
         } catch (err: any) {
             sendError(reply, "Internal server error", 500);

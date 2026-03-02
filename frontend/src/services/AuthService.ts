@@ -254,11 +254,11 @@ export class AuthService {
    */
   async refreshToken(): Promise<{ token: string }> {
     try {
-      const response = await ApiClient.post('/api/auth/token/refresh', {});
+      const refreshToken = TokenManager.getRefreshToken();
+      const response = await ApiClient.post('/api/auth/token/refresh', { refreshToken });
 
       if (response.status === 200 && response.data.success) {
         const { token } = response.data.data;
-        const refreshToken = TokenManager.getRefreshToken();
         if (refreshToken) {
           TokenManager.setTokens(token, refreshToken, 1);
         }

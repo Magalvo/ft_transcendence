@@ -36,6 +36,9 @@ services:
       build:
         context: ./frontend
         dockerfile: Dockerfile
+      environment:
+        - VITE_API_URL=http://localhost:3333
+        - VITE_WS_URL=http://localhost:3000
       ports:
         - "5173:5173"
       networks:
