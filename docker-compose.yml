@@ -23,11 +23,11 @@ services:
       env_file:
         - ./backend/Auth/.env
       environment:
-        - AVATARS_PATH=/Auth/public/avatars
-        - DB_FILE=/Auth/data/dev.sqlite
+        - AVATARS_PATH=/usr/src/auth/public/avatars
+        - DB_FILE=/usr/src/auth/data/dev.sqlite
       volumes:
-        - auth_avatars:/Auth/public/avatars
-        - auth_database:/Auth/data
+        - auth_avatars:/usr/src/auth/public/avatars
+        - auth_database:/usr/src/auth/data
       networks:
         - transcendencenet
       restart: on-failure

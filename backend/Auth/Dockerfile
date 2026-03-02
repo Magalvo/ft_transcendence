@@ -1,4 +1,4 @@
-FROM node:18-bullseye-slim
+FROM node:22-bookworm-slim
 
 # Install sqlite runtime and minimal build deps for native modules
 RUN apt-get update \
