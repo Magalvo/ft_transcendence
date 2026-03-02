@@ -30,10 +30,11 @@ export class DashboardPage extends AbstractComponent {
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "flex gap-3 mb-6";
 
-    const findGameBtn = new Button(
+/*     const findGameBtn = new Button(
       "🔍 Find Game",
       () => {
         router.navigate("/find-game");
+        console.log("Find Game");
       },
       "primary",
     );
@@ -41,14 +42,15 @@ export class DashboardPage extends AbstractComponent {
     const createLobbyBtn = new Button(
       "➕ Create Lobby",
       () => {
-        router.navigate("/find-game");
+        router.navigate("/lobby");
+        console.log("Lobby");
       },
       "secondary",
-    );
+    ); */
 
-    actionsDiv.appendChild(findGameBtn.getElement());
+/*     actionsDiv.appendChild(findGameBtn.getElement());
     actionsDiv.appendChild(createLobbyBtn.getElement());
-    container.appendChild(actionsDiv);
+    container.appendChild(actionsDiv); */
 
     const gridDiv = document.createElement("div");
     gridDiv.className = "grid grid-cols-1 md:grid-cols-3 gap-6";
@@ -145,7 +147,28 @@ export class DashboardPage extends AbstractComponent {
 
     const editBtn = new Button(
       "Edit Profile",
-      () => console.log("Open Edit Modal"),
+      () => {
+        console.log("Open Edit Modal");
+        router.navigate("/profile");
+      },
+      "secondary",
+    );
+
+    const findGameBtn = new Button(
+      "🔍 Find Game",
+      () => {
+        console.log("Find Game!");
+        router.navigate("/find-game");
+      },
+      "primary",
+    );
+
+    const createGameBtn = new Button(
+      "➕ Create Lobby",
+      () => {
+        console.log("Create Game!");
+        router.navigate("/lobby");
+      },
       "secondary",
     );
 
@@ -153,6 +176,8 @@ export class DashboardPage extends AbstractComponent {
     card.getElement().appendChild(name);
     card.getElement().appendChild(status);
     card.addChildren(editBtn);
+    card.addChildren(findGameBtn);
+    card.addChildren(createGameBtn);
 
     return card;
   }
