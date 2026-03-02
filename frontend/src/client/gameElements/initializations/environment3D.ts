@@ -115,7 +115,8 @@ export function createCamera(scene: BABYLON.Scene): BABYLON.ArcRotateCamera {
     new Vec3(0, 0, 0),
     scene
   );
-  camera.attachControl();
+  const canvas = scene.getEngine().getRenderingCanvas();
+  camera.attachControl(canvas, true);
   camera.lowerBetaLimit = 0;
   camera.upperBetaLimit = Math.PI / 2.5 + 4 * Math.PI;
   camera.upperRadiusLimit = 250;

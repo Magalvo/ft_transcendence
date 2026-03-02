@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
   ],
+  optimizeDeps: {
+    force: true,
+  },
   server: {
     proxy: {
       '/avatars': {
