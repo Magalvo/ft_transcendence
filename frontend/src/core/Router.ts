@@ -11,7 +11,7 @@ export class Router {
   private routes: Route[] = [];
   private rootElement: HTMLElement;
   private currentComponent: AbstractComponent | null = null;
-  private readonly publicRoutes = ['/login', '/404'];
+  private readonly publicRoutes = ['/login', '/404', '/terms'];
 
   constructor(rootSelector: string) {
     const el = document.querySelector(rootSelector);
