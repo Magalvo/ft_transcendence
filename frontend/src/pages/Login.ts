@@ -31,7 +31,7 @@ export class LoginPage extends AbstractComponent {
 
     // Background animation
     const background = new GridScanWrapper({
-      enableWebcam: false,
+      enableWebcam: true,
       bloomIntensity: 1.5
     });
     

@@ -305,7 +305,7 @@ void main(){
 
 export const GridScan: React.FC<GridScanProps> = ({
   enableWebcam = true,
-  showPreview = true,
+  showPreview = false,
   modelsPath = '/models',
   sensitivity = 0.55,
   lineThickness = 1,
@@ -672,6 +672,10 @@ export const GridScan: React.FC<GridScanProps> = ({
 
   useEffect(() => {
     let canceled = false;
+    if (!enableWebcam) {
+      setModelsReady(false);
+      return;
+    }
     const load = async () => {
       try {
         await Promise.all([
@@ -687,7 +691,7 @@ export const GridScan: React.FC<GridScanProps> = ({
     return () => {
       canceled = true;
     };
-  }, [modelsPath]);
+  }, [modelsPath, enableWebcam]);
 
   useEffect(() => {
     let stop = false;
@@ -795,6 +799,16 @@ export const GridScan: React.FC<GridScanProps> = ({
 
   return (
     <div ref={containerRef} className={`relative w-full h-full overflow-hidden ${className ?? ''}`} style={style}>
+      {enableWebcam && !showPreview && (
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          autoPlay
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
       {showPreview && (
         <div className="absolute right-3 bottom-3 w-[220px] h-[132px] rounded-lg overflow-hidden border border-white/25 shadow-[0_4px_16px_rgba(0,0,0,0.4)] bg-black text-white text-[12px] leading-[1.2] font-sans pointer-events-none">
           <video ref={videoRef} muted playsInline autoPlay className="w-full h-full object-cover -scale-x-100" />
