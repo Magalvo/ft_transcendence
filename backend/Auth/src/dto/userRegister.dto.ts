@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength } from "class-validator";
+import { IsEmail, IsString, MinLength, MaxLength, IsBoolean, Equals } from "class-validator";
 
 /**
  * DTO for user registration input validation
@@ -17,6 +17,10 @@ class UserRegisterDTO {
 
     @IsEmail({}, { message: 'Email must be valid' })
     email!: string;
+
+    @IsBoolean({ message: 'Accepting terms must be true or false' })
+    @Equals(true, { message: 'You must accept the terms and conditions' })
+    acceptTerms!: boolean;
 
 }
 

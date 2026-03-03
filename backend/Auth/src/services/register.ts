@@ -29,21 +29,24 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
 
 
         
-        if (!user.username || !user.password || !user.email) 
+        if (!user.username || !user.password || !user.email)
             return sendError(reply, "Username, password and email are required", 400);
+
+        if (user.acceptTerms !== true)
+            return sendError(reply, "You must accept the terms and conditions", 400);
         
         const rawUser: any = await db.raw("SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1", [user.username, user.email]);
        
         const existingUser: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
        
-        if (existingUser) 
+        if (existingUser)
             return sendError(reply, `Username or email already exists`, 409);
 
         const passwordHash = await bcrypt.hash(user.password, 10);
         const id = crypto.randomUUID();
         const last_update = new Date().toISOString();
         
-        await db.raw("INSERT INTO users (id, username, passwordHash, email, online, last_request) VALUES (?, ?, ?, ?, ?,?)", [ id, user.username, passwordHash, user.email, false,last_update]);
+        await db.raw("INSERT INTO users (id, username, passwordHash, email, online, last_request, accepted_terms) VALUES (?, ?, ?, ?, ?,?,?)", [ id, user.username, passwordHash, user.email, false, last_update, user.acceptTerms]);
         const username = user.username
         // JWT & Refresh token
         const token = jwt.sign({ userId: id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });

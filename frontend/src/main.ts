@@ -13,6 +13,7 @@ import { LobbyPage } from './pages/Lobby';
 import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
 import { FindGamePage } from './pages/FindGame'
+import { TermsPage } from './pages/Terms';
 
 //? Initialize Router
 const router = new Router('#app');
@@ -27,8 +28,9 @@ router.addRoute('/lobby', LobbyPage);
 router.addRoute('/chat', ChatPage);
 router.addRoute('/find-game', FindGamePage);
 router.addRoute('/tournament', TournamentPage);
+router.addRoute('/terms', TermsPage);
 
-const publicRoutes = ['/login', '/404'];
+const publicRoutes = ['/login', '/404', '/terms'];
 
 if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pathname)) {
   // If we want to enforce login immediately:

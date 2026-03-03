@@ -18,6 +18,9 @@ export class LoginPage extends AbstractComponent {
   private emailInput: Input;
   private show2FAModal: boolean = false;
 
+  // track if user checked "accept terms"
+  private acceptTermsChecked: boolean = false;
+
   constructor() {
     super('section', 'w-full h-screen flex justify-center items-center relative overflow-hidden');
     
@@ -61,6 +64,21 @@ export class LoginPage extends AbstractComponent {
     if (this.isRegisterMode) {
       this.emailInput.render();
       card.getElement().appendChild(this.emailInput.getElement());
+
+      // terms checkbox + link
+      const termsDiv = document.createElement('div');
+      termsDiv.className = 'flex items-center mb-4';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = 'acceptTerms';
+      checkbox.className = 'mr-2';
+      checkbox.onclick = () => { this.acceptTermsChecked = checkbox.checked; };
+      const label = document.createElement('label');
+      label.htmlFor = 'acceptTerms';
+      label.innerHTML = `I accept the <a href="/terms" target="_blank" class="text-indigo-400 underline">terms and conditions</a>`;
+      termsDiv.appendChild(checkbox);
+      termsDiv.appendChild(label);
+      card.getElement().appendChild(termsDiv);
     }
 
     card.getElement().appendChild(this.passwordInput.getElement());
@@ -171,6 +189,11 @@ export class LoginPage extends AbstractComponent {
       } else {
         this.emailInput.setError(false);
       }
+
+      if (!this.acceptTermsChecked) {
+        alert('You must accept the terms and conditions to register.');
+        isValid = false;
+      }
     }
 
     if (!isValid) return;
@@ -178,9 +201,7 @@ export class LoginPage extends AbstractComponent {
     try {
       if (this.isRegisterMode) {
         const email = this.emailInput.getValue();
-        await AuthService.register({ username, password, email });
-        
-        // Show success message - wait for user profile to be fully loaded
+        await AuthService.register({ username, password, email, acceptTerms: this.acceptTermsChecked });
         this.showSuccessMessage('Registration successful! Loading profile...');
         
         // Wait a bit for profile fetch to complete
