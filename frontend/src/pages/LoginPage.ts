@@ -23,31 +23,31 @@ import AuthService from "../services/AuthService";
                         </p>
                     </div>
                     <form>
-                       ` 
+                       `
                        + sectionLogin + `
                         <div class="flex items-center justify-between mb-6">
-                           
+
                             <div id="forgotPass">
                                 <a href="#" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
                                     Forgot password?
                                 </a>
                             </div>
                         </div>
-                        
+
                         <!-- Submit Button with Beautiful Styling -->
-                        <button 
+                        <button
                             id="login"
                             class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             Sign In
                         </button>
-                         <button 
+                         <button
                             id="register"
                             class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer hidden signup-form "
                         >
                             Sign Up
                         </button>
-                        
+
                         <!-- Social Sign In -->
                         <div class="mt-8 signin-form">
                             <div class="relative">
@@ -58,7 +58,7 @@ import AuthService from "../services/AuthService";
                                     <span class="px-2 bg-white text-gray-500">Or sign in with</span>
                                 </div>
                             </div>
-                            
+
                             <div class="mt-6 grid grid-cols-2 gap-3">
                                 <div>
                                     <a href="#" class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -70,7 +70,7 @@ import AuthService from "../services/AuthService";
                                     </svg>
                                     </a>
                                 </div>
-                
+
                                 <div>
                                     <a href="#" class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 137.6 96.6" fill="#fff" stroke="transparent" width="25" height="20"><path d="M229.2 443.9h50.7v25.4h25.3v-45.9h-50.6l50.6-50.7h-25.3l-50.7 50.7zM316.1 398.1l25.3-25.4h-25.3z" fill="#000" transform="translate(-229.2 -372.7)"></path><path d="m341.4 398.1-25.3 25.3v25.3h25.3v-25.3l25.4-25.3v-25.4h-25.4zM366.8 423.4l-25.4 25.3h25.4z" fill="#000" transform="translate(-229.2 -372.7)"></path></svg>
@@ -79,20 +79,20 @@ import AuthService from "../services/AuthService";
                             </div>
                         </div>
                     </form>
-                    
+
                     <!-- Footer -->
                     <div class="mt-8 text-center signin-form text-sm">
                         <span class="text-gray-600 text-sm" id="textSing">
-                            Don't have an account? 
+                            Don't have an account?
                              </span>
                             <span class="text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer" id="signup-span">
                                 Sign up
                             </span>
-                     
+
                     </div>
-                    
+
                 </div>
-            </div>         
+            </div>
         </div>
 
 </section>
@@ -104,25 +104,25 @@ export class LoginPage{
     // True Sing in  False Sign up
     private currentState : boolean = true;
     private authService = new AuthService();
- 
+
       private erroLogin(element : HTMLElement) {
 
         const normalFocusClasses = ['focus:ring-indigo-500', 'focus:border-transparent'];
-        
+
         const errorClasses = ['border-red-500', 'focus:ring-red-500', 'focus:border-red-500'];
 
-        
+
         element.classList.remove(...normalFocusClasses);
         element.classList.add(...errorClasses);
-       
 
 
-        setTimeout(() => { 
+
+        setTimeout(() => {
             element.classList.remove(...errorClasses);
 
             element.classList.add(...normalFocusClasses);
         }, 7000);
-        
+
     }
 
 
@@ -130,17 +130,17 @@ export class LoginPage{
     async register(event: MouseEvent){
         event.preventDefault();
         const button = event.target as HTMLButtonElement;
-        button.disabled = true  
+        button.disabled = true
 
         const usernameEl = document.getElementById('username') as HTMLInputElement;
         const passwordEl = document.getElementById('password') as HTMLInputElement;
         const emailEl = document.getElementById('email') as HTMLInputElement;
-        
+
         const username = usernameEl?.value;
         const password = passwordEl?.value;
         const email = emailEl?.value;
 
-        if(!username || username.length < 3) {
+        if(!username || username.length < 3 || username.length > 20) {
             this.erroLogin(usernameEl);
             button.disabled = false;
             return;
@@ -151,7 +151,7 @@ export class LoginPage{
             button.disabled = false;
             return;
         }
-        
+
         if(!this.authService.parseEmail(email)) {
             this.erroLogin(emailEl);
             button.disabled = false;
@@ -167,37 +167,37 @@ export class LoginPage{
             if(error.response?.status === 400 || error.response?.status === 409){
                 this.erroLogin(usernameEl);
                 this.erroLogin(passwordEl);
-                this.erroLogin(emailEl);  
+                this.erroLogin(emailEl);
             }
         }finally{
             button.disabled = false;
         }
-        
-      
+
+
 
     }
     async auth(event: MouseEvent) {
-      
-        event.preventDefault(); 
+
+        event.preventDefault();
         const button = event.target as HTMLButtonElement;
-        button.disabled = true  
-    
-        
+        button.disabled = true
+
+
         const usernameEl = document.getElementById('username') as HTMLInputElement;
         const passwordEl = document.getElementById('password') as HTMLInputElement;
 
         const username = usernameEl?.value;
         const password = passwordEl?.value;
 
-        if(!username || username.length < 3)
+        if(!username || username.length < 3 || username.length > 20)
             return this.erroLogin(usernameEl);
 
         if(!password || password.length < 3)
             return this.erroLogin(passwordEl);
-            
+
         try{
                      const result = await this.authService.login(username, password);
-           
+
                      if (result.twoFactorRequired) {
                          sessionStorage.setItem('temp_username', username);
                          sessionStorage.setItem('temp_password', password);
@@ -221,7 +221,7 @@ export class LoginPage{
                 } finally {
             button.disabled = false;
                 }
-    
+
     }
 
         private show2FAModal(username: string) {
@@ -277,22 +277,22 @@ export class LoginPage{
         const signupSpan = document.getElementById('signup-span');
 
         LoginButton !== null ? LoginButton.addEventListener('click', this.auth.bind(this)) : ''
-        RegisterButton !== null ? RegisterButton.addEventListener('click',this.register.bind(this)) : '' 
+        RegisterButton !== null ? RegisterButton.addEventListener('click',this.register.bind(this)) : ''
         signupSpan !== null ? signupSpan.addEventListener('click', this.loginAction.bind(this)) : ''
-    
+
     }
 
     private loginAction(event: MouseEvent){
 
         event.preventDefault();
-        
+
         const LoginButton = document.getElementById('login');
         const RegisterButton = document.getElementById('register');
         const signupSpan = document.getElementById('signup-span') as HTMLSpanElement;
         const forgotPass = document.getElementById('forgotPass');
         const textSing = document.getElementById('textSing') as HTMLParagraphElement;
         const emailForm = document.getElementById('emailForm');
-        
+
         if(this.currentState === true){
             this.setVisibilty('block',RegisterButton);
             this.setVisibilty('block',emailForm);
@@ -311,18 +311,13 @@ export class LoginPage{
             this.setCurrentState(true);
          }
     }
-    
 
     private setCurrentState(state: boolean){
         this.currentState = state;
-    
+
     }
     setVisibilty(display : string, element : HTMLElement | null){
         if(element)
             element.style.display = display;
     }
-
-   
-
-
 }

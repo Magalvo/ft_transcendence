@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength } from "class-validator";
+import { IsString, IsOptional, MinLength, MaxLength } from "class-validator";
 
 /**
  * DTO for user login input validation
@@ -8,6 +8,7 @@ class UserLoginDTO {
 
     @IsString()
     @MinLength(3, { message: 'Username must be provided' })
+    @MaxLength(20, { message: 'Username must not exceed 20 characters' })
     username!: string;
     
     @IsString()

@@ -23,7 +23,7 @@ export class LoginPage extends AbstractComponent {
 
   constructor() {
     super('section', 'w-full h-screen flex justify-center items-center relative overflow-hidden');
-    
+
     this.usernameInput = new Input('Username', 'text', 'Username');
     this.passwordInput = new Input('Password', 'password', 'Password');
     this.emailInput = new Input('Email', 'email', 'Email Address');
@@ -37,7 +37,7 @@ export class LoginPage extends AbstractComponent {
       enableWebcam: true,
       bloomIntensity: 1.5
     });
-    
+
     background.render();
     this.element.appendChild(background.getElement());
 
@@ -115,7 +115,7 @@ export class LoginPage extends AbstractComponent {
     const toggleDiv = document.createElement('div');
     toggleDiv.className = 'mt-6 text-center text-sm text-gray-400';
     toggleDiv.innerText = this.isRegisterMode ? "Already have an account? " : "Don't have an account? ";
-    
+
     const toggleLink = document.createElement('span');
     toggleLink.className = 'text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer';
     toggleLink.innerText = this.isRegisterMode ? 'Sign in' : 'Sign up';
@@ -138,7 +138,7 @@ export class LoginPage extends AbstractComponent {
 
     const socialContainer = document.createElement('div');
     socialContainer.className = 'grid grid-cols-1 gap-3';
-    
+
     const googleBtn = document.createElement('button');
     googleBtn.className = 'w-full flex items-center justify-center px-4 py-2 border border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900/50 hover:bg-gray-800/50 focus:outline-none transition';
     googleBtn.innerHTML = `
@@ -164,10 +164,10 @@ export class LoginPage extends AbstractComponent {
 
     const username = this.usernameInput.getValue();
     const password = this.passwordInput.getValue();
-    
+
     let isValid = true;
-    
-    if (!username || username.length < 5) {
+
+    if (!username || username.length < 3 || username.length > 20) {
       this.usernameInput.setError(true);
       isValid = false;
     } else {
@@ -203,14 +203,14 @@ export class LoginPage extends AbstractComponent {
         const email = this.emailInput.getValue();
         await AuthService.register({ username, password, email, acceptTerms: this.acceptTermsChecked });
         this.showSuccessMessage('Registration successful! Loading profile...');
-        
+
         // Wait a bit for profile fetch to complete
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         window.location.href = '/';
       } else {
         const loginResult = await AuthService.login(username, password);
-        
+
         // Check if 2FA is required
         if (loginResult.twoFactorRequired) {
           this.show2FAModal = true;
@@ -218,17 +218,17 @@ export class LoginPage extends AbstractComponent {
         } else {
           // Login successful - wait for user profile to be fully loaded
           this.showSuccessMessage('Login successful! Loading profile...');
-          
+
           // Wait a bit for profile fetch to complete
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           window.location.href = '/';
         }
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
       const errorMessage = error?.response?.data?.error || error?.message || 'Authentication failed. Please try again.';
-      
+
       // Handle specific error types
       if (error.response?.status === 409) {
         this.usernameInput.setError(true);
@@ -252,7 +252,7 @@ export class LoginPage extends AbstractComponent {
 
   private async handleForgotPassword(): Promise<void> {
     const email = prompt('Enter your email address:');
-    
+
     if (!email) return;
 
     if (!AuthService.parseEmail(email)) {
@@ -273,7 +273,7 @@ export class LoginPage extends AbstractComponent {
     const twoFAPage = new TwoFactorPage(
       async () => {
         this.showSuccessMessage('2FA verified! Redirecting...');
-        
+
         // Give user time to see the message, then redirect
         await new Promise(resolve => setTimeout(resolve, 2000));
         window.location.href = '/';
@@ -283,7 +283,7 @@ export class LoginPage extends AbstractComponent {
         this.render();
       }
     );
-    
+
     twoFAPage.render();
     this.element.appendChild(twoFAPage.getElement());
   }
@@ -293,7 +293,7 @@ export class LoginPage extends AbstractComponent {
     successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg';
     successDiv.innerText = message;
     document.body.appendChild(successDiv);
-    
+
     setTimeout(() => successDiv.remove(), 30000);
   }
 }

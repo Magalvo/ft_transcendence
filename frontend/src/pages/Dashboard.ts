@@ -141,8 +141,13 @@ export class DashboardPage extends AbstractComponent {
     name.textContent = user.username;
 
     const status = document.createElement("span");
-    status.className =
-      "px-3 py-1 rounded-full text-sm bg-green-900 text-green-300";
+    const statusClasses =
+      user.status === "online"
+        ? "bg-green-900 text-green-300"
+        : user.status === "ingame"
+          ? "bg-blue-900 text-blue-300"
+          : "bg-gray-700 text-gray-300";
+    status.className = `px-3 py-1 rounded-full text-sm ${statusClasses}`;
     status.textContent = `• ${user.status.toUpperCase()}`;
 
     const editBtn = new Button(
