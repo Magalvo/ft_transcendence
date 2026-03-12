@@ -42,7 +42,7 @@ export class LoginPage extends AbstractComponent {
     this.element.appendChild(background.getElement());
 
     // Login/Register Card
-    const card = new Card('w-full max-w-md bg-white/10 backdrop-blur-sm');
+    const card = new Card('w-full max-w-md bg-white/10 backdrop-blur-sm relative z-10');
 
     const header = document.createElement('div');
     header.className = 'text-center mb-8';
@@ -65,17 +65,19 @@ export class LoginPage extends AbstractComponent {
       this.emailInput.render();
       card.getElement().appendChild(this.emailInput.getElement());
 
-      // terms checkbox + link
+      // terms & privacy checkbox + links
       const termsDiv = document.createElement('div');
-      termsDiv.className = 'flex items-center mb-4';
+      termsDiv.className = 'flex items-center mb-4 text-sm text-gray-300';
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.id = 'acceptTerms';
-      checkbox.className = 'mr-2';
+      checkbox.className = 'mr-2 cursor-pointer';
       checkbox.onclick = () => { this.acceptTermsChecked = checkbox.checked; };
       const label = document.createElement('label');
       label.htmlFor = 'acceptTerms';
-      label.innerHTML = `I accept the <a href="/terms" target="_blank" class="text-indigo-400 underline">terms and conditions</a>`;
+      label.className = 'cursor-pointer';
+      label.innerHTML = `I accept the <a href="/terms" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Terms</a> and <a href="/privacy" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Privacy Policy</a>`;
+      
       termsDiv.appendChild(checkbox);
       termsDiv.appendChild(label);
       card.getElement().appendChild(termsDiv);
@@ -89,7 +91,7 @@ export class LoginPage extends AbstractComponent {
       forgotLink.className = 'flex justify-end mb-6';
       const link = document.createElement('a');
       link.href = 'javascript:void(0)';
-      link.className = 'text-sm text-indigo-400 hover:text-indigo-300 font-medium';
+      link.className = 'text-sm text-indigo-400 hover:text-indigo-300 font-medium transition';
       link.innerText = 'Forgot password?';
       link.onclick = (e) => {
         e.preventDefault();
@@ -117,12 +119,23 @@ export class LoginPage extends AbstractComponent {
     toggleDiv.innerText = this.isRegisterMode ? "Already have an account? " : "Don't have an account? ";
 
     const toggleLink = document.createElement('span');
-    toggleLink.className = 'text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer';
+    toggleLink.className = 'text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer transition';
     toggleLink.innerText = this.isRegisterMode ? 'Sign in' : 'Sign up';
     toggleLink.onclick = () => this.toggleMode();
 
     toggleDiv.appendChild(toggleLink);
     card.getElement().appendChild(toggleDiv);
+
+    if (!this.isRegisterMode) {
+      const legalFooter = document.createElement('div');
+      legalFooter.className = 'mt-6 pt-4 border-t border-gray-700/50 flex justify-center gap-4 text-xs text-gray-500';
+      legalFooter.innerHTML = `
+        <a href="/terms" target="_blank" class="hover:text-gray-300 transition">Terms</a>
+        <span>•</span>
+        <a href="/privacy" target="_blank" class="hover:text-gray-300 transition">Privacy Policy</a>
+      `;
+      card.getElement().appendChild(legalFooter);
+    }
 
     this.element.appendChild(card.getElement());
   }
@@ -131,8 +144,8 @@ export class LoginPage extends AbstractComponent {
     const divider = document.createElement('div');
     divider.className = 'relative mt-6 mb-6';
     divider.innerHTML = `
-      <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-500"></div></div>
-      <div class="relative flex justify-center text-sm"><span class="px-2 bg-transparent text-gray-400">Or continue with</span></div>
+      <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-600/50"></div></div>
+      <div class="relative flex justify-center text-sm"><span class="px-2 bg-[#111] text-gray-400">Or continue with</span></div>
     `;
     card.getElement().appendChild(divider);
 
@@ -140,7 +153,7 @@ export class LoginPage extends AbstractComponent {
     socialContainer.className = 'grid grid-cols-1 gap-3';
 
     const googleBtn = document.createElement('button');
-    googleBtn.className = 'w-full flex items-center justify-center px-4 py-2 border border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900/50 hover:bg-gray-800/50 focus:outline-none transition';
+    googleBtn.className = 'w-full flex items-center justify-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900/50 hover:bg-gray-800 focus:outline-none transition';
     googleBtn.innerHTML = `
       <svg class="h-5 w-5 mr-2" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
       Google
@@ -191,7 +204,7 @@ export class LoginPage extends AbstractComponent {
       }
 
       if (!this.acceptTermsChecked) {
-        alert('You must accept the terms and conditions to register.');
+        alert('You must accept the terms and privacy policy to register.');
         isValid = false;
       }
     }
@@ -290,10 +303,10 @@ export class LoginPage extends AbstractComponent {
 
   private showSuccessMessage(message: string): void {
     const successDiv = document.createElement('div');
-    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg';
+    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
     successDiv.innerText = message;
     document.body.appendChild(successDiv);
 
-    setTimeout(() => successDiv.remove(), 30000);
+    setTimeout(() => successDiv.remove(), 3000);
   }
 }

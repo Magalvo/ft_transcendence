@@ -7,6 +7,7 @@ import { ChatPage } from "./pages/Chat";
 import { FindGamePage } from "./pages/FindGame";
 import { DashboardPage } from "./pages/Dashboard"
 import { TermsPage } from "./pages/Terms";
+import { PrivacyPage } from "./pages/Privacy";
 
 export const AppRoutes:Route[] = [
     {
@@ -41,5 +42,9 @@ export const AppRoutes:Route[] = [
     {
         path: "/terms",
         pageComponent: TermsPage
+    },
+    {
+        path: "/privacy",
+        pageComponent: PrivacyPage
     }
 ]
