@@ -89,12 +89,13 @@ export class AuthService {
   /**
    * Register new user
    */
-  async register({ username, email, password }: userRegister): Promise<RegisterResponse> {
+  async register({ username, email, password, acceptTerms }: userRegister): Promise<RegisterResponse> {
     try {
       const response = await ApiClient.post('/api/auth/register', {
         username,
         email,
         password,
+        acceptTerms,
       });
 
       if (response.status === 201 && response.data.success) {

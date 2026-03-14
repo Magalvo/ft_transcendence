@@ -8,6 +8,8 @@ interface userRegister {
     email: string;
    
     password: string;
+
+    acceptTerms: boolean;
 }
 
 

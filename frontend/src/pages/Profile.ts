@@ -2,7 +2,7 @@ import { AbstractComponent } from '../core/Component';
 import { Navbar } from '../components/layout/Navbar';
 import { Card } from '../components/ui/Card';
 import { UserService } from '../services/UserService';
-import type { UserProfile, Match } from '../types/User';
+import type { UserProfile, Match, Friend } from '../types/User';
 
 export class ProfilePage extends AbstractComponent {
   constructor() {
@@ -19,6 +19,7 @@ export class ProfilePage extends AbstractComponent {
 
 
     const user = await UserService.getProfile(true);
+    const incomingRequests = await UserService.getIncomingFriendRequests();
 
 
     const container = document.createElement('div');
@@ -32,9 +33,11 @@ export class ProfilePage extends AbstractComponent {
     contentColumn.className = 'lg:col-span-2 space-y-8';
 
     const statsCard = this.buildStatsCard(user);
+    const friendsCard = this.buildFriendsCard(user.friends || [], incomingRequests);
     const historyCard = this.buildHistoryCard(user.matches);
 
     contentColumn.appendChild(statsCard.getElement());
+    contentColumn.appendChild(friendsCard.getElement());
     contentColumn.appendChild(historyCard.getElement());
 
     container.appendChild(identityCard.getElement());
@@ -183,6 +186,157 @@ export class ProfilePage extends AbstractComponent {
     return card;
   }
 
+  private buildFriendsCard(
+    friends: Friend[],
+    incomingRequests: Array<{ id: number; requesterId: string; username: string; createdAt: number }>
+  ): Card {
+    const card = new Card('p-0 overflow-hidden');
+
+    const header = document.createElement('div');
+    header.className = 'p-4 bg-gray-800 border-b border-gray-700 font-bold';
+    header.innerText = 'Friends';
+
+    const controls = document.createElement('div');
+    controls.className = 'p-4 border-b border-gray-700 flex gap-2';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Add friend by username';
+    input.className = 'flex-1 px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none';
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50';
+    addBtn.innerText = 'Send';
+    addBtn.onclick = async () => {
+      const username = input.value.trim();
+      if (!username) return;
+      addBtn.disabled = true;
+      addBtn.innerText = 'Sending...';
+      try {
+        await UserService.addFriend(username);
+        input.value = '';
+        alert('Friend request sent');
+        await this.render();
+      } catch (err: any) {
+        alert(err?.message || 'Failed to add friend');
+      } finally {
+        addBtn.disabled = false;
+        addBtn.innerText = 'Send';
+      }
+    };
+
+    controls.appendChild(input);
+    controls.appendChild(addBtn);
+
+    const requestsSection = document.createElement('div');
+    requestsSection.className = 'border-b border-gray-700';
+
+    const requestsTitle = document.createElement('div');
+    requestsTitle.className = 'px-4 py-3 text-sm font-semibold text-yellow-300 bg-gray-800/30';
+    requestsTitle.innerText = 'Incoming Requests';
+    requestsSection.appendChild(requestsTitle);
+
+    const requestsList = document.createElement('div');
+    requestsList.className = 'divide-y divide-gray-700';
+
+    if (incomingRequests.length === 0) {
+      const emptyReq = document.createElement('div');
+      emptyReq.className = 'p-4 text-sm text-gray-500 text-center';
+      emptyReq.innerText = 'No pending requests';
+      requestsList.appendChild(emptyReq);
+    } else {
+      incomingRequests.forEach((request) => {
+        const row = document.createElement('div');
+        row.className = 'p-4 flex items-center justify-between gap-3';
+
+        const left = document.createElement('span');
+        left.className = 'font-semibold';
+        left.innerText = request.username;
+
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-2';
+
+        const acceptBtn = document.createElement('button');
+        acceptBtn.className = 'px-3 py-1 bg-green-700 text-white rounded hover:bg-green-600 transition text-sm';
+        acceptBtn.innerText = 'Confirm';
+        acceptBtn.onclick = async () => {
+          acceptBtn.disabled = true;
+          try {
+            await UserService.acceptFriendRequest(request.id);
+            await this.render();
+          } catch (err: any) {
+            alert(err?.message || 'Failed to confirm request');
+            acceptBtn.disabled = false;
+          }
+        };
+
+        const declineBtn = document.createElement('button');
+        declineBtn.className = 'px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 transition text-sm';
+        declineBtn.innerText = 'Decline';
+        declineBtn.onclick = async () => {
+          declineBtn.disabled = true;
+          try {
+            await UserService.declineFriendRequest(request.id);
+            await this.render();
+          } catch (err: any) {
+            alert(err?.message || 'Failed to decline request');
+            declineBtn.disabled = false;
+          }
+        };
+
+        actions.appendChild(acceptBtn);
+        actions.appendChild(declineBtn);
+        row.appendChild(left);
+        row.appendChild(actions);
+        requestsList.appendChild(row);
+      });
+    }
+
+    requestsSection.appendChild(requestsList);
+
+    const list = document.createElement('div');
+    list.className = 'divide-y divide-gray-700';
+
+    if (friends.length === 0) {
+      const emptyState = document.createElement('div');
+      emptyState.className = 'p-6 text-center text-gray-500';
+      emptyState.innerText = 'No friends yet';
+      list.appendChild(emptyState);
+    } else {
+      friends.forEach((friend) => {
+        const row = document.createElement('div');
+        row.className = 'p-4 flex items-center justify-between hover:bg-gray-800/50 transition';
+        const name = document.createElement('span');
+        name.className = 'font-semibold';
+        name.innerText = friend.username;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'px-3 py-1 bg-red-700 text-white rounded hover:bg-red-600 transition text-sm';
+        removeBtn.innerText = 'Remove';
+        removeBtn.onclick = async () => {
+          removeBtn.disabled = true;
+          try {
+            await UserService.removeFriend(friend.id);
+            await this.render();
+          } catch (err: any) {
+            alert(err?.message || 'Failed to remove friend');
+            removeBtn.disabled = false;
+          }
+        };
+
+        row.appendChild(name);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+      });
+    }
+
+    card.getElement().appendChild(header);
+    card.getElement().appendChild(controls);
+    card.getElement().appendChild(requestsSection);
+    card.getElement().appendChild(list);
+    return card;
+  }
+
   private showEditUsernameModal(user: any, nameElement: HTMLElement): void {
     // Create modal backdrop
     const modal = document.createElement('div');
@@ -202,7 +356,7 @@ export class ProfilePage extends AbstractComponent {
     input.placeholder = 'Enter new username';
     input.value = user.username;
     input.minLength = 3;
-    input.maxLength = 24;
+    input.maxLength = 20;
 
     const error = document.createElement('p');
     error.className = 'text-red-400 text-sm mb-4 hidden';
@@ -227,8 +381,8 @@ export class ProfilePage extends AbstractComponent {
         return;
       }
 
-      if (newUsername.length < 3 || newUsername.length > 24) {
-        error.innerText = 'Username must be between 3 and 24 characters';
+      if (newUsername.length < 3 || newUsername.length > 20) {
+        error.innerText = 'Username must be between 3 and 20 characters';
         error.classList.remove('hidden');
         return;
       }

@@ -8,6 +8,20 @@ import type { User, MatchHistory } from '../types/User';
  * Syncs with global UserStore for reactive updates
  */
 export class UserService {
+  static async getIncomingFriendRequests(): Promise<Array<{ id: number; requesterId: string; username: string; createdAt: number }>> {
+    const response = await ApiClient.get('/api/auth/friends/requests/incoming');
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  static async acceptFriendRequest(requestId: number): Promise<void> {
+    await ApiClient.post(`/api/auth/friends/requests/${requestId}/accept`);
+    await this.refreshProfile();
+  }
+
+  static async declineFriendRequest(requestId: number): Promise<void> {
+    await ApiClient.post(`/api/auth/friends/requests/${requestId}/decline`);
+  }
+
   /**
    * Get current user profile from API
    * Caches data if valid, otherwise fetches fresh
@@ -250,8 +264,13 @@ export class UserService {
    */
   static async updateUsername(username: string): Promise<string> {
     try {
+      const normalized = username.trim();
+      if (normalized.length < 3 || normalized.length > 20) {
+        throw new Error('Username must be between 3 and 20 characters');
+      }
+
       const response = await ApiClient.post('/api/auth/users/username', {
-        username: username.trim()
+        username: normalized
       });
 
       // Handle response - backend returns { success: true, username: "..." }
@@ -286,6 +305,36 @@ export class UserService {
 
       throw new Error(errorMessage);
     }
+  }
+
+  /**
+   * Add friend by username
+   */
+  static async addFriend(username: string): Promise<void> {
+    try {
+      const normalized = username.trim();
+      if (!normalized) {
+        throw new Error('Username is required');
+      }
+      if (normalized.length < 3 || normalized.length > 20) {
+        throw new Error('Username must be between 3 and 20 characters');
+      }
+
+      await ApiClient.post('/api/auth/friends/requests', { username: normalized });
+    } catch (error: any) {
+      console.error('Add friend error:', error);
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to add friend';
+      throw new Error(message);
+    }
+  }
+
+  static async removeFriend(friendId: string): Promise<void> {
+    await ApiClient.post('/api/auth/friends/remove', { friendId });
+    await this.refreshProfile();
   }
 
   /**
