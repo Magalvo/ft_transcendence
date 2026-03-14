@@ -23,6 +23,7 @@ export class Navbar extends AbstractComponent {
     const links = [
       { label: 'Create Game', path: '/lobby' },
       { label: 'Find Game', path: '/find-game' },
+      { label: 'SpacedOut', path: '/spacedout' },
       { label: 'Tournament', path: '/tournament' },
       { label: 'Chat', path: '/chat' },
       { label: 'Dashboard', path: '/dashboard' },

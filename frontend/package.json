@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/three": "^0.183.1",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",
@@ -20,6 +21,7 @@
     "@babylonjs/core": "^8.52.1",
     "@babylonjs/gui": "^8.52.1",
     "@babylonjs/loaders": "^8.52.1",
+    "@mediapipe/tasks-vision": "^0.10.32",
     "@tailwindcss/vite": "^4.1.17",
     "axios": "^1.13.5",
     "face-api.js": "^0.22.2",

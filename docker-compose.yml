@@ -25,6 +25,7 @@ services:
       environment:
         - AVATARS_PATH=/usr/src/auth/public/avatars
         - DB_FILE=/usr/src/auth/data/dev.sqlite
+        - SPACEDOUT_WS_URL=ws://localhost:3030
       volumes:
         - auth_avatars:/usr/src/auth/public/avatars
         - auth_database:/usr/src/auth/data
@@ -39,6 +40,7 @@ services:
       environment:
         - VITE_API_URL=http://localhost:3333
         - VITE_WS_URL=http://localhost:3000
+        - VITE_SPACEDOUT_WS_URL=ws://localhost:3030
       ports:
         - "5173:5173"
       networks:
@@ -46,6 +48,20 @@ services:
       restart: on-failure
       depends_on:
         - gateway
+        - spacedout
+
+  spacedout:
+      container_name: SpacedOut
+      build:
+        context: ./SpacedOut/backend
+        dockerfile: Dockerfile
+      env_file:
+        - ./backend/Auth/.env
+      ports:
+        - "3030:3000"
+      networks:
+        - transcendencenet
+      restart: on-failure
 
 volumes:
   auth_avatars:

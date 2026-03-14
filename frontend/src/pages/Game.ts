@@ -1,11 +1,10 @@
 import { AbstractComponent } from '../core/Component';
-import { Navbar } from '../components/layout/Navbar';
+// import { Navbar } from '../components/layout/Navbar';
 import { GameScene } from '../client/GameScene';
 import { socketService } from '../client/SocketService';
 import { UserStore } from '../core/UserStore';
 import type { Socket } from 'socket.io-client';
 
-// GamePage no longer contains lobby UI/types; lobby moved to LobbyPage
 
 export class GamePage extends AbstractComponent {
     private gameScene: GameScene | null = null;
@@ -18,9 +17,9 @@ export class GamePage extends AbstractComponent {
     public render(): void {
         this.element.innerHTML = '';
 
-        const navbar = new Navbar();
+/*         const navbar = new Navbar();
         navbar.render();
-        this.element.appendChild(navbar.getElement());
+        this.element.appendChild(navbar.getElement()); */
 
         const container = document.createElement('div');
         container.className = 'flex-1 w-full h-full overflow-hidden bg-neutral-900 text-white';
@@ -32,7 +31,6 @@ export class GamePage extends AbstractComponent {
 
         this.element.appendChild(container);
 
-        // Lazy create game scene and reuse shared socket if available
         this.gameScene = new GameScene();
         const currentUser = UserStore.getUser();
         const userId = currentUser?.id;
@@ -40,7 +38,6 @@ export class GamePage extends AbstractComponent {
         this.gameScene.startConnection(s);
         s.emit('requestGameInit');
 
-        // Listen for return to menu event
         this.setupReturnToMenuListener();
     }
 

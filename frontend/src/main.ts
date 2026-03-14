@@ -13,6 +13,7 @@ import { LobbyPage } from './pages/Lobby';
 import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
 import { FindGamePage } from './pages/FindGame'
+import { SpacedOutPage } from './pages/SpacedOut';
 
 //? Initialize Router
 const router = new Router('#app');
@@ -27,6 +28,7 @@ router.addRoute('/lobby', LobbyPage);
 router.addRoute('/chat', ChatPage);
 router.addRoute('/find-game', FindGamePage);
 router.addRoute('/tournament', TournamentPage);
+router.addRoute('/spacedout', SpacedOutPage);
 
 const publicRoutes = ['/login', '/404'];
 
