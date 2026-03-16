@@ -8,6 +8,9 @@ const LASER_SPEED = 9000;
 const DEFAULT_SHIP_SPEED = 3960;
 const MISSILE_PROXIMITY_FUSE_RADIUS = 100;
 const MISSILE_TERMINAL_GUIDANCE_RADIUS = 2500;
+const LOCK_ON_DURATION_MS = 1500;
+const LOCK_DECAY_PER_SECOND = 2000;
+const FLARE_COOLDOWN_MS = 5000;
 
 interface TargetablePilot {
   mesh: THREE.Group;
@@ -59,9 +62,9 @@ export class CombatManager {
   private matFlareBright = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
 
   // Combat State
-  private lockTimer = 0;
+  private lockTimerMs = 0;
   private lockedEnemyId: string | null = null;
-  public flareCooldown = 0;
+  public flareCooldownMs = 0;
   
   // Raycaster for line-of-sight
   private losRaycaster = new THREE.Raycaster();
@@ -116,7 +119,7 @@ export class CombatManager {
   }
 
   public fireMissile(playerShip: THREE.Group, currentSpeed: number): void {
-    if (this.lockTimer < 90 || !this.lockedEnemyId) return;
+    if (this.lockTimerMs < LOCK_ON_DURATION_MS || !this.lockedEnemyId) return;
 
     const missile = new THREE.Mesh(this.missileGeo, this.missileMat);
     const spawnPos = new THREE.Vector3(0, -2, 0);
@@ -137,13 +140,13 @@ export class CombatManager {
     this.socketClient.sendJson({ type: "missileFired", targetId: this.lockedEnemyId });
     this.audio.playMissileLaunchSound();
 
-    this.lockTimer = 0; // Reset lock after firing
+    this.lockTimerMs = 0;
   }
 
   public deployFlares(ship: THREE.Group, isLocalPlayer: boolean): void {
     if (isLocalPlayer) {
-      if (this.flareCooldown > 0) return;
-      this.flareCooldown = 300; // 5 seconds at 60fps
+      if (this.flareCooldownMs > 0) return;
+      this.flareCooldownMs = FLARE_COOLDOWN_MS;
       this.socketClient.sendJson({ type: "deployFlares" });
     }
 
@@ -351,12 +354,15 @@ const forward = new THREE.Vector3(0, 0, -20);
     playerRig: THREE.Group, 
     camera: THREE.Camera, 
     remotePilots: Map<string, TargetablePilot>, 
+    localPilotId: string | null,
+    localShip: THREE.Group | null,
     myTeam: string,
     gridData: number[][] | null,
     viewportWidth: number,
     viewportHeight: number
   ): CombatState {
     const frameScale = delta * 60;
+    const deltaMs = delta * 1000;
     
     // 1. AIM ASSIST & MISSILE LOCK
     let isLockedOn = false;
@@ -427,14 +433,20 @@ const forward = new THREE.Vector3(0, 0, -20);
     if (currentTargetId) {
       isLockedOn = true;
       if (currentTargetId === this.lockedEnemyId) {
-        this.lockTimer = Math.min(this.lockTimer + 1, 90);
+        this.lockTimerMs = Math.min(
+          this.lockTimerMs + deltaMs,
+          LOCK_ON_DURATION_MS,
+        );
       } else {
         this.lockedEnemyId = currentTargetId;
-        this.lockTimer = 0;
+        this.lockTimerMs = 0;
       }
     } else {
-      this.lockTimer = Math.max(this.lockTimer - 2, 0);
-      if (this.lockTimer === 0) this.lockedEnemyId = null;
+      this.lockTimerMs = Math.max(
+        this.lockTimerMs - LOCK_DECAY_PER_SECOND * delta,
+        0,
+      );
+      if (this.lockTimerMs === 0) this.lockedEnemyId = null;
     }
 
     // 2. RADAR WARNING RECEIVER (RWR)
@@ -477,16 +489,26 @@ const forward = new THREE.Vector3(0, 0, -20);
     // 4. UPDATE MISSILES
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const missile = this.missiles[i];
-      const target = remotePilots.get(missile.userData.targetId);
+      const targetId = String(missile.userData.targetId ?? "");
+      const remoteTarget = remotePilots.get(targetId);
+      const targetMesh =
+        remoteTarget?.mesh ||
+        (targetId && localPilotId === targetId ? localShip : null);
 
-      missile.userData.speed = Math.min(missile.userData.speed + 1.5, 250);
+      missile.userData.speed = Math.min(
+        missile.userData.speed + 1.5 * frameScale,
+        250,
+      );
       
-      if (target && target.mesh.visible) {
-        if (target.mesh.userData.flareActiveUntil && target.mesh.userData.flareActiveUntil > Date.now()) {
+      if (targetMesh?.visible) {
+        if (
+          targetMesh.userData.flareActiveUntil &&
+          targetMesh.userData.flareActiveUntil > Date.now()
+        ) {
           missile.userData.targetId = null; // Blinded by flares
         } else {
           const mTargetPos = new THREE.Vector3();
-          target.mesh.getWorldPosition(mTargetPos);
+          targetMesh.getWorldPosition(mTargetPos);
           this.earthAnchor.worldToLocal(mTargetPos);
           
           const mToTarget = new THREE.Vector3().subVectors(mTargetPos, missile.position).normalize();
@@ -498,12 +520,16 @@ const forward = new THREE.Vector3(0, 0, -20);
             1,
           );
           const guidanceStrength = THREE.MathUtils.lerp(0.04, 0.18, terminalGuidance);
-          missile.quaternion.slerp(mTargetRot, guidanceStrength);
+          missile.quaternion.slerp(
+            mTargetRot,
+            1 - Math.pow(1 - guidanceStrength, frameScale),
+          );
         }
       }
 
-      missile.translateZ(-missile.userData.speed);
-      missile.userData.distanceTraveled += missile.userData.speed;
+      const missileStep = missile.userData.speed * frameScale;
+      missile.translateZ(-missileStep);
+      missile.userData.distanceTraveled += missileStep;
 
       if (frameCount % 2 === 0) {
         this.spawnFireParticle(
@@ -521,9 +547,9 @@ const forward = new THREE.Vector3(0, 0, -20);
 
       let hitTarget = false;
       let triggerProximityFuse = false;
-      if (target && target.mesh.visible) {
+      if (targetMesh?.visible) {
         const mTargetPos = new THREE.Vector3();
-        target.mesh.getWorldPosition(mTargetPos);
+        targetMesh.getWorldPosition(mTargetPos);
         this.earthAnchor.worldToLocal(mTargetPos);
         const distanceToTarget = missile.position.distanceTo(mTargetPos);
         if (distanceToTarget < 30) hitTarget = true;
@@ -534,7 +560,7 @@ const forward = new THREE.Vector3(0, 0, -20);
         hitTarget ||
         triggerProximityFuse ||
         missile.userData.distanceTraveled > 30000 ||
-        (!target && missile.userData.distanceTraveled > 5000)
+        (!targetMesh && missile.userData.distanceTraveled > 5000)
       ) {
         if (hitTarget || triggerProximityFuse) {
           this.spawnExplosion(this.earthAnchor.localToWorld(missile.position.clone()));
@@ -685,7 +711,7 @@ const forward = new THREE.Vector3(0, 0, -20);
       }
     }
 
-    this.flareCooldown = Math.max(0, this.flareCooldown - 1);
+    this.flareCooldownMs = Math.max(0, this.flareCooldownMs - deltaMs);
 
     // Calculate nose target for HUD aim reticle
     const noseTarget = new THREE.Vector3(0, 0, -3000);
@@ -697,9 +723,9 @@ const forward = new THREE.Vector3(0, 0, -20);
       aimY: -(noseTarget.y * 0.5 - 0.5) * viewportHeight,
       aimZ: noseTarget.z,
       isLockedOn,
-      lockProgress: this.lockTimer / 90,
+      lockProgress: this.lockTimerMs / LOCK_ON_DURATION_MS,
       isBeingTracked,
-      flareCooldown: this.flareCooldown,
+      flareCooldown: this.flareCooldownMs,
       targetScreenX,
       targetScreenY,
       magnetismYaw: isAimAssistActive ? magnetismYaw : 0,

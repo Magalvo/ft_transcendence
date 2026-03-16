@@ -1826,6 +1826,8 @@ export class SpacedOutGame {
       this.playerRig,
       this.camera,
       this.remotePilots,
+      this.myPilotId,
+      this.localShip,
       this.localTeam,
       this.worldGrid,
       this.hudCanvas.width,

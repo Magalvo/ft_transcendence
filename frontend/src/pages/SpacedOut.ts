@@ -1,6 +1,5 @@
 import { AbstractComponent } from "../core/Component";
 import { Navbar } from "../components/layout/Navbar";
-import { SPACEDOUT_WS_URL } from "../services/RuntimeConfig";
 import { SpacedOutService } from "../services/SpacedOutService";
 import { SpacedOutGame } from "../games/spacedout/SpacedOutGame";
 import { JoinWarpTransition } from "../games/spacedout/JoinWarpTransition";
@@ -48,8 +47,8 @@ export class SpacedOutPage extends AbstractComponent {
                 <div class="text-xs uppercase tracking-[0.2em] text-cyan-300">Service Status</div>
                 <div id="spacedout-status" class="mt-1 text-sm text-slate-200">Creating authenticated SpacedOut session...</div>
               </div>
-              <div class="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
-                ${SPACEDOUT_WS_URL}
+              <div id="spacedout-ws-url" class="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
+                Session pending
               </div>
             </div>
 
@@ -233,6 +232,7 @@ export class SpacedOutPage extends AbstractComponent {
       content.querySelector<HTMLVideoElement>("#spacedout-video");
     const logsMount = content.querySelector<HTMLElement>("#spacedout-logs");
     const statusMount = content.querySelector<HTMLElement>("#spacedout-status");
+    const wsUrlMount = content.querySelector<HTMLElement>("#spacedout-ws-url");
     const playerListMount = content.querySelector<HTMLElement>("#spacedout-player-list");
     const telemetryMount = content.querySelector<HTMLElement>(
       "#spacedout-telemetry",
@@ -323,6 +323,7 @@ export class SpacedOutPage extends AbstractComponent {
       !videoElement ||
       !logsMount ||
       !statusMount ||
+      !wsUrlMount ||
       !playerListMount ||
       !telemetryMount ||
       !loadingOverlay ||
@@ -365,6 +366,7 @@ export class SpacedOutPage extends AbstractComponent {
       if (!this.isMounted) {
         return;
       }
+      wsUrlMount.textContent = session.wsUrl;
 
       this.game = new SpacedOutGame({
         mount: viewport,

@@ -903,6 +903,14 @@ const app = uWS
 
           const chosenTeam = payload.team === "BLUE" ? "BLUE" : "RED";
           const spawnData = TEAM_SPAWNS[chosenTeam];
+          const spawnPose = projectSpawnAboveTerrain({
+            x: spawnData.pos.x,
+            y: spawnData.pos.y,
+            z: spawnData.pos.z,
+            dx: spawnData.dir.dx,
+            dy: spawnData.dir.dy,
+            dz: spawnData.dir.dz,
+          });
 
           player.team = chosenTeam;
           clearRespawnTimer(player);
@@ -911,12 +919,12 @@ const app = uWS
           player.hp = DEFAULT_HP;
           player.flareActiveUntil = 0;
 
-          player.x = spawnData.pos.x;
-          player.y = spawnData.pos.y;
-          player.z = spawnData.pos.z;
-          player.dx = spawnData.dir.dx;
-          player.dy = spawnData.dir.dy;
-          player.dz = spawnData.dir.dz;
+          player.x = spawnPose.x;
+          player.y = spawnPose.y;
+          player.z = spawnPose.z;
+          player.dx = spawnPose.dx;
+          player.dy = spawnPose.dy;
+          player.dz = spawnPose.dz;
 
           player.historyHead = 0;
           player.historyCount = 0;
