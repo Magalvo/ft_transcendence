@@ -1,4 +1,7 @@
 ENV_FILE = ./backend/Auth/.env
+COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
+COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker compose
+DB_VOLUME = $(COMPOSE_PROJECT_NAME)_auth_database
 
 # Default target - runs 'up' command
 all: up
@@ -13,15 +16,15 @@ up:
 		echo "PORT=3000" >> $(ENV_FILE); \
 		echo "DB_FILE=dev.sqlite" >> $(ENV_FILE); \
 	fi
-	docker compose up -d --build
+	$(COMPOSE) up -d --build
 
 # Stop and remove all running containers
 down:
-	docker compose down
+	$(COMPOSE) down
 
 # Display logs from running containers
 logs:
-	docker compose logs
+	$(COMPOSE) logs
 
 # Clean environment: stop containers and remove .env file
 clean: down
@@ -30,7 +33,7 @@ clean: down
 # Fully clean the environment: stop containers, remove volumes, images, networks
 # - Removes all Docker volumes, images, containers, and networks
 fclean:
-	docker compose down -v --rmi all
+	$(COMPOSE) down -v --rmi all
 	docker container prune -f
 	docker image prune -f
 	docker volume prune -f
@@ -40,7 +43,8 @@ fclean:
 # - Removes the auth_database volume
 # - Rebuilds the entire application
 dbre:
-	docker volume rm transcendence_auth_database || true
+	$(COMPOSE) down
+	docker volume rm $(DB_VOLUME) || true
 	$(MAKE) re
 
 # Rebuild the application
@@ -51,19 +55,19 @@ re: up
 
 # Build Docker images without using cache
 build:
-	docker compose build --no-cache
+	$(COMPOSE) build --no-cache
 
 # Pull latest Docker images from registry
 pull:
-	docker compose pull
+	$(COMPOSE) pull
 
 # Display logs from running containers and follow new output
 logs-f:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
 # Show status of all running containers
 status:
-	docker compose ps
+	$(COMPOSE) ps
 
 # Declare phony targets (targets that are not files)
 .PHONY: all up down logs clean fclean dbre re build pull logs-f status

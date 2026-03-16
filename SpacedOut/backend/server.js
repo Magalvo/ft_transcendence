@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const uWS = require("uWebSockets.js");
 const combatEngine = require("bindings")("combat");
 
-const port = Number(process.env.PORT) || 3030;
+const port = Number(process.env.PORT) || 3000;
 let nextPilotId = 1;
 const players = {};
 
@@ -1009,11 +1009,11 @@ const app = uWS
       }
     },
   })
-  .listen("0.0.0.0", 3000, (token) => {
+  .listen("0.0.0.0", port, (token) => {
     if (token) {
-      console.log("📡 TOWER ONLINE ON PORT 3000 (0.0.0.0)");
+      console.log(`📡 TOWER ONLINE ON PORT ${port} (0.0.0.0)`);
     } else {
-      console.error("🔴 FATAL: FAILED TO BIND TO PORT 3000.");
+      console.error(`🔴 FATAL: FAILED TO BIND TO PORT ${port}.`);
       process.exit(1);
     }
   });

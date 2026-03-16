@@ -14,6 +14,13 @@ const upstream = process.env.AUTH_UPSTREAM || 'http://127.0.0.1:3000';
 
 app.register(proxy, {
   upstream,
+  prefix: '/api/health',
+  rewritePrefix: '/api/health',
+  http2: false,
+})
+
+app.register(proxy, {
+  upstream,
   // Frontend calls /api/auth/*, rewrite to /api/* on Auth service
   prefix: '/api/auth',
   rewritePrefix: '/api',
@@ -29,6 +36,10 @@ app.register(proxy, {
 })
 
 app.get('/', async () => {
+  return { ok: true, service: 'gateway' };
+})
+
+app.get('/health', async () => {
   return { ok: true, service: 'gateway' };
 })
 
