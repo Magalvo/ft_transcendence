@@ -1155,9 +1155,10 @@ export class SpacedOutGame {
         ? snapshot.username
         : `PILOT-${id.slice(0, 4)}`;
     const pilot = this.ensureRemotePilot(id, username, team);
+    const isFirstSnapshot = pilot.lastSnapshotAt === null;
     const now = performance.now();
     const elapsedSeconds =
-      pilot.lastSnapshotAt === null
+      isFirstSnapshot || pilot.lastSnapshotAt === null
         ? null
         : Math.max(
             (now - pilot.lastSnapshotAt) / 1000,
@@ -1185,6 +1186,12 @@ export class SpacedOutGame {
 
     pilot.targetPosition.copy(position);
     pilot.targetQuaternion.copy(quaternionFromPose(position, direction));
+    if (isFirstSnapshot) {
+      // Snap the first authoritative pose into place so remote ships do not
+      // lerp outward from the planet center on their spawn frame.
+      pilot.mesh.position.copy(position);
+      pilot.mesh.quaternion.copy(pilot.targetQuaternion);
+    }
     pilot.hp = Number(snapshot.hp) || 100;
     pilot.team = team;
     pilot.username = username;
@@ -1222,11 +1229,13 @@ export class SpacedOutGame {
 
     const mesh = this.createPilotShip(team);
     mesh.scale.set(3, 3, 3);
+    mesh.visible = false;
     this.earthAnchor.add(mesh);
 
     const label = document.createElement("div");
     label.className = "spacedout-contact-label";
     label.textContent = username;
+    label.style.display = "none";
     this.labelsMount.appendChild(label);
 
     const state: RemotePilotState = {
