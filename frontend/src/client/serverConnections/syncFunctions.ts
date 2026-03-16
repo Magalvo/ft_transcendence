@@ -67,7 +67,7 @@ export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boo
         if (isHell) {
             addFireEffect(data, ball.mesh, new BABYLON.Color3(1, 0.5, 0), false);
         } else {
-            removeFireFromMesh(data, ball.mesh);
+            removeFireFromMesh(ball.mesh);
         }
         if (sb.particles === true)
             spawnHitParticles(data.scene, ball.mesh.position);
@@ -77,7 +77,7 @@ export function syncPlayingBalls(data: GameData, serverBalls: any[], isHell: boo
     while (localBalls.length > serverBalls.length) {
         const removed = localBalls.pop();
         if (removed) {
-            removeFireFromMesh(data, removed.mesh);
+            removeFireFromMesh(removed.mesh);
             removed.dispose();
         }
     }
@@ -91,7 +91,7 @@ export function syncMagicBalls(data: GameData, serverBalls: any[]) {
         if (!ball?.metadata) { ball?.dispose(); localBalls.splice(i, 1); continue; }
 
         if (!serverBalls.find((sb: any) => sb.id === ball.metadata.id)) {
-            removeFireFromMesh(data, ball);
+            removeFireFromMesh(ball);
             ball.dispose();
             localBalls.splice(i, 1);
         }

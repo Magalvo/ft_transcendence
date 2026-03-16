@@ -10,7 +10,7 @@ export function MainConfig(config:MainConf){
 
     global.rootElement = document.getElementById(config.rootElement);
 
-    return function(target : any){
+    return function(_target : any){
 
         let router = new RouteHandler();
         router.initialize();

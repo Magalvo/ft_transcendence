@@ -59,14 +59,15 @@ export class GameScene {
     undefineKeyEvents();
     if (this.scene && !this.scene.isDisposed) this.scene.dispose();
     if (!this.engine) throw new Error('Engine not initialized before resetScene');
-    this.scene = new BABYLON.Scene(this.engine);
-    this.initializeGameData(serverConfigs);
-    this.data.obj3D = createObjects3D(this.scene, serverConfigs);
-    this.data.obj2D = createObjects2D(this.scene);
-    this.data.env3D = createEnvironment3D(this.data.obj3D, this.scene);
+    const scene = new BABYLON.Scene(this.engine);
+    this.scene = scene;
+    this.initializeGameData(serverConfigs, scene);
+    this.data.obj3D = createObjects3D(scene, serverConfigs);
+    this.data.obj2D = createObjects2D(scene);
+    this.data.env3D = createEnvironment3D(this.data.obj3D, scene);
     defineKeyEvents(this.data);
 
-    this.scene.registerBeforeRender(() => {
+    scene.registerBeforeRender(() => {
       const dt = this.engine!.getDeltaTime() / 1000;
       renderGame(dt, this.data);
       if (this.data.flags.return_main_menu) { /* RETURN MAIN PAGE */ };
@@ -74,8 +75,8 @@ export class GameScene {
     this.engine!.resize();
   }
 
-  private initializeGameData(configs: any): void {
-    this.data.scene = this.scene;
+  private initializeGameData(configs: any, scene: BABYLON.Scene): void {
+    this.data.scene = scene;
     this.data.socket = this.socket;
     this.data.gameConfigs = configs;
     this.data.mods = {

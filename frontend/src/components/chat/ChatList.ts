@@ -9,7 +9,6 @@ interface ChatContact {
 }
 
 export class ChatList extends AbstractComponent {
-  private activeId: number | null = null;
   private onSelect: (contact: ChatContact) => void;
 
   constructor(contacts: ChatContact[], onSelect: (c: ChatContact) => void) {
@@ -41,7 +40,6 @@ export class ChatList extends AbstractComponent {
       `;
 
       item.onclick = () => {
-        this.activeId = contact.id;
         this.onSelect(contact);
         
       };

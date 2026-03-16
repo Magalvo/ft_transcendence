@@ -1,7 +1,6 @@
 
 import { PageComponent } from "../decorators/page";
 import bgTest from "../../assets/bg-test.png"
-import axios from "axios";
 import sectionLogin from "../components/sectionLogin";
 import AuthService from "../services/AuthService";
 
@@ -103,7 +102,7 @@ export class LoginPage{
 
     // True Sing in  False Sign up
     private currentState : boolean = true;
-    private authService = new AuthService();
+    private authService = AuthService;
 
       private erroLogin(element : HTMLElement) {
 
@@ -159,7 +158,12 @@ export class LoginPage{
         }
 
         try{
-            const { token, refreshToken } = await this.authService.register({username, password, email});
+            const { token, refreshToken } = await this.authService.register({
+                username,
+                password,
+                email,
+                acceptTerms: true,
+            });
             console.log(token, refreshToken);
             console.log('Redirect to home');
             this.authService.redirectToHomePage(token, refreshToken);
@@ -201,7 +205,7 @@ export class LoginPage{
                      if (result.twoFactorRequired) {
                          sessionStorage.setItem('temp_username', username);
                          sessionStorage.setItem('temp_password', password);
-                         this.show2FAModal(username);
+                         this.show2FAModal();
                      } else if (result.token && result.refreshToken) {
                          this.authService.redirectToHomePage(result.token, result.refreshToken);
                      }
@@ -210,7 +214,7 @@ export class LoginPage{
                     if (errorMsg.includes('2FA')) {
                         sessionStorage.setItem('temp_username', username);
                         sessionStorage.setItem('temp_password', password);
-                        this.show2FAModal(username);
+                        this.show2FAModal();
                     } else if(error.response?.status === 401){
             this.erroLogin(usernameEl);
             this.erroLogin(passwordEl);
@@ -224,7 +228,7 @@ export class LoginPage{
 
     }
 
-        private show2FAModal(username: string) {
+        private show2FAModal() {
             const modal = document.createElement('div');
             modal.id = '2fa-modal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center';

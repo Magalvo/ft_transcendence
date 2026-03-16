@@ -43,7 +43,7 @@ export function addFireEffect(data: GameData, mesh: BABYLON.AbstractMesh, color:
 /**
  * Cleanly removes the fire effect.
  */
-export function removeFireFromMesh(data: GameData, mesh: BABYLON.AbstractMesh) {
+export function removeFireFromMesh(mesh: BABYLON.AbstractMesh) {
     const ps = mesh.metadata?.firePS;
     if (ps) {
         ps.stop();

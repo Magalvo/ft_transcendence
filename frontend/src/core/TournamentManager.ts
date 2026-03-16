@@ -10,7 +10,6 @@ export class TournamentManager {
     private static instance: TournamentManager;
     private participants: string[] = [];
     private matches: TournamentMatch[] = [];
-    private currentMatchIndex: number = 0;
 
     private constructor() {
         const saved = localStorage.getItem('pong_tournament');

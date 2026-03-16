@@ -68,6 +68,7 @@ export class ChatWindow extends AbstractComponent {
       isMe,
       isInvite
     };
+    this.currentMessages.push(msg);
     
     const bubble = new MessageBubble(msg, () => {
         console.log("Redirecting to Game...");

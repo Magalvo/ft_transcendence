@@ -10,6 +10,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/three": "^0.183.1",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",

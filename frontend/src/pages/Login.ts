@@ -16,7 +16,6 @@ export class LoginPage extends AbstractComponent {
   private usernameInput: Input;
   private passwordInput: Input;
   private emailInput: Input;
-  private show2FAModal: boolean = false;
 
   // track if user checked "accept terms"
   private acceptTermsChecked: boolean = false;
@@ -104,7 +103,7 @@ export class LoginPage extends AbstractComponent {
     // Main action button
     const actionBtn = new Button(
       this.isRegisterMode ? 'Sign Up' : 'Sign In',
-      (e) => { this.handleSubmit(e); },
+      () => { void this.handleSubmit(); },
       'primary'
     );
     actionBtn.getElement().classList.add('w-full', 'mb-4');
@@ -172,7 +171,7 @@ export class LoginPage extends AbstractComponent {
     this.render();
   }
 
-  private async handleSubmit(e: Event): Promise<void> {
+  private async handleSubmit(e?: Event): Promise<void> {
     if (e) e.preventDefault();
 
     const username = this.usernameInput.getValue();
@@ -226,7 +225,6 @@ export class LoginPage extends AbstractComponent {
 
         // Check if 2FA is required
         if (loginResult.twoFactorRequired) {
-          this.show2FAModal = true;
           this.render2FAModal();
         } else {
           // Login successful - wait for user profile to be fully loaded
@@ -252,7 +250,6 @@ export class LoginPage extends AbstractComponent {
         alert(errorMessage);
       } else if (error.response?.status === 400) {
         if ((error.response?.data?.error || '').includes('2FA')) {
-          this.show2FAModal = true;
           this.render2FAModal();
         } else {
           alert(`Error: ${errorMessage}`);
@@ -292,7 +289,6 @@ export class LoginPage extends AbstractComponent {
         window.location.href = '/';
       },
       () => {
-        this.show2FAModal = false;
         this.render();
       }
     );

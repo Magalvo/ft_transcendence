@@ -21,7 +21,7 @@ export class TournamentBracket extends AbstractComponent {
     const bracketContainer = document.createElement("div");
     bracketContainer.className = "flex flex-wrap justify-center gap-12";
 
-    this.matches.forEach((match, index) => {
+    this.matches.forEach((match) => {
       const matchCard = document.createElement("div");
       matchCard.className =
         "bg-gray-700 p-4 rounded-lg border border-gray-600 w-64 relative";
