@@ -1056,28 +1056,58 @@ function distance3D(p1, p2) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-function getGridAltitude(nx, ny, nz) {
-  // If map hasn't arrived yet, default to safe clearance
-  if (!serverTerrainGrid || serverGridRows === 0) {
-    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
-  }
-
+function getGridCoords(nx, ny, nz) {
   const phi = Math.acos(ny);
   const theta = Math.atan2(nz, nx);
 
   const rRow = Math.round((phi / Math.PI) * (serverGridRows - 1));
   const rCol = Math.round(((Math.PI - theta) / (2 * Math.PI)) * (serverGridCols - 1));
 
-  const safeRow = clamp(rRow, 0, serverGridRows - 1);
-  const safeCol = clamp(rCol, 0, serverGridCols - 1);
+  return {
+    row: clamp(rRow, 0, serverGridRows - 1),
+    col: clamp(rCol, 0, serverGridCols - 1),
+  };
+}
 
-  const idx = safeRow * serverGridCols + safeCol;
+function getGridAltitudeFromCell(row, col) {
+  const idx = row * serverGridCols + col;
   const rawGroundZ = serverTerrainGrid[idx];
-
   return Math.max(0, rawGroundZ * TERRAIN_SCALE_Z) + TERRAIN_CLEARANCE_BIAS;
 }
 
-function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE + 80) {
+function getGridAltitude(nx, ny, nz) {
+  // If map hasn't arrived yet, default to safe clearance
+  if (!serverTerrainGrid || serverGridRows === 0 || serverGridCols === 0) {
+    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
+  }
+
+  const { row, col } = getGridCoords(nx, ny, nz);
+  return getGridAltitudeFromCell(row, col);
+}
+
+function getBufferedGridAltitude(nx, ny, nz, cellRadius = 2) {
+  if (!serverTerrainGrid || serverGridRows === 0 || serverGridCols === 0) {
+    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
+  }
+
+  const { row, col } = getGridCoords(nx, ny, nz);
+  let maxAltitude = getGridAltitudeFromCell(row, col);
+
+  for (let rowOffset = -cellRadius; rowOffset <= cellRadius; rowOffset += 1) {
+    for (let colOffset = -cellRadius; colOffset <= cellRadius; colOffset += 1) {
+      const sampleRow = clamp(row + rowOffset, 0, serverGridRows - 1);
+      const sampleCol = clamp(col + colOffset, 0, serverGridCols - 1);
+      const altitude = getGridAltitudeFromCell(sampleRow, sampleCol);
+      if (altitude > maxAltitude) {
+        maxAltitude = altitude;
+      }
+    }
+  }
+
+  return maxAltitude;
+}
+
+function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE + 500) {
   const sx = Number(spawn?.x) || 0;
   const sy = Number(spawn?.y) || 0;
   const sz = Number(spawn?.z) || 0;
@@ -1090,7 +1120,7 @@ function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE +
   const nz =
     Number.isFinite(distFromCenter) && distFromCenter > 0 ? sz / distFromCenter : 0;
 
-  const safeRadius = WORLD_RADIUS + getGridAltitude(nx, ny, nz) + clearance;
+  const safeRadius = WORLD_RADIUS + getBufferedGridAltitude(nx, ny, nz, 4) + clearance;
   const dx = Number.isFinite(spawn?.dx) ? spawn.dx : 0;
   const dy = Number.isFinite(spawn?.dy) ? spawn.dy : 1;
   const dz = Number.isFinite(spawn?.dz) ? spawn.dz : 0;
@@ -1143,7 +1173,7 @@ function keepBotAboveTerrain(bot, stepScale) {
   const ny = bot.y / distFromCenter;
   const nz = bot.z / distFromCenter;
 
-  const terrainAltitude = getGridAltitude(nx, ny, nz);
+  const terrainAltitude = getBufferedGridAltitude(nx, ny, nz, 2);
   const minSafeAltitude = terrainAltitude + BOT_MIN_TERRAIN_CLEARANCE;
   const currentAltitude = distFromCenter - WORLD_RADIUS;
 
