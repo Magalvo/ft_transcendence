@@ -139,6 +139,20 @@ app.post("/login", async (req, reply) => {
     return await faVerify(req,reply);
   });
 
+  // inicia login com Google
+app.get('/api/google/login', (req, res) => {
+  const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=SEU_CLIENT_ID&redirect_uri=http://localhost:3000/api/google/callback&response_type=code&scope=openid email profile`;
+  res.redirect(googleUrl);
+});
+
+// callback do Google
+app.get('/api/google/callback', async (req, res) => {
+  const code = req.query.code;
+  // trocar código por token, criar sessão e redirecionar para frontend
+  res.redirect('http://localhost:8080/');
+});
+
+
   // --- GET CURRENT USER ---
   app.get("/me", async (req, reply) => {
     try {

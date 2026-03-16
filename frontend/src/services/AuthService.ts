@@ -32,7 +32,7 @@ interface User {
 }
 
 export class AuthService {
-  private apiUrl = API_URL;
+	private apiUrl = API_URL;
 
   /**
    * Login with username and password
@@ -285,15 +285,10 @@ export class AuthService {
   /**
    * Redirect to Google OAuth login
    */
-  loginWithGoogle(): void {
-    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!GOOGLE_CLIENT_ID) {
-      console.error('Google Client ID not configured');
-      return;
-    }
-
-    window.location.href = `${this.apiUrl}/api/auth/google/login`;
-  }
+loginWithGoogle(): void {
+  const BACKEND_URL = 'http://localhost:8080'; // seu backend
+  window.location.href = `${BACKEND_URL}/api/auth/google/login`;
+}
 
   /**
    * Handle Google OAuth callback (called from URL params)
