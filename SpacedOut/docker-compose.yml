@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: duckua-backend
+    # We remove 'ports:' here. The backend is no longer exposed directly to the internet.
+    # It is only accessible internally by the frontend container on port 3000.
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: duckua-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"     # Map Host port 8080 to Container port 80
+      - "8443:443"    # Map Host port 8443 to Container port 443
+    restart: unless-stopped

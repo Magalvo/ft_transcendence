@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - FdF Flight Simulator</title>
+    <style>
+        /* Retro dark theme */
+        body { margin: 0; overflow: hidden; background-color: #050508; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; }
+        #video {
+            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            transform: scaleX(-1); border: 2px solid rgba(0, 255, 204, 0.5);
+            border-radius: 8px; z-index: 10; box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+        }
+        #ui-layer {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #00ffcc; text-align: center; z-index: 20; background: rgba(0,0,0,0.8); 
+            padding: 20px; border: 1px solid #00ffcc; border-radius: 10px; box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+        }
+        #controls-hint {
+            position: absolute; top: 20px; left: 20px; color: #00ffcc; text-shadow: 0 0 5px #00ffcc;
+            z-index: 20; font-size: 14px; background: rgba(0,0,0,0.7); padding: 15px; border: 1px solid #00ffcc; border-radius: 5px;
+            display: none; 
+        }
+        #speed-readout {
+            position: absolute; bottom: 20px; left: 20px; color: #ff0055; text-shadow: 0 0 8px #ff0055;
+            z-index: 20; font-size: 28px; font-weight: bold; display: none; 
+        }
+        #calibration-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(5, 5, 8, 0.95); z-index: 30;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #00ffcc; text-align: center; display: none; 
+        }
+        #calibrate-btn {
+            margin-top: 20px; padding: 15px 30px; font-size: 18px; font-weight: bold; text-transform: uppercase;
+            background-color: transparent; color: #00ffcc; border: 2px solid #00ffcc; border-radius: 4px; cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        #calibrate-btn:hover:not(:disabled) { background-color: #00ffcc; color: #000; box-shadow: 0 0 15px #00ffcc; }
+        #calibrate-btn:disabled { border-color: #333; color: #555; cursor: not-allowed; }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui-layer">
+        <h2 id="loading-text">INITIALIZING FDF MATRIX...</h2>
+    </div>
+
+    <div id="calibration-screen">
+        <h2>SYSTEM CALIBRATION</h2>
+        <p>1. Sit in your neutral flying posture.</p>
+        <p>2. Look directly at the center of the screen.</p>
+        <button id="calibrate-btn" disabled>Awaiting Visual Link...</button>
+    </div>
+    
+    <div id="controls-hint">
+        <b>[ FLIGHT OVERRIDE ]</b><br><br>
+        W: Throttle Up<br>
+        S: Throttle Down<br>
+        FACE YAW: Steer Vector<br>
+        FACE X/Y: Cockpit Parallax
+    </div>
+
+    <div id="speed-readout">SPD: 200</div>
+    <video id="video" autoplay playsinline></video>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+        // ==========================================
+        // 1. SCENE SETUP (RETRO SYNTHWAVE VIBE)
+        // ==========================================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050508);
+        //scene.fog = new THREE.FogExp2(0x050508, 0.0015); // Adds depth to the wireframe
+        scene.fog = new THREE.Fog(0x050508, 1500, 8000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 100000);
+
+        // ==========================================
+        // 2. FDF PARSER AND MESH GENERATOR
+        // ==========================================
+        
+        // A fallback generator just in case map.fdf isn't in the folder yet
+        function generateProceduralFDF() {
+            const grid = [];
+            for (let i = 0; i < 200; i++) {
+                const row = [];
+                for (let j = 0; j < 200; j++) {
+                    // Create some rolling math hills
+                    row.push(Math.sin(i / 10) * 15 + Math.cos(j / 10) * 15 + Math.sin((i+j)/5) * 5);
+                }
+                grid.push(row);
+            }
+            return grid;
+        }
+
+        async function loadFDFData(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("File missing");
+                const text = await response.text();
+                
+                const lines = text.trim().split('\n');
+                const grid = [];
+                
+                for (let line of lines) {
+                    // Split by spaces, handle 42's optional color formatting (e.g. "10,0xFF0000")
+                    const vals = line.trim().split(/\s+/).map(v => {
+                        const zStr = v.split(',')[0]; 
+                        let z = parseInt(zStr, 10);
+                        if (isNaN(z)) z = 0;
+                        if (z < -9000) z = -10; // Handle the ARC/INFO NODATA_value for oceans
+                        return z;
+                    });
+                    if (vals.length > 0) grid.push(vals);
+                }
+                return grid;
+            } catch (err) {
+                console.warn("map.fdf not found! Loading procedural training simulator instead.");
+                document.getElementById('loading-text').innerText = "FDF NOT FOUND. LOADING PROCEDURAL MATRIX...";
+                return generateProceduralFDF();
+            }
+        }
+
+        const CHUNK_SIZE = 50; // 100x100 points per tile
+        const SCALE_X = 10;
+        const SCALE_Y = 10;
+        const SCALE_Z = 0.025;
+
+        // This function builds a single LOD mesh for a specific chunk of the map
+        function createChunk(grid, startRow, startCol, step, globalOffsetX, globalOffsetZ) {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+            const indices = [];
+            const colors = [];
+            const tempColor = new THREE.Color();
+
+            // Prevent going out of bounds on the edges of the map
+            const endRow = Math.min(startRow + CHUNK_SIZE, grid.length - 1);
+            const endCol = Math.min(startCol + CHUNK_SIZE, grid[0].length - 1);
+
+            // Calculate how many vertices this specific LOD step will have
+            const chunkRows = Math.floor((endRow - startRow) / step) + 1;
+            const chunkCols = Math.floor((endCol - startCol) / step) + 1;
+
+            for (let r = startRow; r <= endRow; r += step) {
+                for (let c = startCol; c <= endCol; c += step) {
+                    const rawZ = grid[r][c];
+
+                    // Topographic coloring
+                    if (rawZ <= -500) tempColor.setHex(0x0a1e3f);
+                    else if (rawZ < 0) tempColor.setHex(0x1ca3ec);
+                    else if (rawZ >= 0 && rawZ < 200) tempColor.setHex(0x387c44);
+                    else if (rawZ >= 200 && rawZ < 1000) tempColor.setHex(0x8a9a5b);
+                    else if (rawZ >= 1000 && rawZ < 3000) tempColor.setHex(0x8b7355);
+                    else tempColor.setHex(0xffffff);
+
+                    colors.push(tempColor.r, tempColor.g, tempColor.b);
+
+                    const x = c * SCALE_X - globalOffsetX;
+                    const y = rawZ * SCALE_Z;
+                    const z = r * SCALE_Y - globalOffsetZ;
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Generate faces
+            for (let i = 0; i < chunkRows - 1; i++) {
+                for (let j = 0; j < chunkCols - 1; j++) {
+                    const a = i * chunkCols + j;
+                    const b = i * chunkCols + (j + 1);
+                    const c = (i + 1) * chunkCols + j;
+                    const d = (i + 1) * chunkCols + (j + 1);
+                    
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshBasicMaterial({ 
+                vertexColors: true, 
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            return new THREE.Mesh(geometry, material);
+        }
+
+/*         function createFDFMesh(grid) {
+            const rows = grid.length;
+            const cols = grid[0].length;
+            
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+            const indices = [];
+            const colors = []; // NEW: Array to hold our real-world colors
+            
+            const scaleX = 20;
+            const scaleY = 20;
+            const scaleZ = 0.05; 
+            
+            const offsetX = (cols * scaleX) / 2;
+            const offsetZ = (rows * scaleY) / 2;
+
+            const tempColor = new THREE.Color();
+
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const rawZ = grid[i][j]; // The actual real-world elevation in meters
+
+                    // Determine the "real" geographic color based on altitude
+                    if (rawZ <= -500) {
+                        tempColor.setHex(0x0a1e3f); // Deep Ocean
+                    } else if (rawZ < 0) {
+                        tempColor.setHex(0x1ca3ec); // Shallow Water / Coast
+                    } else if (rawZ >= 0 && rawZ < 200) {
+                        tempColor.setHex(0x387c44); // Lowland Green Plains
+                    } else if (rawZ >= 200 && rawZ < 1000) {
+                        tempColor.setHex(0x8a9a5b); // Highland Green / Foothills
+                    } else if (rawZ >= 1000 && rawZ < 3000) {
+                        tempColor.setHex(0x8b7355); // Mountain Brown / Rock
+                    } else {
+                        tempColor.setHex(0xffffff); // Snow Peaks
+                    }
+
+                    // Push the RGB values to the color array
+                    colors.push(tempColor.r, tempColor.g, tempColor.b);
+
+                    const x = j * scaleX - offsetX;
+                    const y = rawZ * scaleZ;
+                    const z = i * scaleY - offsetZ;
+                    vertices.push(x, y, z);
+                }
+            }
+            
+            for (let i = 0; i < rows - 1; i++) {
+                for (let j = 0; j < cols - 1; j++) {
+                    const a = i * cols + j;
+                    const b = i * cols + (j + 1);
+                    const c = (i + 1) * cols + j;
+                    const d = (i + 1) * cols + (j + 1);
+                    
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); // Apply the colors to the geometry
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+            
+            // Update the material to use our custom vertex colors
+            const material = new THREE.MeshBasicMaterial({ 
+                vertexColors: true, // Tells Three.js to use the colors we just generated
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            return new THREE.Mesh(geometry, material);
+        } */
+
+        // ==========================================
+        // 3. INITIALIZE WORLD & PLAYER RIG
+        // ==========================================
+        const earthAnchor = new THREE.Group();
+        scene.add(earthAnchor);
+
+        const playerRig = new THREE.Group();
+        playerRig.rotation.order = 'YXZ'; 
+        earthAnchor.add(playerRig);
+        playerRig.add(camera);
+
+        loadFDFData('worldMap.fdf').then(grid => {
+            const rows = grid.length;
+            const cols = grid[0].length;
+            
+            // Center the entire map
+            const globalOffsetX = (cols * SCALE_X) / 2;
+            const globalOffsetZ = (rows * SCALE_Y) / 2;
+
+            // Slice the map into chunks and generate LODs
+            for (let i = 0; i < rows - 1; i += CHUNK_SIZE) {
+                for (let j = 0; j < cols - 1; j += CHUNK_SIZE) {
+                    
+                    const lod = new THREE.LOD();
+                    
+                    // High Detail (Visible up to 2,000 units away)
+                    lod.addLevel(createChunk(grid, i, j, 1, globalOffsetX, globalOffsetZ), 0);
+                    
+                    // Medium Detail (Visible from 2,000 to 6,000 units away)
+                    lod.addLevel(createChunk(grid, i, j, 2, globalOffsetX, globalOffsetZ), 2000);
+                    
+                    // Low Detail (Visible from 6,000+ units away)
+                    lod.addLevel(createChunk(grid, i, j, 4, globalOffsetX, globalOffsetZ), 6000);
+
+                    earthAnchor.add(lod);
+                }
+            }
+            
+            // Spawn player high in the sky to see the LODs working
+            playerRig.position.set(0, 1500, (rows * SCALE_Y) / 2); 
+            
+            initVisionAI();
+        });
+
+        // ==========================================
+        // 4. MEDIAPIPE AI & CALIBRATION
+        // ==========================================
+        let faceLandmarker;
+        const video = document.getElementById("video");
+        let isCalibrated = false;
+        let targetCamPos = new THREE.Vector2(0, 0);
+        let turnVelocityYaw = 0; let turnVelocityPitch = 0;
+        let calNoseX = 0.5; let calNoseY = 0.5;
+        let calYaw = 0; let calPitch = 0;
+        let liveRawNoseX = 0.5, liveRawNoseY = 0.5, liveRawYaw = 0, liveRawPitch = 0;
+        let faceDetected = false;
+
+        async function initVisionAI() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+                runningMode: "VIDEO", numFaces: 1
+            });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            video.srcObject = stream;
+            video.addEventListener("loadeddata", predictWebcam);
+            
+            document.getElementById("ui-layer").style.display = "none"; 
+            document.getElementById("calibration-screen").style.display = "flex";
+        }
+
+        document.getElementById('calibrate-btn').addEventListener('click', () => {
+            if (!faceDetected) return;
+            calNoseX = liveRawNoseX; calNoseY = liveRawNoseY; calYaw = liveRawYaw; calPitch = liveRawPitch;
+            isCalibrated = true;
+            document.getElementById('calibration-screen').style.display = 'none';
+            document.getElementById('controls-hint').style.display = 'block';
+            document.getElementById('speed-readout').style.display = 'block';
+        });
+
+        let lastVideoTime = -1;
+
+        function predictWebcam() {
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                const results = faceLandmarker.detectForVideo(video, performance.now());
+                
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                    const landmarks = results.faceLandmarks[0];
+                    faceDetected = true;
+                    
+                    const btn = document.getElementById('calibrate-btn');
+                    if (btn.disabled) { btn.disabled = false; btn.innerText = "LINK ESTABLISHED - BEGIN"; }
+
+                    const nose = landmarks[1]; const leftEar = landmarks[234]; const rightEar = landmarks[454];
+                    const topHead = landmarks[10]; const chin = landmarks[152];
+
+                    liveRawNoseX = nose.x; liveRawNoseY = nose.y;
+                    liveRawYaw = Math.atan2(rightEar.z - leftEar.z, rightEar.x - leftEar.x);
+                    liveRawPitch = -Math.atan2(chin.z - topHead.z, chin.y - topHead.y);
+
+                    if (isCalibrated) {
+                        targetCamPos.x = (liveRawNoseX - calNoseX) * -2.0 * 8.0;
+                        targetCamPos.y = -((liveRawNoseY - calNoseY) * -2.0 * 8.0);
+
+                        const adjustedYaw = liveRawYaw - calYaw;
+                        const adjustedPitch = liveRawPitch - calPitch;
+                        const DEADZONE = 0.08; 
+                        const STEERING_SENSITIVITY = 0.02;
+
+                        turnVelocityYaw = Math.abs(adjustedYaw) > DEADZONE ? (Math.abs(adjustedYaw) - DEADZONE) * Math.sign(adjustedYaw) * STEERING_SENSITIVITY : 0;
+                        turnVelocityPitch = Math.abs(adjustedPitch) > DEADZONE ? (Math.abs(adjustedPitch) - DEADZONE) * Math.sign(adjustedPitch) * STEERING_SENSITIVITY : 0;
+                    }
+                } else {
+                    faceDetected = false; turnVelocityYaw = 0; turnVelocityPitch = 0;
+                    if (!isCalibrated) {
+                        const btn = document.getElementById('calibrate-btn');
+                        btn.disabled = true; btn.innerText = "Awaiting Visual Link...";
+                    }
+                }
+            }
+            requestAnimationFrame(predictWebcam);
+        }
+
+        // ==========================================
+        // 5. FLIGHT CONTROLS
+        // ==========================================
+        const keys = { w: false, s: false };
+        window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+        const BASE_SPEED = 2.0; const BOOST_SPEED = 8.0; const BRAKE_SPEED = 0.5;
+        let currentSpeed = BASE_SPEED;
+        const speedUI = document.getElementById("speed-readout");
+
+        // ==========================================
+        // 6. MAIN GAME LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isCalibrated) {
+                let targetSpeed = BASE_SPEED;
+                if (keys.w) targetSpeed = BOOST_SPEED;
+                if (keys.s) targetSpeed = BRAKE_SPEED;
+                currentSpeed += (targetSpeed - currentSpeed) * 0.05;
+                
+                speedUI.innerText = `SPD: ${Math.round(currentSpeed * 100)}`;
+
+                playerRig.rotateY(turnVelocityYaw);
+                playerRig.rotateX(turnVelocityPitch);
+                playerRig.translateZ(-currentSpeed);
+
+                camera.position.x += (targetCamPos.x - camera.position.x) * 0.1;
+                camera.position.y += (targetCamPos.y - camera.position.y) * 0.1;
+                camera.rotation.set(0, 0, 0); 
+                camera.rotation.z += ((-turnVelocityYaw * 10) - camera.rotation.z) * 0.1;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

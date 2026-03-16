@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - Google Earth Flight</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: sans-serif; } /* Sky blue background */
+        canvas { display: block; }
+        #video {
+            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            transform: scaleX(-1); border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #ui-layer {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; text-align: center; z-index: 20; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px;
+        }
+        #controls-hint {
+            position: absolute; top: 20px; left: 20px; color: white; text-shadow: 1px 1px 2px black;
+            z-index: 20; font-size: 14px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+            display: none; 
+        }
+        #speed-readout {
+            position: absolute; bottom: 20px; left: 20px; color: #00ffaa; text-shadow: 1px 1px 2px black;
+            z-index: 20; font-size: 24px; font-weight: bold; font-family: monospace; display: none; 
+        }
+        #calibration-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(5, 5, 16, 0.9); z-index: 30;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: white; text-align: center; display: none; 
+        }
+        #calibrate-btn {
+            margin-top: 20px; padding: 15px 30px; font-size: 18px; font-weight: bold;
+            background-color: #00ffaa; color: #050510; border: none; border-radius: 8px; cursor: pointer;
+        }
+        #calibrate-btn:disabled { background-color: #555; color: #888; cursor: not-allowed; }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+                "3d-tiles-renderer": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.3.30/+esm"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui-layer">
+        <h2 id="loading-text">Loading AI Model & Earth Data...</h2>
+    </div>
+
+    <div id="calibration-screen">
+        <h2>Flight System Calibration</h2>
+        <p>1. Sit in your neutral flying posture.</p>
+        <p>2. Look directly at the center of the screen.</p>
+        <button id="calibrate-btn" disabled>Waiting for Face...</button>
+    </div>
+    
+    <div id="controls-hint">
+        <b>Flight Controls:</b><br>
+        W: Throttle Up | S: Throttle Down<br>
+        Face Turn: Steer Ship<br>
+        Face Lean: Look Around Cockpit
+    </div>
+
+    <div id="speed-readout">SPD: 200 KM/H</div>
+    <video id="video" autoplay playsinline></video>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TilesRenderer } from '3d-tiles-renderer';
+        import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+        // ==========================================
+        // 1. THREE.JS SCENE SETUP
+        // ==========================================
+        const scene = new THREE.Scene();
+        // Add a realistic atmosphere/fog color
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.0002); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(1000, 2000, 1000);
+        scene.add(sunLight);
+
+        // ==========================================
+        // 2. GOOGLE 3D TILES (THE EARTH)
+        // ==========================================
+        
+        const tilesRenderer = new TilesRenderer(`https://tile.googleapis.com/v1/3dtiles/root.json?key=${GOOGLE_API_KEY}`);
+
+        tilesRenderer.preprocessURL = (uri) => {
+            const url = new URL(uri);
+            url.searchParams.append('key', GOOGLE_API_KEY);
+            return url.toString();
+        };
+        
+        // Orient the Google Earth tiles so the North Pole aligns with ThreeJS Y-axis
+        tilesRenderer.group.rotation.x = -Math.PI / 2;
+        scene.add(tilesRenderer.group);
+
+        // ==========================================
+        // 3. EARTH ANCHOR & PLAYER RIG
+        // ==========================================
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 100000);
+        
+        // Connect the camera to the TilesRenderer so it knows what resolution tiles to stream
+        tilesRenderer.setCamera(camera);
+        tilesRenderer.setResolutionFromRenderer(camera, renderer);
+
+        // Convert Lat/Lon to a 3D position on the sphere
+        function getEarthPosition(lat, lon, heightInMeters) {
+            const radius = 6378137 + heightInMeters; 
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const z = (radius * Math.sin(phi) * Math.sin(theta));
+            const y = (radius * Math.cos(phi));
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // The Anchor sticks to the globe. The Rig flies relative to the Anchor.
+        const earthAnchor = new THREE.Group();
+        scene.add(earthAnchor);
+
+        const playerRig = new THREE.Group();
+        playerRig.rotation.order = 'YXZ'; 
+        earthAnchor.add(playerRig);
+        playerRig.add(camera);
+
+        // Spawn at the Grand Canyon: Latitude 36.1069, Longitude -112.1129, Altitude 3000 meters
+        const startPosition = getEarthPosition(36.1069, -112.1129, 3000);
+        earthAnchor.position.copy(startPosition);
+        
+        // Orient the anchor so "Up" is pointing away from the center of the earth
+        const surfaceNormal = startPosition.clone().normalize();
+        earthAnchor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), surfaceNormal);
+
+        // ==========================================
+        // 4. MEDIAPIPE AI & CALIBRATION (Unchanged Logic)
+        // ==========================================
+        let faceLandmarker;
+        const video = document.getElementById("video");
+        let isCalibrated = false;
+        let targetCamPos = new THREE.Vector2(0, 0);
+        let turnVelocityYaw = 0; let turnVelocityPitch = 0;
+        let calNoseX = 0.5; let calNoseY = 0.5;
+        let calYaw = 0; let calPitch = 0;
+        let liveRawNoseX = 0.5, liveRawNoseY = 0.5, liveRawYaw = 0, liveRawPitch = 0;
+        let faceDetected = false;
+
+        async function initVisionAI() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+                runningMode: "VIDEO", numFaces: 1
+            });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            video.srcObject = stream;
+            video.addEventListener("loadeddata", predictWebcam);
+            document.getElementById("ui-layer").style.display = "none"; 
+            document.getElementById("calibration-screen").style.display = "flex";
+        }
+
+        document.getElementById('calibrate-btn').addEventListener('click', () => {
+            if (!faceDetected) return;
+            calNoseX = liveRawNoseX; calNoseY = liveRawNoseY; calYaw = liveRawYaw; calPitch = liveRawPitch;
+            isCalibrated = true;
+            document.getElementById('calibration-screen').style.display = 'none';
+            document.getElementById('controls-hint').style.display = 'block';
+            document.getElementById('speed-readout').style.display = 'block';
+        });
+
+        let lastVideoTime = -1;
+
+        function predictWebcam() {
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                const results = faceLandmarker.detectForVideo(video, performance.now());
+                
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                    const landmarks = results.faceLandmarks[0];
+                    faceDetected = true;
+                    
+                    const btn = document.getElementById('calibrate-btn');
+                    if (btn.disabled) { btn.disabled = false; btn.innerText = "Begin Flight"; }
+
+                    const nose = landmarks[1]; const leftEar = landmarks[234]; const rightEar = landmarks[454];
+                    const topHead = landmarks[10]; const chin = landmarks[152];
+
+                    liveRawNoseX = nose.x; liveRawNoseY = nose.y;
+                    liveRawYaw = Math.atan2(rightEar.z - leftEar.z, rightEar.x - leftEar.x);
+                    liveRawPitch = -Math.atan2(chin.z - topHead.z, chin.y - topHead.y);
+
+                    if (isCalibrated) {
+                        targetCamPos.x = (liveRawNoseX - calNoseX) * -2.0 * 6.0;
+                        targetCamPos.y = -((liveRawNoseY - calNoseY) * -2.0 * 6.0);
+
+                        const adjustedYaw = liveRawYaw - calYaw;
+                        const adjustedPitch = liveRawPitch - calPitch;
+                        const DEADZONE = 0.08; 
+                        const STEERING_SENSITIVITY = 0.02;
+
+                        turnVelocityYaw = Math.abs(adjustedYaw) > DEADZONE ? (Math.abs(adjustedYaw) - DEADZONE) * Math.sign(adjustedYaw) * STEERING_SENSITIVITY : 0;
+                        turnVelocityPitch = Math.abs(adjustedPitch) > DEADZONE ? (Math.abs(adjustedPitch) - DEADZONE) * Math.sign(adjustedPitch) * STEERING_SENSITIVITY : 0;
+                    }
+                } else {
+                    faceDetected = false; turnVelocityYaw = 0; turnVelocityPitch = 0;
+                    if (!isCalibrated) document.getElementById('calibrate-btn').disabled = true;
+                }
+            }
+            requestAnimationFrame(predictWebcam);
+        }
+        initVisionAI();
+
+        // ==========================================
+        // 5. FLIGHT CONTROLS (Updated for scale)
+        // ==========================================
+        const keys = { w: false, s: false };
+        window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+        // Speed is now in Meters per Frame. 
+        // 5.0 m/frame at 60fps = 300 m/s (roughly the speed of a commercial jet)
+        const BASE_SPEED = 2.0; const BOOST_SPEED = 8.0; const BRAKE_SPEED = 0.5;
+        let currentSpeed = BASE_SPEED;
+        const speedUI = document.getElementById("speed-readout");
+
+        // ==========================================
+        // 6. MAIN GAME LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isCalibrated) {
+                let targetSpeed = BASE_SPEED;
+                if (keys.w) targetSpeed = BOOST_SPEED;
+                if (keys.s) targetSpeed = BRAKE_SPEED;
+                currentSpeed += (targetSpeed - currentSpeed) * 0.05;
+                
+                // Convert m/frame to km/h for the UI readout
+                const kmh = Math.round((currentSpeed * 60 * 60) / 1000);
+                speedUI.innerText = `SPD: ${kmh} KM/H`;
+
+                // Steer the rig locally
+                playerRig.rotateY(turnVelocityYaw);
+                playerRig.rotateX(turnVelocityPitch);
+
+                // Move forward
+                playerRig.translateZ(-currentSpeed);
+
+                // Cockpit Dodging & Camera Banking
+                camera.position.x += (targetCamPos.x - camera.position.x) * 0.1;
+                camera.position.y += (targetCamPos.y - camera.position.y) * 0.1;
+                camera.rotation.set(0, 0, 0); 
+                camera.rotation.z += ((-turnVelocityYaw * 10) - camera.rotation.z) * 0.1;
+            }
+
+            // CRITICAL: Update the camera matrix so the TilesRenderer knows exactly where we are looking
+            camera.updateMatrixWorld();
+            
+            // CRITICAL: Fetch the new chunks of the Earth based on our location
+            tilesRenderer.update();
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
+
+
+

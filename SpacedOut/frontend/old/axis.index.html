@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - 6DOF Controls (Position + Rotation)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050510; font-family: sans-serif; }
+        canvas { display: block; }
+        #video {
+            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            transform: scaleX(-1); border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #ui-layer {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; text-align: center; z-index: 20; pointer-events: none;
+        }
+        #controls-hint {
+            position: absolute; top: 20px; left: 20px; color: rgba(255,255,255,0.7);
+            z-index: 20; font-size: 14px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        <h2 id="loading-text">Loading AI Model...</h2>
+    </div>
+    
+    <div id="controls-hint">
+        <b>Controls:</b><br>
+        WASD: Pitch & Yaw<br>
+        Q / E: Roll<br>
+        Face: Look Around + Parallax<br>
+        Blink: Fire
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script type="module">
+        import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+        // ==========================================
+        // 1. THREE.JS SCENE SETUP
+        // ==========================================
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+        // We explicitly set rotation order to YXZ for standard First-Person camera behavior
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.rotation.order = 'YXZ'; 
+        camera.position.z = 10;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const targets = [];
+        const lasers = [];
+        const explosions = []; 
+
+        const createDebrisLayer = (color, baseZ, count, size) => {
+            const geometry = new THREE.IcosahedronGeometry(size, 0);
+            const material = new THREE.MeshStandardMaterial({ color: color, wireframe: true });
+            for (let i = 0; i < count; i++) {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, baseZ + (Math.random() - 0.5) * 10);
+                mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+                scene.add(mesh);
+                targets.push({ mesh: mesh, color: color }); 
+            }
+        };
+
+        createDebrisLayer(0x0055ff, -20, 100, 2); 
+        createDebrisLayer(0x00ffaa, -5, 50, 1);   
+        createDebrisLayer(0xff0055, 5, 20, 0.5);  
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(0, 0, 15);
+        scene.add(pointLight);
+
+        // ==========================================
+        // 2. KEYBOARD CONTROLS (NEW)
+        // ==========================================
+        const keys = { w: false, a: false, s: false, d: false, q: false, e: false };
+        let kbPitch = 0, kbYaw = 0, kbRoll = 0; // Keyboard accumulated rotation
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) keys[key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) keys[key] = false;
+        });
+
+        function updateKeyboardRotation() {
+            const turnSpeed = 0.03;
+            if (keys.w) kbPitch += turnSpeed; // Look up
+            if (keys.s) kbPitch -= turnSpeed; // Look down
+            if (keys.a) kbYaw += turnSpeed;   // Turn left
+            if (keys.d) kbYaw -= turnSpeed;   // Turn right
+            if (keys.q) kbRoll += turnSpeed;  // Roll left
+            if (keys.e) kbRoll -= turnSpeed;  // Roll right
+        }
+
+        // ==========================================
+        // 3. EXPLOSIONS & LASERS
+        // ==========================================
+        function createExplosion(x, y, z, colorHex) {
+            const particleCount = 40;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = [];
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z;
+                velocities.push(new THREE.Vector3((Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5));
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({ color: colorHex, size: 0.3, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending });
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            explosions.push({ mesh: particles, velocities: velocities, life: 1.0 });
+        }
+
+        let lastShotTime = 0;
+        function fireLaser() {
+            const now = Date.now();
+            if (now - lastShotTime < 500) return; 
+            lastShotTime = now;
+
+            const geometry = new THREE.CylinderGeometry(0.1, 0.1, 4, 8);
+            geometry.rotateX(Math.PI / 2); 
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            
+            [-0.5, 0.5].forEach(offsetX => {
+                const laser = new THREE.Mesh(geometry, material);
+                
+                // Spawn laser at camera position
+                laser.position.copy(camera.position);
+                // Apply the camera's exact rotation to the laser so it shoots where we look!
+                laser.quaternion.copy(camera.quaternion); 
+                
+                // Offset slightly to the left/right and forward
+                laser.translateX(offsetX);
+                laser.translateZ(-2);
+                
+                scene.add(laser);
+                lasers.push(laser);
+            });
+        }
+
+        // ==========================================
+        // 4. MEDIAPIPE AI TRACKING (POSITION + ROTATION)
+        // ==========================================
+        let faceLandmarker;
+        const video = document.getElementById("video");
+        
+        let targetCamPos = new THREE.Vector2(0, 0);
+        let camPitch = 0, camYaw = 0, camRoll = 0; // Webcam calculated rotation
+
+        async function initVisionAI() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+                runningMode: "VIDEO", numFaces: 1
+            });
+
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            video.srcObject = stream;
+            video.addEventListener("loadeddata", predictWebcam);
+            document.getElementById("ui-layer").style.display = "none"; 
+        }
+
+        let lastVideoTime = -1;
+        function getDistance(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); }
+
+        function predictWebcam() {
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                const results = faceLandmarker.detectForVideo(video, performance.now());
+                
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                    const landmarks = results.faceLandmarks[0];
+                    
+                    // -- TRANSLATION (Parallax via Nose) --
+                    const nose = landmarks[1]; 
+                    targetCamPos.x = (nose.x - 0.5) * -2.0 * 8.0;
+                    targetCamPos.y = -((nose.y - 0.5) * -2.0 * 8.0);
+
+                    // -- ROTATION (Pitch, Yaw, Roll) --
+                    const leftEar = landmarks[234];
+                    const rightEar = landmarks[454];
+                    const topHead = landmarks[10];
+                    const chin = landmarks[152];
+
+                    // Math.atan2 gets the angle between two points. 
+                    // We multiply to increase the sensitivity/exaggerate the movement.
+                    
+                    // Yaw (Look Left/Right) -> Track Z depth difference between ears
+                    camYaw = Math.atan2(rightEar.z - leftEar.z, rightEar.x - leftEar.x) * 1.5;
+                    
+                    // Pitch (Look Up/Down) -> Track Z depth difference between chin and forehead
+                    camPitch = -Math.atan2(chin.z - topHead.z, chin.y - topHead.y) * 1.5;
+                    
+                    // Roll (Tilt Left/Right) -> Track Y difference between ears
+                    camRoll = Math.atan2(rightEar.y - leftEar.y, rightEar.x - leftEar.x);
+
+                    // -- BLINK TO FIRE --
+                    if (getDistance(landmarks[159], landmarks[145]) < 0.012 && getDistance(landmarks[386], landmarks[374]) < 0.012) {
+                        fireLaser();
+                    }
+                }
+            }
+            requestAnimationFrame(predictWebcam);
+        }
+        initVisionAI();
+
+        // ==========================================
+        // 5. GAME RENDER & COLLISION LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updateKeyboardRotation();
+
+            // 1. Smoothly apply Translation (Parallax)
+            camera.position.x += (targetCamPos.x - camera.position.x) * 0.1;
+            camera.position.y += (targetCamPos.y - camera.position.y) * 0.1;
+
+            // 2. Smoothly apply combined Rotation (Webcam + Keyboard)
+            const targetPitch = kbPitch + camPitch;
+            const targetYaw = kbYaw + camYaw;
+            const targetRoll = kbRoll + camRoll;
+
+            camera.rotation.x += (targetPitch - camera.rotation.x) * 0.1;
+            camera.rotation.y += (targetYaw - camera.rotation.y) * 0.1;
+            camera.rotation.z += (targetRoll - camera.rotation.z) * 0.1;
+
+            // Animate Targets
+            targets.forEach(t => { t.mesh.rotation.x += 0.002; t.mesh.rotation.y += 0.003; });
+
+            // Animate Explosions
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i];
+                const pos = exp.mesh.geometry.attributes.position.array;
+                for (let p = 0; p < pos.length / 3; p++) {
+                    pos[p * 3] += exp.velocities[p].x;
+                    pos[p * 3 + 1] += exp.velocities[p].y;
+                    pos[p * 3 + 2] += exp.velocities[p].z;
+                }
+                exp.mesh.geometry.attributes.position.needsUpdate = true;
+                exp.life -= 0.03; 
+                exp.mesh.material.opacity = exp.life;
+                if (exp.life <= 0) {
+                    scene.remove(exp.mesh);
+                    exp.mesh.geometry.dispose();
+                    exp.mesh.material.dispose();
+                    explosions.splice(i, 1);
+                }
+            }
+
+            // Update Lasers
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                const laser = lasers[i];
+                
+                // Move laser "forward" based on its own rotation using translateZ
+                laser.translateZ(-1.5); 
+
+                // Check distance from camera to remove it if it goes too far
+                if (laser.position.distanceTo(camera.position) > 60) {
+                    scene.remove(laser);
+                    lasers.splice(i, 1);
+                    continue;
+                }
+
+                for (let j = targets.length - 1; j >= 0; j--) {
+                    const targetData = targets[j];
+                    if (laser.position.distanceTo(targetData.mesh.position) < 2.5) {
+                        createExplosion(targetData.mesh.position.x, targetData.mesh.position.y, targetData.mesh.position.z, targetData.color);
+                        scene.remove(targetData.mesh);
+                        targets.splice(j, 1);
+                        scene.remove(laser);
+                        lasers.splice(i, 1);
+                        break; 
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
