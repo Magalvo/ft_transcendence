@@ -18,6 +18,7 @@ export class Lobby {
     private leader: string | null = null; // Explicitly track the leader
     private socketToUserMap: Map<string, string>;
     private userDataCache: Map<string, { id: string; username: string }> = new Map();
+    private removeCallback?: () => void;
 
     public config: GameConfiguration;
     public slots: { left: LobbySlot[], right: LobbySlot[] } = { left: [], right: [] };
@@ -30,6 +31,10 @@ export class Lobby {
         this.roomId = roomId;
         this.config = new GameConfiguration("normal", "one_for_one");
         this.resizeSlots();
+    }
+
+    public setRemoveCallback(callback: () => void) {
+        this.removeCallback = callback;
     }
 
     /* --- CLIENT MANAGEMENT --- */
@@ -250,7 +255,10 @@ export class Lobby {
             players.push(new GamePlayer('human', socketId, 'spectator' as any, spectatorName, userId));
         }
 
-        this.gameInstance = new Game(this.io, this.config, players, this.roomId);
+        this.gameInstance = new Game(this.io, this.config, players, this.roomId, () => {
+            this.gameInstance = null;
+            if (this.removeCallback) this.removeCallback();
+        });
         this.gameInstance.start();
         this.emitToLobby('gameStarted');
     }

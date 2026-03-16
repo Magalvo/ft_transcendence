@@ -14,13 +14,16 @@ export class Game {
     private roomId: string;
     private engine: GameEngine;
     private gameLoopInterval: NodeJS.Timeout | null = null;
+    private onGameEnd?: () => void;
+    private socketHandlers: Map<string, Map<string, (...args: any[]) => void>> = new Map();
 
     private humansReady = 0;
     private totalHumans = 0;
 
-    constructor(io: Server, configurations: GameConfiguration, initialPlayers: GamePlayer[], roomId: string) {
+    constructor(io: Server, configurations: GameConfiguration, initialPlayers: GamePlayer[], roomId: string, onGameEnd?: () => void) {
         this.io = io;
         this.roomId = roomId;
+        this.onGameEnd = onGameEnd;
         this.engine = new GameEngine(this.io, configurations);
 
         this.totalHumans = 0;
@@ -66,35 +69,47 @@ export class Game {
         const socket = this.io.sockets.sockets.get(player.socket_id || "");
         if (!socket) return;
 
+        const socketId = player.socket_id || "";
+        if (!this.socketHandlers.has(socketId)) {
+            this.socketHandlers.set(socketId, new Map());
+        }
+        const handlers = this.socketHandlers.get(socketId)!;
+
         const teamPlayers = this.engine.data.players.filter(p => p.side === player.side);
         const myIndex = (player.side === 'spectator') ? -1 : teamPlayers.indexOf(player);
 
-        socket.on('requestGameInit', () => {
+        const requestGameInitHandler = () => {
             console.log(`Sending Init to player ${player.socket_id}`);
             socket.emit('init', {
                 side: player.side,
                 index: myIndex,
                 configs: this.engine.data.configs
             });
-        });
+        };
+        socket.on('requestGameInit', requestGameInitHandler);
+        handlers.set('requestGameInit', requestGameInitHandler);
 
-        socket.on('renderReady', () => {
+        const renderReadyHandler = () => {
             console.log(`Player ${player.socket_id} is ready to start!`);
             this.humansReady++;
             if (this.humansReady >= this.totalHumans)
                 this.startGameLoop();
-        });
+        };
+        socket.on('renderReady', renderReadyHandler);
+        handlers.set('renderReady', renderReadyHandler);
 
         if (player.side !== 'spectator') {
-            socket.on('input', (data) => {
+            const inputHandler = (data: any) => {
                 if (this.engine.data.status !== GameStatus.RUNNING) return;
                 if (data.side === player.side) {
                     if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
                     else this.engine.data.inputs.right[myIndex] = data.cmd;
                 }
-            });
+            };
+            socket.on('input', inputHandler);
+            handlers.set('input', inputHandler);
 
-            socket.on('pauseGame', () => {
+            const pauseGameHandler = () => {
                 const data = this.engine.data;
                 const now = Date.now();
                 const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
@@ -109,11 +124,13 @@ export class Game {
                     data.status = GameStatus.RUNNING;
                     this.emitToRoom('gameResumed');
                 }
-            });
+            };
+            socket.on('pauseGame', pauseGameHandler);
+            handlers.set('pauseGame', pauseGameHandler);
         }
 
         // Handle player leaving the game mid-session
-        socket.on('leaveGame', (data: any) => {
+        const leaveGameHandler = (data: any) => {
             const reason = data?.reason || 'unknown';
             console.log(`[Game] Player ${player.socket_id} (${player.side}) requested to leave. Reason: ${reason}`);
             
@@ -135,7 +152,9 @@ export class Game {
                 this.engine.data.status = GameStatus.ENDGAME;
                 this.engine.data.countdownTimer = 0;
             }
-        });
+        };
+        socket.on('leaveGame', leaveGameHandler);
+        handlers.set('leaveGame', leaveGameHandler);
     }
 
     private startGameLoop() {
@@ -188,6 +207,7 @@ export class Game {
                 this.engine.resetGame();
                 // CLEANUP AND END GAME
                 this.cleanup();
+                if (this.onGameEnd) this.onGameEnd();
             }
             this.emitToRoom('gameState', this.engine.getSnapshot());
             return;
@@ -258,6 +278,17 @@ export class Game {
 
     private cleanup() {
         console.log('🧹 [Game] Cleaning up game instance');
+        
+        // Remove socket handlers
+        for (const [socketId, handlers] of this.socketHandlers) {
+            const socket = this.io.sockets.sockets.get(socketId);
+            if (socket) {
+                for (const [event, handler] of handlers) {
+                    socket.off(event, handler);
+                }
+            }
+        }
+        this.socketHandlers.clear();
         
         // Stop the game loop
         if (this.gameLoopInterval) {

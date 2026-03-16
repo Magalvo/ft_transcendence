@@ -69,6 +69,7 @@ function handleReturnToMainMenu(data: GameData) {
         side: data.mySide,
         reason: 'user_requested'
       });
+      data.socket.emit('leaveLobbyPage');
     } catch (e) {
       console.error('Error notifying server of game leave:', e);
     }
