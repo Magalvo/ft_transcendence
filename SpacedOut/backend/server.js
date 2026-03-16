@@ -1077,6 +1077,34 @@ function getGridAltitude(nx, ny, nz) {
   return Math.max(0, rawGroundZ * TERRAIN_SCALE_Z) + TERRAIN_CLEARANCE_BIAS;
 }
 
+function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE + 80) {
+  const sx = Number(spawn?.x) || 0;
+  const sy = Number(spawn?.y) || 0;
+  const sz = Number(spawn?.z) || 0;
+  const distFromCenter = Math.sqrt(sx * sx + sy * sy + sz * sz);
+
+  const nx =
+    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sx / distFromCenter : 0;
+  const ny =
+    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sy / distFromCenter : 1;
+  const nz =
+    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sz / distFromCenter : 0;
+
+  const safeRadius = WORLD_RADIUS + getGridAltitude(nx, ny, nz) + clearance;
+  const dx = Number.isFinite(spawn?.dx) ? spawn.dx : 0;
+  const dy = Number.isFinite(spawn?.dy) ? spawn.dy : 1;
+  const dz = Number.isFinite(spawn?.dz) ? spawn.dz : 0;
+
+  return {
+    x: nx * safeRadius,
+    y: ny * safeRadius,
+    z: nz * safeRadius,
+    dx,
+    dy,
+    dz,
+  };
+}
+
 /* function sampleTerrainRawElevation(nx, ny, nz) {
   let elevation = 0;
   let currentAmplitude = TERRAIN_HEIGHT_AMPLITUDE;
@@ -1236,13 +1264,18 @@ function estimateVelocity(player) {
   };
 }
 
-function initializeBotState(bot, botConfig, now) {
+function initializeBotState(bot, botConfig, now, spawnPose) {
   bot.isBot = true;
   bot.authenticated = true;
   bot.username = `BOT-${botConfig.id}`;
   bot.botProfile = botConfig.profile;
   bot.speed = 10;
-  bot.spawn = { ...botConfig.spawn, dx: 0, dy: 1, dz: 0 };
+  bot.spawn = {
+    ...spawnPose,
+    dx: Number.isFinite(spawnPose?.dx) ? spawnPose.dx : 0,
+    dy: Number.isFinite(spawnPose?.dy) ? spawnPose.dy : 1,
+    dz: Number.isFinite(spawnPose?.dz) ? spawnPose.dz : 0,
+  };
   bot.aiMode = "PATROL";
   bot.aiTargetId = null;
   bot.aiTargetDistance = Infinity;
@@ -1602,14 +1635,16 @@ function spawnBotsIfNeeded() {
 
   const botInitNow = Date.now();
   BOTS.forEach((botConfig) => {
+    const spawnPose = projectSpawnAboveTerrain(botConfig.spawn);
     const p = createPlayerState();
-    p.x = botConfig.spawn.x;
-    p.y = botConfig.spawn.y;
-    p.z = botConfig.spawn.z;
-    p.dx = 0;
-    p.dy = 1;
-    p.dz = 0;
-    initializeBotState(p, botConfig, botInitNow);
+    p.x = spawnPose.x;
+    p.y = spawnPose.y;
+    p.z = spawnPose.z;
+    p.dx = spawnPose.dx;
+    p.dy = spawnPose.dy;
+    p.dz = spawnPose.dz;
+    initializeBotState(p, botConfig, botInitNow, spawnPose);
+    pushHistorySample(p, botInitNow);
     players[botConfig.id] = p;
     publishPilotIdentity(botConfig.id, p);
   });
