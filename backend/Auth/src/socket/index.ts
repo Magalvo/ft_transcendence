@@ -211,6 +211,13 @@ export function setupSocketIO(httpServer: any) {
       
       const lobbyId = generateLobbyId();
       const newLobby = new Lobby(io, socketToUserMap, `lobby:${lobbyId}`);
+      newLobby.setRemoveCallback(() => {
+        // Remove lobby if empty after game ends
+        if (newLobby.getClientCount() === 0) {
+          lobbiesRegistry.delete(lobbyId);
+          broadcastLobbyList();
+        }
+      });
       
       
       const modeMap: Record<string, 'one_for_one' | 'two_for_two' | 'three_for_three'> = {
