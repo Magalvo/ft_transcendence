@@ -6,62 +6,64 @@ services:
       dockerfile: Dockerfile
     environment:
       - AUTH_UPSTREAM=http://auth:3000
-    ports:
-      - "3333:3333"
+    expose:
+      - "3333"
     networks:
       - transcendencenet
     restart: on-failure
     depends_on:
       - auth
+
   auth:
-      container_name: Auth
-      build:
-        context: ./backend/Auth
-        dockerfile: Dockerfile
-      ports:
-        - "3000:3000"
-      env_file:
-        - ./backend/Auth/.env
-      environment:
-        - AVATARS_PATH=/usr/src/auth/public/avatars
-        - DB_FILE=/usr/src/auth/data/dev.sqlite
-        - SPACEDOUT_WS_URL=ws://localhost:3030
-      volumes:
-        - auth_avatars:/usr/src/auth/public/avatars
-        - auth_database:/usr/src/auth/data
-      networks:
-        - transcendencenet
-      restart: on-failure
+    container_name: Auth
+    build:
+      context: ./backend/Auth
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/Auth/.env
+    environment:
+      - AVATARS_PATH=/usr/src/auth/public/avatars
+      - DB_FILE=/usr/src/auth/data/dev.sqlite
+      - FRONTEND_URL=https://localhost:8443
+      - SPACEDOUT_WS_URL=/spacedout-ws
+    expose:
+      - "3000"
+    volumes:
+      - auth_avatars:/usr/src/auth/public/avatars
+      - auth_database:/usr/src/auth/data
+    networks:
+      - transcendencenet
+    restart: on-failure
+
   frontend:
-      container_name: Frontend
-      build:
-        context: ./frontend
-        dockerfile: Dockerfile
-      environment:
-        - VITE_API_URL=http://localhost:3333
-        - VITE_WS_URL=http://localhost:3000
-        - VITE_SPACEDOUT_WS_URL=ws://localhost:3030
-      ports:
-        - "5173:5173"
-      networks:
-        - transcendencenet
-      restart: on-failure
-      depends_on:
-        - gateway
-        - spacedout
+    container_name: Frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:443"
+    networks:
+      - transcendencenet
+    restart: on-failure
+    depends_on:
+      - gateway
+      - auth
+      - spacedout
 
   spacedout:
-      container_name: SpacedOut
-      build:
-        context: ./SpacedOut/backend
-        dockerfile: Dockerfile
-      env_file:
-        - ./backend/Auth/.env
-      ports:
-        - "3030:3000"
-      networks:
-        - transcendencenet
-      restart: on-failure
+    container_name: SpacedOut
+    build:
+      context: ./SpacedOut/backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/Auth/.env
+    expose:
+      - "3000"
+    networks:
+      - transcendencenet
+    restart: on-failure
 
 volumes:
   auth_avatars:

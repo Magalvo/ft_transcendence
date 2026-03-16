@@ -97,8 +97,8 @@ export class SpacedOutPage extends AbstractComponent {
                 <span>M: Toggle FACE / KEYBOARD</span>
                 <span>P: Pause / Resume</span>
                 <span>WASD / Arrows: Manual flight backup</span>
-                <span>Space: Lasers | Q: Missile | F: Flares</span>
-                <span>Shift / Ctrl: Throttle / Airbrake | C: Recalibrate</span>
+                <span>Space: Lasers | Shift / Q: Missile | F: Flares</span>
+                <span>Mouse Wheel: Throttle | Ctrl: Airbrake | C: Recalibrate</span>
                 <span>B: Back to Lobby | R / V / [ / ] after death</span>
               </div>
 

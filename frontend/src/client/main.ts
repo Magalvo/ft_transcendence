@@ -1,5 +1,6 @@
 import { GameScene } from "./index.js";
 import { io, Socket } from "socket.io-client";
+import { WS_URL } from "../services/RuntimeConfig";
 
 /* --- STATE --- */
 let socket: Socket;
@@ -21,7 +22,7 @@ const leaderMsg = document.getElementById('leader-msg')!;
 const game = new GameScene();
 
 function init() {
-    socket = io("http://localhost:3000");
+    socket = io(WS_URL);
 
     socket.on('connect', () => {
         console.log("Connected to Lobby");

@@ -20,6 +20,24 @@ import UserStatsDTO from "../dto/userStats.dto.js";
 
 const AVATARS_PATH = process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
 
+function getFrontendBaseUrl(headers: Record<string, unknown>): string {
+  const forwardedProto = String(headers["x-forwarded-proto"] || "").trim();
+  const forwardedHost = String(headers["x-forwarded-host"] || "").trim();
+  const origin = String(headers.origin || "").trim();
+
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  if (origin) {
+    return origin.replace(/\/+$/g, "");
+  }
+
+  return (process.env.FRONTEND_URL || "https://localhost:8443").replace(
+    /\/+$/g,
+    "",
+  );
+}
+
 export default async function authRoutes(app: FastifyInstance) {
   const JWT_SECRET = process.env.JWT_SECRET!;
   const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -72,7 +90,10 @@ export default async function authRoutes(app: FastifyInstance) {
             }
 
             const jwtToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
-            reply.redirect(`http://localhost:3000/?token=${jwtToken}`);
+            const frontendBaseUrl = getFrontendBaseUrl(
+              req.headers as Record<string, unknown>,
+            );
+            reply.redirect(`${frontendBaseUrl}/?token=${jwtToken}`);
           } catch (err: any) {
             app.log.error("Google OAuth error:", err);
             sendError(reply, "Google login failed", 500);

@@ -58,7 +58,7 @@ export default async function gameRoutes(app: FastifyInstance) {
         return {
           token,
           expiresInSeconds,
-          wsUrl: process.env.SPACEDOUT_WS_URL || "ws://localhost:3030",
+          wsUrl: process.env.SPACEDOUT_WS_URL || "/spacedout-ws",
           user: {
             id: user.id,
             username: user.username,

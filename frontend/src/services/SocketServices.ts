@@ -1,9 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
+import { WS_URL } from './RuntimeConfig';
 
 class SocketService {
   private socket: Socket | null = null;
 
-  public init(url = 'http://localhost:3000'): Socket {
+  public init(url = WS_URL): Socket {
     if (!this.socket) {
       this.socket = io(url);
     }

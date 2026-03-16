@@ -501,6 +501,23 @@ export class SpacedOutGame {
       this.isLaserTriggerHeld = false;
       this.laserShotQueued = false;
     };
+    const wheelHandler = (event: WheelEvent) => {
+      if (!this.canControlShip() || this.isPaused) {
+        return;
+      }
+
+      const direction = Math.sign(event.deltaY);
+      if (direction === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      this.speed = THREE.MathUtils.clamp(
+        this.speed - direction * 12,
+        MIN_FLIGHT_SPEED,
+        MAX_FLIGHT_SPEED,
+      );
+    };
     const keydownHandler = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       if (this.shouldCaptureGameplayKey(event, key)) {
@@ -550,6 +567,17 @@ export class SpacedOutGame {
         return;
       }
 
+      if (
+        key === "shift" &&
+        !event.repeat &&
+        !this.isPaused &&
+        this.canFireWeapons()
+      ) {
+        event.preventDefault();
+        this.combatManager?.fireMissile(this.localShip!, this.speed);
+        return;
+      }
+
       if (key === "p" && !event.repeat) {
         event.preventDefault();
         this.togglePause();
@@ -578,6 +606,7 @@ export class SpacedOutGame {
 
     window.addEventListener("resize", resizeHandler);
     window.addEventListener("blur", blurHandler);
+    window.addEventListener("wheel", wheelHandler, { passive: false });
     window.addEventListener("keydown", keydownHandler);
     window.addEventListener("keyup", keyupHandler);
 
@@ -586,6 +615,9 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("blur", blurHandler),
+    );
+    this.cleanupCallbacks.push(() =>
+      window.removeEventListener("wheel", wheelHandler),
     );
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("keydown", keydownHandler),
@@ -1760,12 +1792,6 @@ export class SpacedOutGame {
       this.controlMode === "FACE" ? this.vision.pitchInput : manualPitch;
 
     if (this.canControlShip()) {
-      if (this.pressedKeys.has("shift")) {
-        this.speed = Math.min(
-          MAX_FLIGHT_SPEED,
-          this.speed + THROTTLE_ACCELERATION * delta,
-        );
-      }
       if (this.pressedKeys.has("control")) {
         this.speed = Math.max(
           MIN_FLIGHT_SPEED,
