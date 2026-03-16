@@ -18,16 +18,16 @@ Make sure you have the following installed on your machine:
 ## ⚡ Quick Start
 
 1.  **Clone the repository:**
-    \`\`\`bash
+    ```bash
     git clone <your-repository-url>
     cd ft_transcendence
-    \`\`\`
+    ```
 
 2.  **Start the application:**
     The provided `Makefile` will automatically generate the required `.env` files and build the Docker containers.
-    \`\`\`bash
+    ```bash
     make
-    \`\`\`
+    ```
 
 3.  **Access the application:**
     * **Frontend (App):** [http://localhost:5173](http://localhost:5173)
@@ -35,14 +35,14 @@ Make sure you have the following installed on your machine:
 ## 🛑 Stopping the Application
 
 To safely stop and remove the containers, run:
-\`\`\`bash
+```bash
 make down
-\`\`\`
+```
 
 To completely clean up (including volumes and database resets), run:
-\`\`\`bash
+```bash
 make fclean
-\`\`\`
+```
 
 ## 📁 Project Structure
 
