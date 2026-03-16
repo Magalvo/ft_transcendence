@@ -22,8 +22,9 @@ function generateLobbyId(): string {
 export function setupSocketIO(httpServer: any) {
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: "http://localhost:5174",
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 
@@ -152,8 +153,8 @@ export function setupSocketIO(httpServer: any) {
 
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
-    
-  
+
+
     const authUserId = (socket.handshake.auth?.userId as string | undefined) || (socket.data.userId as string | undefined);
     if (authUserId) {
       socketToUserMap.set(socket.id, authUserId);
@@ -161,7 +162,7 @@ export function setupSocketIO(httpServer: any) {
       console.log(`Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`);
     }
 
-    
+
     const authTokenRaw = socket.handshake.auth?.token || socket.handshake.headers.authorization;
     if (authTokenRaw && !socketToUserMap.has(socket.id)) {
       try {
@@ -183,13 +184,13 @@ export function setupSocketIO(httpServer: any) {
     if (!socketToUserMap.has(socket.id)) {
       socket.emit("requestUserAuth");
     }
-    
+
     socket.on("userAuth", (data: { userId: string }) => {
       if (data.userId) {
         socketToUserMap.set(socket.id, data.userId);
-        socket.data.userId = data.userId;  
+        socket.data.userId = data.userId;
         console.log(`Mapped socket ${socket.id} to user ${data.userId}`);
-       
+
         getActiveLobby(socket.id).broadcastStatePublic();
       }
     });
@@ -208,7 +209,7 @@ export function setupSocketIO(httpServer: any) {
 
     socket.on("createLobby", async (data: { mode: string; isPrivate: boolean; code?: string }) => {
       console.log(`📋 Client ${socket.id} creating lobby: ${data.mode} (${data.isPrivate ? "private" : "public"})`);
-      
+
       const lobbyId = generateLobbyId();
       const newLobby = new Lobby(io, socketToUserMap, `lobby:${lobbyId}`);
       newLobby.setRemoveCallback(() => {
@@ -218,16 +219,16 @@ export function setupSocketIO(httpServer: any) {
           broadcastLobbyList();
         }
       });
-      
-      
+
+
       const modeMap: Record<string, 'one_for_one' | 'two_for_two' | 'three_for_three'> = {
         '1v1': 'one_for_one',
         '2v2': 'two_for_two',
         '3v3': 'three_for_three',
       };
-      
+
       newLobby.setGameMode(socket.id, modeMap[data.mode] || 'one_for_one');
-      
+
       const privateCode = data.isPrivate ? normalizeLobbyCode(data.code) : undefined;
       if (data.isPrivate && !privateCode) {
         socket.emit("joinLobbyError", { message: "Private lobby requires a valid code" });
@@ -242,9 +243,9 @@ export function setupSocketIO(httpServer: any) {
       });
 
       moveSocketToLobby(socket.id, lobbyId);
-      
-      socket.emit("lobbyCreated", { 
-        lobbyId, 
+
+      socket.emit("lobbyCreated", {
+        lobbyId,
         code: privateCode
       });
 
@@ -291,7 +292,7 @@ export function setupSocketIO(httpServer: any) {
 
     socket.on("joinLobbyById", async (data: { lobbyId: string; code?: string }) => {
       console.log(`🎮 Client ${socket.id} attempting to join lobby ${data.lobbyId}`);
-      
+
       const entry = lobbiesRegistry.get(data.lobbyId);
       if (!entry) {
         socket.emit("joinLobbyError", { message: "Lobby not found" });
@@ -307,14 +308,14 @@ export function setupSocketIO(httpServer: any) {
           return;
         }
       }
-      
+
       if (!moveSocketToLobby(socket.id, data.lobbyId)) {
         socket.emit("joinLobbyError", { message: "Could not join lobby" });
         return;
       }
 
       socket.emit("joinLobbySuccess", { lobbyId: data.lobbyId });
-      
+
       await entry.lobby.broadcastStatePublic();
       await broadcastLobbyList();
     });
