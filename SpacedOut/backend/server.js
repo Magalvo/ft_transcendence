@@ -561,10 +561,12 @@ function handleBinaryMessage(ws, message) {
     if (!player || !player.authenticated) return;
     if (ws.numericId !== terrainHostId) return; // Security: Only Host can upload the map
 
-    const header = new Uint32Array(message, 0, 2);
+    const safeCopy = message.slice(0);
+
+    const header = new Uint32Array(safeCopy, 0, 2);
     serverGridRows = header[0];
     serverGridCols = header[1];
-    serverTerrainGrid = new Float32Array(message, 8);
+    serverTerrainGrid = new Float32Array(safeCopy, 8);
 
     console.log(`🗺️ [TERRAIN] Host uploaded collision map: ${serverGridRows}x${serverGridCols}`);
     return;
