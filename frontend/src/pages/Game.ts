@@ -9,9 +9,18 @@ import type { Socket } from 'socket.io-client';
 export class GamePage extends AbstractComponent {
   private gameScene: GameScene | null = null;
   private returnToMenuHandler: ((event: Event) => void) | null = null;
+  private tournamentId: string | null;
+  private matchId: string | null;
+  private p1Id: string | null;
+  private p2Id: string | null;
 
   constructor() {
     super('div', 'flex flex-col h-screen bg-black overflow-hidden');
+    const params = new URLSearchParams(window.location.search);
+    this.tournamentId = params.get('tournamentId');
+    this.matchId = params.get('matchId');
+    this.p1Id = params.get('p1');
+    this.p2Id = params.get('p2');
   }
 
   public render(): void {
@@ -71,25 +80,19 @@ export class GamePage extends AbstractComponent {
             window.removeEventListener('match-recording-error', recordErrorHandler);
             
             
-            import('../main').then(({ router }) => {
-                
-                if (this.gameScene) {
-                    this.gameScene.dispose();
-                    this.gameScene = null;
-                }
-                
-                console.log('🚀 Navigating to tournament/dashboard from game');
-                
-                // Return to tournament if it exists, otherwise dashboard
-                if (this.tournamentId) {
-                    router.navigate('/tournament');
-                } else {
-                    router.navigate('/dashboard');
-                }
-            }).catch((error) => {
-                console.error('Error navigating from game:', error);
-                window.location.href = '/dashboard';
-            });
+            if (this.gameScene) {
+              this.gameScene.dispose();
+              this.gameScene = null;
+            }
+
+            console.log('🚀 Navigating to tournament/dashboard from game');
+
+            // Return to tournament if it exists, otherwise dashboard
+            if (this.tournamentId) {
+              navigateTo('/tournament');
+            } else {
+              navigateTo('/dashboard');
+            }
         };
 
         window.addEventListener('game-return-to-menu', this.returnToMenuHandler);

@@ -2,7 +2,6 @@ import { AbstractComponent } from "../../core/Component";
 import { navigateTo } from "../../core/AppRouter";
 import { TournamentMatch } from "../../core/TournamentManager";
 import { TournamentManager } from "../../core/TournamentManager";
-import { router } from "../../main";
 
 export class TournamentBracket extends AbstractComponent {
   private matches: TournamentMatch[];
@@ -80,12 +79,12 @@ export class TournamentBracket extends AbstractComponent {
           `;
 
 
-      if (!match.winner && match.p1 !== "TBD" && match.p2 !== "TBD") {
+      if (!match.winner_id && match.player1_id && match.player2_id) {
         const playBtn = document.createElement("button");
         playBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition";
         playBtn.textContent = "JOGAR PARTIDA";
         playBtn.onclick = () => {
-          navigateTo(`/game?matchId=${match.id}&p1=${match.p1}&p2=${match.p2}`);
+          navigateTo(`/game?matchId=${match.id}&p1=${match.player1_id}&p2=${match.player2_id}&tournamentId=${match.tournament_id}`);
         };
         matchCard.appendChild(playBtn);
       }
