@@ -38,6 +38,11 @@ services:
       - FRONTEND_URL=https://localhost:8443
       - PORT=3000
       - SPACEDOUT_WS_URL=/spacedout-ws
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google_client_secret
+    secrets:
+      - jwt_secret
+      - google_client_secret
     expose:
       - "3000"
     healthcheck:
@@ -116,3 +121,9 @@ volumes:
 networks:
   transcendencenet:
     driver: bridge
+
+secrets:
+  jwt_secret:
+    file: ./.secrets/jwt_secret.txt
+  google_client_secret:
+    file: ./.secrets/google_client_secret.txt
