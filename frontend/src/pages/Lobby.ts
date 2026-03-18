@@ -49,24 +49,21 @@ export class LobbyPage extends AbstractComponent {
   private isTransitioningToGame = false;
   private selectedLobbyId: string | null = null;
 
-    private slotsLeftEl: HTMLElement | null = null;
-    private slotsRightEl: HTMLElement | null = null;
-    private benchListEl: HTMLElement | null = null;
-    private leaderControls: HTMLElement | null = null;
-    private btnStart: HTMLButtonElement | null = null;
-    private leaderMsg: HTMLElement | null = null;
-    private powerUpsButton: HTMLButtonElement | null = null;
-    private btnLeave: HTMLButtonElement | null = null;
+  private slotsLeftEl: HTMLElement | null = null;
+  private slotsRightEl: HTMLElement | null = null;
+  private benchListEl: HTMLElement | null = null;
+  private leaderControls: HTMLElement | null = null;
+  private btnStart: HTMLButtonElement | null = null;
+  private leaderMsg: HTMLElement | null = null;
+  private powerUpsButton: HTMLButtonElement | null = null;
+  private btnLeave: HTMLButtonElement | null = null;
 
-
-    private btnMode1: HTMLButtonElement | null = null;
-    private btnMode2: HTMLButtonElement | null = null;
-    private btnMode3: HTMLButtonElement | null = null;
-
-
-    private btnDurFast: HTMLButtonElement | null = null;
-    private btnDurNormal: HTMLButtonElement | null = null;
-    private btnDurLong: HTMLButtonElement | null = null;
+  private btnMode1: HTMLButtonElement | null = null;
+  private btnMode2: HTMLButtonElement | null = null;
+  private btnMode3: HTMLButtonElement | null = null;
+  private btnDurFast: HTMLButtonElement | null = null;
+  private btnDurNormal: HTMLButtonElement | null = null;
+  private btnDurLong: HTMLButtonElement | null = null;
 
   private onSocketConnect = (): void => {
     this.myId = this.socket?.id ?? '';
@@ -91,21 +88,24 @@ export class LobbyPage extends AbstractComponent {
     navigateTo('/');
   };
 
-    private onJoinLobbyError = (data: { message: string }): void => {
-        alert(`Failed to join lobby: ${data.message}`);
-        router.navigate('/find-game');
-    };
+  private onJoinLobbyError = (data: { message: string }): void => {
+    alert(t('lobby.error.join', { message: data.message }));
+    navigateTo('/find-game');
+  };
 
-    private onLobbyStartError = (data: { message: string; conflicts?: string[] }): void => {
-        // Only the leader should see start errors, since they initiated start
-        if (!this.isLeader) return;
+  private onLobbyStartError = (data: {
+    message: string;
+    conflicts?: string[];
+  }): void => {
+    if (!this.isLeader) return;
 
-        const conflictInfo = Array.isArray(data.conflicts) && data.conflicts.length > 0
-            ? `\nConflicting players (already in a game): ${data.conflicts.join(', ')}`
-            : '';
+    const conflictInfo =
+      Array.isArray(data.conflicts) && data.conflicts.length > 0
+        ? `\nConflicting players: ${data.conflicts.join(', ')}`
+        : '';
 
-        alert(`${data.message}${conflictInfo}`);
-    };
+    alert(`${data.message}${conflictInfo}`);
+  };
 
   constructor() {
     super('div', 'flex flex-col h-screen bg-black overflow-auto');
@@ -201,10 +201,12 @@ export class LobbyPage extends AbstractComponent {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setMode', 'one_for_one');
     });
+
     this.btnMode2?.addEventListener('click', () => {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setMode', 'two_for_two');
     });
+
     this.btnMode3?.addEventListener('click', () => {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setMode', 'three_for_three');
@@ -214,10 +216,12 @@ export class LobbyPage extends AbstractComponent {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setDuration', 'fast');
     });
+
     this.btnDurNormal?.addEventListener('click', () => {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setDuration', 'normal');
     });
+
     this.btnDurLong?.addEventListener('click', () => {
       if (!this.isLeader) return;
       this.socket?.emit('lobby_setDuration', 'long');
@@ -233,15 +237,12 @@ export class LobbyPage extends AbstractComponent {
       this.socket?.emit('lobby_start');
     });
 
-        this.btnLeave?.addEventListener('click', () => {
-            console.log('Leaving lobby');
-            if (confirm('Are you sure you want to leave the lobby?')) {
-                this.leaveCurrentLobby();
-
-                router.navigate('/');
-            }
-        });
-    }
+    this.btnLeave?.addEventListener('click', () => {
+      if (!window.confirm(t('lobby.confirmLeave'))) return;
+      this.leaveCurrentLobby();
+      navigateTo('/');
+    });
+  }
 
   private joinRequestedLobby(): void {
     if (!this.socket) return;
@@ -279,19 +280,15 @@ export class LobbyPage extends AbstractComponent {
     const currentUser = UserStore.getUser() || TokenManager.getUser();
     this.socket = socketService.init(undefined, currentUser?.id);
 
-        this.myId = this.socket?.id ?? '';
-        console.log(` Lobby: My socket ID is ${this.myId}`);
-
-        this.socket.on('connect', this.onSocketConnect);
-        this.socket.on('lobbyState', this.onLobbyState);
-        this.socket.on('gameStarted', this.onGameStarted);
-        this.socket.on('kicked', this.onKicked);
-        this.socket.on('joinLobbyError', this.onJoinLobbyError);
-        this.socket.on('lobby_start_error', this.onLobbyStartError);
-
+    this.socket.on('connect', this.onSocketConnect);
+    this.socket.on('lobbyState', this.onLobbyState);
+    this.socket.on('gameStarted', this.onGameStarted);
+    this.socket.on('kicked', this.onKicked);
+    this.socket.on('joinLobbyError', this.onJoinLobbyError);
+    this.socket.on('lobby_start_error', this.onLobbyStartError);
 
     if (this.socket.connected) {
-      this.joinRequestedLobby();
+      this.onSocketConnect();
     }
   }
 
@@ -332,6 +329,7 @@ export class LobbyPage extends AbstractComponent {
       this.btnDurLong,
       this.powerUpsButton,
     ];
+
     settingsBtns.forEach((btn) => {
       if (!btn) return;
       btn.disabled = !this.isLeader;
@@ -347,13 +345,13 @@ export class LobbyPage extends AbstractComponent {
     this.btnMode3?.classList.toggle('ring-2', players === 3);
     this.btnMode3?.classList.toggle('ring-yellow-400', players === 3);
 
-    const dur = state.config.duration_label;
-    this.btnDurFast?.classList.toggle('ring-2', dur === 'fast');
-    this.btnDurFast?.classList.toggle('ring-yellow-400', dur === 'fast');
-    this.btnDurNormal?.classList.toggle('ring-2', dur === 'normal');
-    this.btnDurNormal?.classList.toggle('ring-yellow-400', dur === 'normal');
-    this.btnDurLong?.classList.toggle('ring-2', dur === 'long');
-    this.btnDurLong?.classList.toggle('ring-yellow-400', dur === 'long');
+    const duration = state.config.duration_label;
+    this.btnDurFast?.classList.toggle('ring-2', duration === 'fast');
+    this.btnDurFast?.classList.toggle('ring-yellow-400', duration === 'fast');
+    this.btnDurNormal?.classList.toggle('ring-2', duration === 'normal');
+    this.btnDurNormal?.classList.toggle('ring-yellow-400', duration === 'normal');
+    this.btnDurLong?.classList.toggle('ring-2', duration === 'long');
+    this.btnDurLong?.classList.toggle('ring-yellow-400', duration === 'long');
 
     if (this.powerUpsButton) {
       this.powerUpsButton.textContent = this.getPowerUpsLabel(this.currentPowerUpsState);
@@ -368,15 +366,15 @@ export class LobbyPage extends AbstractComponent {
 
   private renderBench(bench: BenchPlayer[]): void {
     if (!this.benchListEl) return;
-    this.benchListEl.innerHTML = '';
+    const benchListEl = this.benchListEl;
+    benchListEl.innerHTML = '';
 
     bench.forEach((player) => {
       const playerEl = document.createElement('button');
       playerEl.type = 'button';
-      playerEl.id = `bench-${player.socketId}`;
       playerEl.className =
         'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left transition';
-      playerEl.textContent = `👤 ${player.username}`;
+      playerEl.textContent = player.username;
 
       if (player.socketId === this.myId) {
         playerEl.classList.add('ring-1', 'ring-yellow-400');
@@ -397,7 +395,7 @@ export class LobbyPage extends AbstractComponent {
         playerEl.classList.add('opacity-80', 'cursor-default');
       }
 
-      this.benchListEl?.appendChild(playerEl);
+      benchListEl.appendChild(playerEl);
     });
   }
 
@@ -417,29 +415,33 @@ export class LobbyPage extends AbstractComponent {
       if (slot.content === 'empty') {
         row.classList.add('border-dashed', 'opacity-70');
         row.textContent = t('lobby.emptySlot');
+
         if (this.isLeader) {
           row.classList.add('cursor-pointer', 'hover:bg-neutral-600');
           row.addEventListener('click', () => {
             if (!this.socket) return;
+
             if (!this.selectedBenchPlayer) {
               this.socket.emit('lobby_addBot', { side, slotIndex: slot.index });
               return;
             }
 
-                        this.socket.emit('lobby_movePlayer', {
-                            targetId: this.selectedBenchPlayer,
-                            side,
-                            slotIndex: slot.index,
-                        });
-                        this.selectedBenchPlayer = null;
-                    });
-                }
-            } else if (slot.content === 'human') {
-                const label = document.createElement('span');
-
-                const displayName = slot.playerName || (slot.socketId && playerData?.[slot.socketId]?.username) || 'Player';
-                label.textContent = `👤 ${displayName}`;
-                row.appendChild(label);
+            this.socket.emit('lobby_movePlayer', {
+              targetId: this.selectedBenchPlayer,
+              side,
+              slotIndex: slot.index,
+            });
+            this.selectedBenchPlayer = null;
+          });
+        }
+      } else if (slot.content === 'human') {
+        const label = document.createElement('span');
+        const displayName =
+          slot.playerName ||
+          (slot.socketId ? playerData?.[slot.socketId]?.username : '') ||
+          t('lobby.playerFallback');
+        label.textContent = displayName;
+        row.appendChild(label);
 
         if (this.isLeader && slot.socketId) {
           const actions = document.createElement('div');
@@ -462,7 +464,7 @@ export class LobbyPage extends AbstractComponent {
           kickBtn.textContent = t('lobby.action.kick');
           kickBtn.addEventListener('click', (event) => {
             event.stopPropagation();
-            if (confirm(t('lobby.confirmKick', { name: displayName }))) {
+            if (window.confirm(t('lobby.confirmKick', { name: displayName }))) {
               this.socket?.emit('lobby_kick', { socketId: slot.socketId });
             }
           });
@@ -496,15 +498,27 @@ export class LobbyPage extends AbstractComponent {
 
           actions.append(
             createBtn('-', 'bg-neutral-800', () =>
-              this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: -1 })
+              this.socket?.emit('lobby_botLevel', {
+                side,
+                slotIndex: slot.index,
+                delta: -1,
+              })
             ),
             createBtn('+', 'bg-neutral-800', () =>
-              this.socket?.emit('lobby_botLevel', { side, slotIndex: slot.index, delta: 1 })
+              this.socket?.emit('lobby_botLevel', {
+                side,
+                slotIndex: slot.index,
+                delta: 1,
+              })
             ),
             createBtn('X', 'bg-red-700', () =>
-              this.socket?.emit('lobby_removeBot', { side, slotIndex: slot.index })
+              this.socket?.emit('lobby_removeBot', {
+                side,
+                slotIndex: slot.index,
+              })
             )
           );
+
           row.appendChild(actions);
         }
       }
@@ -513,26 +527,24 @@ export class LobbyPage extends AbstractComponent {
     });
   }
 
-    public onDestroy(): void {
-        console.log('🧹 Lobby cleanup: Removing listeners');
+  private getPowerUpsLabel(enabled: boolean): string {
+    return t('lobby.powerUps', {
+      state: enabled ? t('lobby.powerUps.on') : t('lobby.powerUps.off'),
+    });
+  }
 
-        if (this.socket) {
-            if (!this.isTransitioningToGame) {
-                console.log('🚪 Leaving lobby (navigating away)');
-                this.leaveCurrentLobby();
-            } else {
-                console.log('🎮 Transitioning to game, keeping lobby state');
-            }
+  public onDestroy(): void {
+    if (!this.socket) return;
 
-            this.socket.off('connect', this.onSocketConnect);
-            this.socket.off('lobbyState', this.onLobbyState);
-            this.socket.off('gameStarted', this.onGameStarted);
-            this.socket.off('kicked', this.onKicked);
-            this.socket.off('joinLobbyError', this.onJoinLobbyError);
-            this.socket.off('lobby_start_error', this.onLobbyStartError);
-
-
-            console.log('Lobby listeners removed');
-        }
+    if (!this.isTransitioningToGame) {
+      this.leaveCurrentLobby();
     }
+
+    this.socket.off('connect', this.onSocketConnect);
+    this.socket.off('lobbyState', this.onLobbyState);
+    this.socket.off('gameStarted', this.onGameStarted);
+    this.socket.off('kicked', this.onKicked);
+    this.socket.off('joinLobbyError', this.onJoinLobbyError);
+    this.socket.off('lobby_start_error', this.onLobbyStartError);
+  }
 }
