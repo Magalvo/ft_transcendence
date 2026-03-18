@@ -396,6 +396,78 @@ if (!playerStatsExists) {
   }
 }
 
+// Create tournaments table
+const tournamentsExists = await db.schema.hasTable("tournaments");
+
+if (!tournamentsExists) {
+  await db.schema.createTable("tournaments", (table) => {
+    table.uuid("id").primary().notNullable();
+    table.string("name").notNullable();
+    table.uuid("created_by").notNullable();
+    table.string("status").notNullable().defaultTo("active"); // active, completed
+    table.uuid("winner_id").nullable();
+    table.integer("player_count").notNullable().defaultTo(4);
+    table.timestamp("created_at").notNullable();
+    table.timestamp("completed_at").nullable();
+
+    table.foreign("created_by").references("id").inTable("users").onDelete("CASCADE");
+    table.foreign("winner_id").references("id").inTable("users").onDelete("SET NULL");
+  });
+  console.log("Table 'tournaments' created!");
+} else {
+  console.log("Table 'tournaments' already exists");
+}
+
+// Create tournament_participants table
+const tournamentsParticipantsExists = await db.schema.hasTable("tournament_participants");
+
+if (!tournamentsParticipantsExists) {
+  await db.schema.createTable("tournament_participants", (table) => {
+    table.increments("id").primary();
+    table.uuid("tournament_id").notNullable();
+    table.uuid("user_id").notNullable();
+    table.boolean("is_eliminated").defaultTo(false);
+    table.timestamp("created_at").notNullable();
+
+    table.foreign("tournament_id").references("id").inTable("tournaments").onDelete("CASCADE");
+    table.foreign("user_id").references("id").inTable("users").onDelete("CASCADE");
+    table.unique(["tournament_id", "user_id"]);
+  });
+  console.log("Table 'tournament_participants' created!");
+} else {
+  console.log("Table 'tournament_participants' already exists");
+}
+
+// Create tournament_matches table
+const tournamentMatchesExists = await db.schema.hasTable("tournament_matches");
+
+if (!tournamentMatchesExists) {
+  await db.schema.createTable("tournament_matches", (table) => {
+    table.uuid("id").primary().notNullable();
+    table.uuid("tournament_id").notNullable();
+    table.uuid("game_id").nullable();
+    table.integer("round").notNullable();
+    table.integer("match_number").notNullable();
+    table.uuid("player1_id").notNullable();
+    table.uuid("player2_id").notNullable();
+    table.uuid("winner_id").nullable();
+    table.integer("player1_score").defaultTo(0);
+    table.integer("player2_score").defaultTo(0);
+    table.string("status").notNullable().defaultTo("pending"); // pending, in_progress, completed
+    table.timestamp("created_at").notNullable();
+    table.timestamp("completed_at").nullable();
+
+    table.foreign("tournament_id").references("id").inTable("tournaments").onDelete("CASCADE");
+    table.foreign("game_id").references("id").inTable("matches").onDelete("SET NULL");
+    table.foreign("player1_id").references("id").inTable("users").onDelete("CASCADE");
+    table.foreign("player2_id").references("id").inTable("users").onDelete("CASCADE");
+    table.foreign("winner_id").references("id").inTable("users").onDelete("SET NULL");
+  });
+  console.log("Table 'tournament_matches' created!");
+} else {
+  console.log("Table 'tournament_matches' already exists");
+}
+
   await db.raw("PRAGMA foreign_keys = ON;");
   console.log("Foreign keys enabled!");
 

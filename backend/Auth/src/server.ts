@@ -14,6 +14,7 @@ import "reflect-metadata";
 import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
 import chatRoutes from './routes/chat.js';
+import tournamentRoutes from './routes/tournament.js';
 import { CONFIG } from './game/config.js';
 import multipart from "@fastify/multipart";
 
@@ -60,6 +61,13 @@ try {
   app.register(chatRoutes, { prefix: "/api" });
 } catch (err) {
   console.error("Failed to register chatRoutes:", err);
+  process.exit(1);
+}
+
+try {
+  app.register(tournamentRoutes, { prefix: "/api" });
+} catch (err) {
+  console.error("Failed to register tournamentRoutes:", err);
   process.exit(1);
 }
 

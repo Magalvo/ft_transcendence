@@ -3,6 +3,7 @@ import { GameScene } from '../client/GameScene';
 import { socketService } from '../client/SocketService';
 import { navigateTo } from '../core/AppRouter';
 import { UserStore } from '../core/UserStore';
+import { TournamentManager } from '../core/TournamentManager';
 import type { Socket } from 'socket.io-client';
 
 export class GamePage extends AbstractComponent {
@@ -38,36 +39,100 @@ export class GamePage extends AbstractComponent {
     this.setupReturnToMenuListener();
   }
 
-  private setupReturnToMenuListener(): void {
-    const statsUpdateHandler = (_event: Event) => {
-      console.log('Match stats updated, invalidating cache');
-      UserStore.invalidateCache();
-    };
+    /**
+     * Setup listener for when user returns to main menu from game
+     */
+    private setupReturnToMenuListener(): void {
+        
+        const statsUpdateHandler = async (event: Event) => {
+            console.log('📊 Match stats updated, invalidating cache');
+            UserStore.invalidateCache();
 
-    const recordErrorHandler = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.warn('Encountered error recording match:', customEvent.detail?.message);
-    };
+            // If this is a tournament match, submit the result
+            if (this.tournamentId && this.matchId) {
+                await this.submitTournamentResult(event);
+            }
+        };
+        
+        
+        const recordErrorHandler = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            console.warn('⚠️ Encountered error recording match:', customEvent.detail?.message);
+            
+        };
+        
+        window.addEventListener('match-stats-updated', statsUpdateHandler);
+        window.addEventListener('match-recording-error', recordErrorHandler);
 
-    window.addEventListener('match-stats-updated', statsUpdateHandler);
-    window.addEventListener('match-recording-error', recordErrorHandler);
+        this.returnToMenuHandler = (_event: Event) => {
+            console.log('Game page received return to menu event');
+            
+            window.removeEventListener('match-stats-updated', statsUpdateHandler);
+            window.removeEventListener('match-recording-error', recordErrorHandler);
+            
+            
+            import('../main').then(({ router }) => {
+                
+                if (this.gameScene) {
+                    this.gameScene.dispose();
+                    this.gameScene = null;
+                }
+                
+                console.log('🚀 Navigating to tournament/dashboard from game');
+                
+                // Return to tournament if it exists, otherwise dashboard
+                if (this.tournamentId) {
+                    router.navigate('/tournament');
+                } else {
+                    router.navigate('/dashboard');
+                }
+            }).catch((error) => {
+                console.error('Error navigating from game:', error);
+                window.location.href = '/dashboard';
+            });
+        };
 
-    this.returnToMenuHandler = (_event: Event) => {
-      console.log('Game page received return to menu event');
+        window.addEventListener('game-return-to-menu', this.returnToMenuHandler);
+    }
 
-      window.removeEventListener('match-stats-updated', statsUpdateHandler);
-      window.removeEventListener('match-recording-error', recordErrorHandler);
+    private async submitTournamentResult(event: Event): Promise<void> {
+        if (!this.tournamentId || !this.matchId) return;
 
-      if (this.gameScene) {
-        this.gameScene.dispose();
-        this.gameScene = null;
-      }
+        const customEvent = event as CustomEvent;
+        const { matchId: gameId, winner } = customEvent.detail || {};
 
-      navigateTo('/dashboard');
-    };
+        if (!gameId || !winner) {
+            console.warn('⚠️ Missing match result data');
+            return;
+        }
 
-    window.addEventListener('game-return-to-menu', this.returnToMenuHandler);
-  }
+        try {
+            const tournamentManager = TournamentManager.getInstance();
+            const match = tournamentManager.getMatch(this.matchId);
+
+            if (!match) {
+                console.warn('⚠️ Tournament match not found locally');
+                return;
+            }
+
+            // Determine winner ID based on the winner returned (A or B)
+            const winnerId = winner === 'A' ? this.p1Id : this.p2Id;
+            const player1Score = winner === 'A' ? 1 : 0;
+            const player2Score = winner === 'B' ? 1 : 0;
+
+            // Update local tournament state
+            tournamentManager.submitResult(
+                this.matchId,
+                winnerId || '',
+                player1Score,
+                player2Score
+            );
+
+            console.log('✅ Tournament match result submitted');
+        } catch (error) {
+            console.error('❌ Error submitting tournament result:', error);
+        }
+    }
 
   public onDestroy(): void {
     if (this.returnToMenuHandler) {
