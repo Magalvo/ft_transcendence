@@ -5,17 +5,19 @@ export interface User {
   email: string;
   online: boolean;
   avatarUrl?: string;
+  twoFactorEnabled?: boolean;
 }
 
 export interface UserProfile {
   id: string;
   username: string;
   email: string;
-  avatarUrl: string;
+  avatarUrl?: string;
   status: 'online' | 'offline' | 'ingame';
   wins: number;
   losses: number;
   rank?: string;
+  twoFactorEnabled?: boolean;
   matches: Match[];
   friends: Friend[];
   stats: {

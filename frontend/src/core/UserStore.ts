@@ -12,6 +12,7 @@ export interface UserProfile {
   wins: number;
   losses: number;
   rank?: string;
+  twoFactorEnabled?: boolean;
   matches: Match[];
   friends: Friend[];
   stats: {
@@ -68,7 +69,7 @@ class UserStoreClass {
    */
   subscribe(listener: UserStoreListener): () => void {
     this.listeners.add(listener);
-    
+
     // Return unsubscribe function
     return () => {
       this.listeners.delete(listener);

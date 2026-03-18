@@ -33,6 +33,7 @@ interface User {
 
 export class AuthService {
   private apiUrl = API_URL;
+  private pendingTwoFactorCredentials: { username: string; password: string } | null = null;
 
   /**
    * Login with username and password
@@ -77,6 +78,8 @@ export class AuthService {
       if (error.response?.status === 400) {
         const errorMsg = error.response?.data?.error || "";
         if (errorMsg.includes("2FA") || errorMsg.includes("2FA code")) {
+          // Store credentials for the pending 2FA verification step
+          this.pendingTwoFactorCredentials = { username, password };
           return {
             twoFactorRequired: true,
             username,
@@ -165,6 +168,34 @@ export class AuthService {
    */
   async verify2FA(code: string): Promise<{ message: string }> {
     try {
+      if (!this.pendingTwoFactorCredentials) {
+        throw new Error("No pending 2FA login session");
+      }
+
+      const { username, password } = this.pendingTwoFactorCredentials;
+
+      // Re-use the login endpoint with the 2FA code to complete authentication
+      await this.login(username, password, code);
+
+      // Clear pending credentials once 2FA succeeds
+      this.pendingTwoFactorCredentials = null;
+
+      return { message: "2FA verified" };
+    } catch (error: any) {
+      const errorMsg = this.handleError(error, "2FA verification failed");
+      if (error?.response) {
+        error.message = errorMsg;
+        throw error;
+      }
+      throw new Error(errorMsg);
+    }
+  }
+
+  /**
+   * Verify 2FA code during setup (enabling 2FA in profile settings)
+   */
+  async verify2FASetup(code: string): Promise<{ message: string }> {
+    try {
       const response = await ApiClient.post("/api/auth/2fa/verify", { code });
 
       if (response.status === 200 && response.data.success) {
@@ -173,8 +204,34 @@ export class AuthService {
 
       throw new Error("Invalid 2FA code");
     } catch (error: any) {
-      this.handleError(error, "2FA verification failed");
-      throw error;
+      const errorMsg = this.handleError(error, "2FA verification failed");
+      if (error?.response) {
+        error.message = errorMsg;
+        throw error;
+      }
+      throw new Error(errorMsg);
+    }
+  }
+
+  /**
+   * Disable Two-Factor Authentication on the account
+   */
+  async disable2FA(): Promise<{ message: string }> {
+    try {
+      const response = await ApiClient.post("/api/auth/2fa/disable", {});
+
+      if (response.status === 200 && response.data.success) {
+        return response.data.data;
+      }
+
+      throw new Error("Failed to disable 2FA");
+    } catch (error: any) {
+      const errorMsg = this.handleError(error, "Failed to disable 2FA");
+      if (error?.response) {
+        error.message = errorMsg;
+        throw error;
+      }
+      throw new Error(errorMsg);
     }
   }
 
@@ -419,6 +476,13 @@ export class AuthService {
   parseEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  }
+
+  /**
+   * Clear any pending 2FA login credentials (e.g. when user cancels)
+   */
+  clearPendingTwoFactor(): void {
+    this.pendingTwoFactorCredentials = null;
   }
 }
 

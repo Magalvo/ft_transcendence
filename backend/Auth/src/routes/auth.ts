@@ -326,6 +326,25 @@ export default async function authRoutes(app: FastifyInstance) {
     return await faVerify(req, reply);
   });
 
+  // --- 2FA DISABLE ---
+  app.post("/2fa/disable", async (req, reply) => {
+    try {
+      const userId = getAuthUserId(req as any);
+
+      await db("users")
+        .where({ id: userId })
+        .update({ twoFactorSecret: null, tempTwoFactorSecret: null });
+
+      return sendSuccess(reply, { message: "2FA disabled" });
+    } catch (err: any) {
+      app.log.error(err);
+      if (err.message === "Missing or invalid Authorization header") {
+        return sendError(reply, err.message, 401);
+      }
+      return sendError(reply, err.message || "Failed to disable 2FA", 500);
+    }
+  });
+
   // --- GET CURRENT USER ---
   app.get("/me", async (req, reply) => {
     try {
@@ -343,7 +362,7 @@ export default async function authRoutes(app: FastifyInstance) {
       };
 
       const rawUser: any = await db.raw(
-        "SELECT id, username, email, avatarUrl, online FROM users WHERE id = ? LIMIT 1",
+        "SELECT id, username, email, avatarUrl, online, twoFactorSecret FROM users WHERE id = ? LIMIT 1",
         [decoded.userId],
       );
 
@@ -363,6 +382,7 @@ export default async function authRoutes(app: FastifyInstance) {
           `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
         online: user.online,
         status: user.online ? "online" : "offline",
+        twoFactorEnabled: !!user.twoFactorSecret,
         wins: 0,
         losses: 0,
         rank: "Unranked",

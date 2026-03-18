@@ -2,7 +2,8 @@ import { AbstractComponent } from '../core/Component';
 import { Navbar } from '../components/layout/Navbar';
 import { Card } from '../components/ui/Card';
 import { UserService } from '../services/UserService';
-import type { UserProfile, Match, Friend } from '../types/User';
+import AuthService from '../services/AuthService';
+import type { UserProfile, Match, Friend } from '../core/UserStore';
 
 export class ProfilePage extends AbstractComponent {
   constructor() {
@@ -34,9 +35,11 @@ export class ProfilePage extends AbstractComponent {
 
     const statsCard = this.buildStatsCard(user);
     const friendsCard = this.buildFriendsCard(user.friends || [], incomingRequests);
+    const securityCard = this.buildSecurityCard(user);
     const historyCard = this.buildHistoryCard(user.matches);
 
     contentColumn.appendChild(statsCard.getElement());
+    contentColumn.appendChild(securityCard.getElement());
     contentColumn.appendChild(friendsCard.getElement());
     contentColumn.appendChild(historyCard.getElement());
 
@@ -134,6 +137,173 @@ export class ProfilePage extends AbstractComponent {
         ${statItem('Losses', user.stats.losses, 'text-red-400')}
         ${statItem('Rank', user.stats.rank || 'Unranked', 'text-yellow-400')}
     `;
+    return card;
+  }
+
+  private buildSecurityCard(user: UserProfile): Card {
+    const card = new Card('p-0 overflow-hidden');
+
+    const header = document.createElement('div');
+    header.className = 'p-4 bg-gray-800 border-b border-gray-700 font-bold flex items-center justify-between';
+    header.innerHTML = `
+      <span>Security &amp; 2FA</span>
+      <span class="text-xs px-2 py-1 rounded-full ${user.twoFactorEnabled ? 'bg-green-600 text-green-50' : 'bg-yellow-600 text-yellow-50'}">
+        ${user.twoFactorEnabled ? '2FA Enabled' : '2FA Disabled'}
+      </span>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'p-4 space-y-4';
+
+    const description = document.createElement('p');
+    description.className = 'text-sm text-gray-300';
+    description.innerText = 'Protect your account by requiring a one-time code from an authenticator app when you sign in.';
+
+    const statusText = document.createElement('p');
+    statusText.className = 'text-sm';
+    statusText.innerHTML = user.twoFactorEnabled
+      ? '<span class="text-green-400 font-semibold">Two-Factor Authentication is currently enabled on your account.</span>'
+      : '<span class="text-yellow-400 font-semibold">Two-Factor Authentication is not enabled yet.</span>';
+
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'mt-2 flex flex-wrap gap-3 items-center';
+
+    const enableBtn = document.createElement('button');
+    enableBtn.className = 'inline-flex items-center px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed';
+    enableBtn.innerText = user.twoFactorEnabled ? 'Reconfigure 2FA' : 'Enable 2FA';
+
+    const disableBtn = document.createElement('button');
+    disableBtn.className = 'inline-flex items-center px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed';
+    disableBtn.innerText = 'Disable 2FA';
+    disableBtn.disabled = !user.twoFactorEnabled;
+
+    const qrContainer = document.createElement('div');
+    qrContainer.className = 'mt-4 hidden flex-col items-center gap-3';
+
+    const qrImage = document.createElement('img');
+    qrImage.className = 'w-40 h-40 rounded-lg border border-gray-700 bg-gray-900 object-contain';
+
+    const secretText = document.createElement('p');
+    secretText.className = 'text-xs text-gray-400 break-all text-center';
+
+    const codeInput = document.createElement('input');
+    codeInput.type = 'text';
+    codeInput.maxLength = 6;
+    codeInput.placeholder = 'Enter 6-digit code';
+    codeInput.className = 'mt-2 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-sm text-white w-full max-w-xs text-center tracking-widest';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'mt-2 inline-flex items-center px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed';
+    confirmBtn.innerText = 'Confirm & Enable';
+
+    const errorText = document.createElement('p');
+    errorText.className = 'mt-2 text-xs text-red-400 hidden';
+
+    const infoText = document.createElement('p');
+    infoText.className = 'text-xs text-gray-400 mt-2 text-center';
+    infoText.innerText = 'Scan the QR code with Google Authenticator, Authy, or another TOTP app, then enter the 6-digit code to confirm.';
+
+    let setupInProgress = false;
+
+    disableBtn.onclick = async () => {
+      if (!user.twoFactorEnabled) return;
+      if (!confirm('Are you sure you want to disable Two-Factor Authentication?')) {
+        return;
+      }
+
+      disableBtn.disabled = true;
+
+      try {
+        await AuthService.disable2FA();
+        await UserService.refreshProfile();
+        alert('Two-Factor Authentication has been disabled.');
+        void this.render();
+      } catch (err: any) {
+        console.error('Failed to disable 2FA:', err);
+        alert(err?.message || 'Failed to disable 2FA');
+        disableBtn.disabled = false;
+      }
+    };
+
+    enableBtn.onclick = async () => {
+      if (setupInProgress) return;
+      setupInProgress = true;
+      enableBtn.disabled = true;
+      enableBtn.innerText = 'Generating…';
+      errorText.classList.add('hidden');
+
+      try {
+        const result = await AuthService.setup2FA();
+        qrImage.src = result.qr;
+        secretText.innerText = `Secret: ${result.secret}`;
+        qrContainer.classList.remove('hidden');
+        qrContainer.classList.add('flex');
+        enableBtn.innerText = 'Regenerate QR';
+      } catch (err: any) {
+        const msg = err?.message || 'Failed to start 2FA setup';
+        errorText.innerText = msg;
+        errorText.classList.remove('hidden');
+        enableBtn.disabled = false;
+        enableBtn.innerText = user.twoFactorEnabled ? 'Reconfigure 2FA' : 'Enable 2FA';
+        setupInProgress = false;
+        return;
+      }
+
+      setupInProgress = false;
+      enableBtn.disabled = false;
+    };
+
+    confirmBtn.onclick = async () => {
+      const code = codeInput.value.trim();
+      if (code.length !== 6) {
+        errorText.innerText = 'Please enter the 6-digit code from your authenticator app.';
+        errorText.classList.remove('hidden');
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      confirmBtn.innerText = 'Verifying…';
+      errorText.classList.add('hidden');
+
+      try {
+        await AuthService.verify2FASetup(code);
+      } catch (err: any) {
+        const msg = err?.message || 'Invalid 2FA code';
+        errorText.innerText = msg;
+        errorText.classList.remove('hidden');
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = 'Confirm & Enable';
+        return;
+      }
+
+      // Refresh full profile to show updated state
+      try {
+        await UserService.refreshProfile();
+        alert('Two-Factor Authentication enabled successfully!');
+        void this.render();
+      } catch (err: any) {
+        console.error('Failed to refresh profile after enabling 2FA:', err);
+      }
+    };
+
+    qrContainer.appendChild(qrImage);
+    qrContainer.appendChild(secretText);
+    qrContainer.appendChild(codeInput);
+    qrContainer.appendChild(confirmBtn);
+    qrContainer.appendChild(infoText);
+    qrContainer.appendChild(errorText);
+
+    buttonRow.appendChild(enableBtn);
+    buttonRow.appendChild(disableBtn);
+
+    body.appendChild(description);
+    body.appendChild(statusText);
+    body.appendChild(buttonRow);
+    body.appendChild(qrContainer);
+
+    card.getElement().appendChild(header);
+    card.getElement().appendChild(body);
+
     return card;
   }
 

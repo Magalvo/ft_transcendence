@@ -76,7 +76,7 @@ export class LoginPage extends AbstractComponent {
       label.htmlFor = 'acceptTerms';
       label.className = 'cursor-pointer';
       label.innerHTML = `I accept the <a href="/terms" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Terms</a> and <a href="/privacy" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Privacy Policy</a>`;
-      
+
       termsDiv.appendChild(checkbox);
       termsDiv.appendChild(label);
       card.getElement().appendChild(termsDiv);
@@ -289,6 +289,7 @@ export class LoginPage extends AbstractComponent {
         window.location.href = '/';
       },
       () => {
+        AuthService.clearPendingTwoFactor();
         this.render();
       }
     );

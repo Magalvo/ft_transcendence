@@ -50,6 +50,7 @@ export class UserService {
         status: userData.online ? 'online' : 'offline',
         wins: 0,
         losses: 0,
+        twoFactorEnabled: userData.twoFactorEnabled,
         matches: [],
         friends: [],
         stats: {

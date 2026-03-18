@@ -15,6 +15,9 @@ class UserProfileResponseDTO {
 
     online!: boolean;               // Current online status
 
+    // Two-Factor Authentication status
+    twoFactorEnabled?: boolean;     // True if 2FA is enabled for this user
+
     // Profile stats
     wins!: number;                  // Total wins
 
