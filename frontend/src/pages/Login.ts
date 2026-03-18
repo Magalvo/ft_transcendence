@@ -5,57 +5,68 @@ import { Button } from '../components/ui/Button';
 import AuthService from '../services/AuthService';
 import { TwoFactorPage } from './TwoFactorPage';
 import { GridScanWrapper } from '../components/ui/GridScanWrapper';
+import {
+  availableLocales,
+  i18n,
+  t,
+  type Locale,
+} from '../services/I18nService';
 
-/**
- * LoginPage - Main authentication page for login/register
- * Handles both login and registration modes
- * Integrates with 2FA flow
- */
 export class LoginPage extends AbstractComponent {
-  private isRegisterMode: boolean = false;
+  private isRegisterMode = false;
   private usernameInput: Input;
   private passwordInput: Input;
   private emailInput: Input;
-
-  // track if user checked "accept terms"
-  private acceptTermsChecked: boolean = false;
+  private acceptTermsChecked = false;
 
   constructor() {
-    super('section', 'w-full h-screen flex justify-center items-center relative overflow-hidden');
+    super(
+      'section',
+      'w-full h-screen flex justify-center items-center relative overflow-hidden'
+    );
 
-    this.usernameInput = new Input('Username', 'text', 'Username');
-    this.passwordInput = new Input('Password', 'password', 'Password');
-    this.emailInput = new Input('Email', 'email', 'Email Address');
+    this.usernameInput = new Input(
+      t('login.username.placeholder'),
+      'text',
+      t('login.username.label')
+    );
+    this.passwordInput = new Input(
+      t('login.password.placeholder'),
+      'password',
+      t('login.password.label')
+    );
+    this.emailInput = new Input(
+      t('login.email.placeholder'),
+      'email',
+      t('login.email.label')
+    );
   }
 
   public render(): void {
     this.element.innerHTML = '';
 
-    // Background animation
     const background = new GridScanWrapper({
       enableWebcam: true,
-      bloomIntensity: 1.5
+      bloomIntensity: 1.5,
     });
-
     background.render();
     this.element.appendChild(background.getElement());
+    this.element.appendChild(this.buildLanguageSwitcher());
 
-    // Login/Register Card
     const card = new Card('w-full max-w-md bg-white/10 backdrop-blur-sm relative z-10');
 
     const header = document.createElement('div');
     header.className = 'text-center mb-8';
     header.innerHTML = `
       <h2 class="text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600 leading-normal inline-block">
-        Pong Game
+        ${t('login.title')}
       </h2>
       <p class="text-gray-400 mt-4">
-        ${this.isRegisterMode ? 'Create an account to join the arena' : 'Sign in to access the arena'}
+        ${this.isRegisterMode ? t('login.subtitle.signUp') : t('login.subtitle.signIn')}
       </p>
     `;
     card.getElement().appendChild(header);
 
-    // Form inputs
     this.usernameInput.render();
     this.passwordInput.render();
     card.getElement().appendChild(this.usernameInput.getElement());
@@ -64,62 +75,73 @@ export class LoginPage extends AbstractComponent {
       this.emailInput.render();
       card.getElement().appendChild(this.emailInput.getElement());
 
-      // terms & privacy checkbox + links
       const termsDiv = document.createElement('div');
       termsDiv.className = 'flex items-center mb-4 text-sm text-gray-300';
+
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.id = 'acceptTerms';
       checkbox.className = 'mr-2 cursor-pointer';
-      checkbox.onclick = () => { this.acceptTermsChecked = checkbox.checked; };
+      checkbox.checked = this.acceptTermsChecked;
+      checkbox.onclick = () => {
+        this.acceptTermsChecked = checkbox.checked;
+      };
+
       const label = document.createElement('label');
       label.htmlFor = 'acceptTerms';
       label.className = 'cursor-pointer';
-      label.innerHTML = `I accept the <a href="/terms" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Terms</a> and <a href="/privacy" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline transition">Privacy Policy</a>`;
+      label.append(t('login.acceptTerms.prefix'));
+      label.appendChild(this.buildLegalLink('/terms', t('login.legal.terms')));
+      label.append(t('login.acceptTerms.connector'));
+      label.appendChild(this.buildLegalLink('/privacy', t('login.legal.privacy')));
 
-      termsDiv.appendChild(checkbox);
-      termsDiv.appendChild(label);
+      termsDiv.append(checkbox, label);
       card.getElement().appendChild(termsDiv);
     }
 
     card.getElement().appendChild(this.passwordInput.getElement());
 
-    // Forgot password link (login mode only)
     if (!this.isRegisterMode) {
       const forgotLink = document.createElement('div');
       forgotLink.className = 'flex justify-end mb-6';
+
       const link = document.createElement('a');
-      link.href = 'javascript:void(0)';
+      link.href = '#';
       link.className = 'text-sm text-indigo-400 hover:text-indigo-300 font-medium transition';
-      link.innerText = 'Forgot password?';
-      link.onclick = (e) => {
-        e.preventDefault();
-        this.handleForgotPassword();
+      link.innerText = t('login.forgotPassword');
+      link.onclick = (event) => {
+        event.preventDefault();
+        void this.handleForgotPassword();
       };
+
       forgotLink.appendChild(link);
       card.getElement().appendChild(forgotLink);
     }
 
-    // Main action button
     const actionBtn = new Button(
-      this.isRegisterMode ? 'Sign Up' : 'Sign In',
-      () => { void this.handleSubmit(); },
+      this.isRegisterMode ? t('login.actions.signUp') : t('login.actions.signIn'),
+      () => {
+        void this.handleSubmit();
+      },
       'primary'
     );
     actionBtn.getElement().classList.add('w-full', 'mb-4');
     card.addChildren(actionBtn);
 
-    // Social login
     this.renderSocialLogin(card);
 
-    // Toggle mode
     const toggleDiv = document.createElement('div');
     toggleDiv.className = 'mt-6 text-center text-sm text-gray-400';
-    toggleDiv.innerText = this.isRegisterMode ? "Already have an account? " : "Don't have an account? ";
+    toggleDiv.innerText = this.isRegisterMode
+      ? t('login.toggle.haveAccount')
+      : t('login.toggle.noAccount');
 
     const toggleLink = document.createElement('span');
-    toggleLink.className = 'text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer transition';
-    toggleLink.innerText = this.isRegisterMode ? 'Sign in' : 'Sign up';
+    toggleLink.className =
+      'text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer transition';
+    toggleLink.innerText = this.isRegisterMode
+      ? t('login.toggle.signIn')
+      : t('login.toggle.signUp');
     toggleLink.onclick = () => this.toggleMode();
 
     toggleDiv.appendChild(toggleLink);
@@ -127,12 +149,29 @@ export class LoginPage extends AbstractComponent {
 
     if (!this.isRegisterMode) {
       const legalFooter = document.createElement('div');
-      legalFooter.className = 'mt-6 pt-4 border-t border-gray-700/50 flex justify-center gap-4 text-xs text-gray-500';
-      legalFooter.innerHTML = `
-        <a href="/terms" target="_blank" class="hover:text-gray-300 transition">Terms</a>
-        <span>•</span>
-        <a href="/privacy" target="_blank" class="hover:text-gray-300 transition">Privacy Policy</a>
-      `;
+      legalFooter.className =
+        'mt-6 pt-4 border-t border-gray-700/50 flex justify-center gap-4 text-xs text-gray-500';
+
+      legalFooter.appendChild(
+        this.buildLegalLink(
+          '/terms',
+          t('login.legal.terms'),
+          'hover:text-gray-300 transition'
+        )
+      );
+
+      const separator = document.createElement('span');
+      separator.innerHTML = '&bull;';
+      legalFooter.appendChild(separator);
+
+      legalFooter.appendChild(
+        this.buildLegalLink(
+          '/privacy',
+          t('login.legal.privacy'),
+          'hover:text-gray-300 transition'
+        )
+      );
+
       card.getElement().appendChild(legalFooter);
     }
 
@@ -144,7 +183,7 @@ export class LoginPage extends AbstractComponent {
     divider.className = 'relative mt-6 mb-6';
     divider.innerHTML = `
       <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-600/50"></div></div>
-      <div class="relative flex justify-center text-sm"><span class="px-2 bg-[#111] text-gray-400">Or continue with</span></div>
+      <div class="relative flex justify-center text-sm"><span class="px-2 bg-[#111] text-gray-400">${t('login.social.continue')}</span></div>
     `;
     card.getElement().appendChild(divider);
 
@@ -152,13 +191,14 @@ export class LoginPage extends AbstractComponent {
     socialContainer.className = 'grid grid-cols-1 gap-3';
 
     const googleBtn = document.createElement('button');
-    googleBtn.className = 'w-full flex items-center justify-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900/50 hover:bg-gray-800 focus:outline-none transition';
+    googleBtn.className =
+      'w-full flex items-center justify-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900/50 hover:bg-gray-800 focus:outline-none transition';
     googleBtn.innerHTML = `
       <svg class="h-5 w-5 mr-2" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
       Google
     `;
-    googleBtn.onclick = (e) => {
-      e.preventDefault();
+    googleBtn.onclick = (event) => {
+      event.preventDefault();
       AuthService.loginWithGoogle();
     };
 
@@ -171,8 +211,8 @@ export class LoginPage extends AbstractComponent {
     this.render();
   }
 
-  private async handleSubmit(e?: Event): Promise<void> {
-    if (e) e.preventDefault();
+  private async handleSubmit(event?: Event): Promise<void> {
+    if (event) event.preventDefault();
 
     const username = this.usernameInput.getValue();
     const password = this.passwordInput.getValue();
@@ -203,7 +243,7 @@ export class LoginPage extends AbstractComponent {
       }
 
       if (!this.acceptTermsChecked) {
-        alert('You must accept the terms and privacy policy to register.');
+        alert(t('login.validation.acceptTerms'));
         isValid = false;
       }
     }
@@ -213,34 +253,35 @@ export class LoginPage extends AbstractComponent {
     try {
       if (this.isRegisterMode) {
         const email = this.emailInput.getValue();
-        await AuthService.register({ username, password, email, acceptTerms: this.acceptTermsChecked });
-        this.showSuccessMessage('Registration successful! Loading profile...');
+        await AuthService.register({
+          username,
+          password,
+          email,
+          acceptTerms: this.acceptTermsChecked,
+        });
+        this.showSuccessMessage(t('login.success.register'));
 
-        // Wait a bit for profile fetch to complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-
+        await new Promise((resolve) => setTimeout(resolve, 500));
         window.location.href = '/';
       } else {
         const loginResult = await AuthService.login(username, password);
 
-        // Check if 2FA is required
         if (loginResult.twoFactorRequired) {
           this.render2FAModal();
         } else {
-          // Login successful - wait for user profile to be fully loaded
-          this.showSuccessMessage('Login successful! Loading profile...');
+          this.showSuccessMessage(t('login.success.login'));
 
-          // Wait a bit for profile fetch to complete
-          await new Promise(resolve => setTimeout(resolve, 500));
-
+          await new Promise((resolve) => setTimeout(resolve, 500));
           window.location.href = '/';
         }
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
-      const errorMessage = error?.response?.data?.error || error?.message || 'Authentication failed. Please try again.';
+      const errorMessage =
+        error?.response?.data?.error ||
+        error?.message ||
+        t('login.error.authFallback');
 
-      // Handle specific error types
       if (error.response?.status === 409) {
         this.usernameInput.setError(true);
         alert(errorMessage);
@@ -252,7 +293,7 @@ export class LoginPage extends AbstractComponent {
         if ((error.response?.data?.error || '').includes('2FA')) {
           this.render2FAModal();
         } else {
-          alert(`Error: ${errorMessage}`);
+          alert(t('login.error.prefixed', { message: errorMessage }));
         }
       } else {
         alert(errorMessage);
@@ -261,20 +302,21 @@ export class LoginPage extends AbstractComponent {
   }
 
   private async handleForgotPassword(): Promise<void> {
-    const email = prompt('Enter your email address:');
+    const email = prompt(t('login.forgotPassword.prompt'));
 
     if (!email) return;
 
     if (!AuthService.parseEmail(email)) {
-      alert('Please enter a valid email address');
+      alert(t('login.forgotPassword.invalidEmail'));
       return;
     }
 
     try {
       await AuthService.forgotPassword(email);
-      alert('Password reset email sent! Check your inbox.');
+      alert(t('login.forgotPassword.success'));
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Failed to send reset email';
+      const errorMsg =
+        error.response?.data?.error || t('login.forgotPassword.failure');
       alert(errorMsg);
     }
   }
@@ -282,10 +324,8 @@ export class LoginPage extends AbstractComponent {
   private render2FAModal(): void {
     const twoFAPage = new TwoFactorPage(
       async () => {
-        this.showSuccessMessage('2FA verified! Redirecting...');
-
-        // Give user time to see the message, then redirect
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        this.showSuccessMessage(t('login.success.twoFactor'));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         window.location.href = '/';
       },
       () => {
@@ -300,10 +340,54 @@ export class LoginPage extends AbstractComponent {
 
   private showSuccessMessage(message: string): void {
     const successDiv = document.createElement('div');
-    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    successDiv.className =
+      'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
     successDiv.innerText = message;
     document.body.appendChild(successDiv);
 
     setTimeout(() => successDiv.remove(), 3000);
+  }
+
+  private buildLanguageSwitcher(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className =
+      'absolute top-6 right-6 z-20 flex items-center gap-2 rounded-full border border-gray-700 bg-black/40 px-3 py-2 text-sm text-gray-200 backdrop-blur-sm';
+
+    const label = document.createElement('span');
+    label.textContent = t('nav.languageLabel');
+
+    const select = document.createElement('select');
+    select.className =
+      'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm text-white outline-none focus:border-blue-500';
+    select.setAttribute('aria-label', t('nav.languageLabel'));
+    select.value = i18n.getLocale();
+
+    availableLocales.forEach((locale) => {
+      const option = document.createElement('option');
+      option.value = locale;
+      option.textContent =
+        locale === 'pt' ? t('nav.languageName.pt') : t('nav.languageName.en');
+      select.appendChild(option);
+    });
+
+    select.addEventListener('change', () => {
+      i18n.setLocale(select.value as Locale);
+    });
+
+    wrapper.append(label, select);
+    return wrapper;
+  }
+
+  private buildLegalLink(
+    path: string,
+    label: string,
+    className = 'text-indigo-400 hover:text-indigo-300 underline transition'
+  ): HTMLAnchorElement {
+    const link = document.createElement('a');
+    link.href = path;
+    link.target = '_blank';
+    link.className = className;
+    link.textContent = label;
+    return link;
   }
 }

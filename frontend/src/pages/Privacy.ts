@@ -1,208 +1,228 @@
-import { AbstractComponent } from '../core/Component';
+import { AbstractComponent } from "../core/Component";
+import { i18n, t } from "../services/I18nService";
+
+const privacyContent = {
+  en: {
+    interpretation:
+      "The words whose initial letters are capitalized have meanings defined below. The same definitions apply whether they appear in singular or plural form.",
+    definitions: [
+      { label: "Account", text: "A unique account created for you to access the service and its features." },
+      { label: "Application", text: "Transcendence, the software platform provided by the company." },
+      { label: "Company", text: 'Transcendence, also referred to as "we", "us", or "our".' },
+      { label: "Country", text: "Portugal." },
+      { label: "Personal Data", text: "Any information that relates to an identified or identifiable person." },
+      { label: "Service", text: "The Transcendence application and related features." },
+    ],
+    personalData:
+      "While using the service, we may collect information you provide directly, such as account details, profile data, and support communications.",
+    usageData:
+      "We may also collect technical and usage information automatically, including device data, browser details, IP address, visited pages, and timestamps needed for security, diagnostics, and product improvement.",
+    applicationInfo:
+      "If you choose to use optional features such as avatar uploads, we may request access to images or files from your device. You can manage these permissions through your device settings.",
+    usePersonalData: [
+      "Provide, operate, and maintain the service.",
+      "Manage your account, authentication, and game-related features.",
+      "Communicate with you about updates, support, and security issues.",
+      "Improve reliability, moderation, and the overall player experience.",
+      "Comply with legal obligations and protect the platform from abuse.",
+    ],
+    retention:
+      "We retain personal data only for as long as necessary to provide the service, meet legal obligations, resolve disputes, and enforce our policies. When appropriate, data may be deleted, aggregated, or anonymized.",
+    transfer:
+      "Your data may be processed in the locations where we or our service providers operate. When required, we apply reasonable safeguards for international transfers.",
+    delete:
+      "You may request access to, correction of, or deletion of your personal data. Some information may be retained when we are legally required or otherwise permitted to do so.",
+    businessTransactions:
+      "If the company is involved in a merger, acquisition, or asset sale, personal data may be transferred as part of that transaction.",
+    lawEnforcement:
+      "We may disclose personal data when required by law or in response to valid requests from public authorities.",
+    otherLegal:
+      "We may also disclose information to protect our rights, investigate misuse, prevent harm, or defend against legal claims.",
+    security:
+      "We work to protect personal data with reasonable technical and organizational measures, but no transmission or storage method is completely secure.",
+    children:
+      "The service is not directed to children under 16, and we do not knowingly collect personal data from them without the required consent.",
+    links:
+      "The service may contain links to third-party websites. We are not responsible for their content or privacy practices, and we encourage you to review their policies.",
+    changes:
+      "We may update this Privacy Policy from time to time. When we do, we will post the updated version on this page and revise the last updated date.",
+  },
+  pt: {
+    interpretation:
+      "As palavras com inicial maiuscula tem os significados definidos abaixo. As mesmas definicoes aplicam-se tanto no singular como no plural.",
+    definitions: [
+      { label: "Conta", text: "Uma conta unica criada para acederes ao servico e respetivas funcionalidades." },
+      { label: "Aplicacao", text: "Transcendence, a plataforma de software fornecida pela empresa." },
+      { label: "Empresa", text: 'Transcendence, tambem referida como "nos", "nosso" ou "nossa".' },
+      { label: "Pais", text: "Portugal." },
+      { label: "Dados Pessoais", text: "Qualquer informacao relacionada com uma pessoa identificada ou identificavel." },
+      { label: "Servico", text: "A aplicacao Transcendence e as funcionalidades associadas." },
+    ],
+    personalData:
+      "Ao utilizares o servico, podemos recolher informacoes fornecidas diretamente por ti, como dados de conta, dados de perfil e comunicacoes de suporte.",
+    usageData:
+      "Tambem podemos recolher automaticamente informacoes tecnicas e de utilizacao, incluindo dados do dispositivo, navegador, endereco IP, paginas visitadas e datas necessarias para seguranca, diagnostico e melhoria do produto.",
+    applicationInfo:
+      "Se optares por usar funcionalidades opcionais, como carregamento de avatar, podemos pedir acesso a imagens ou ficheiros do teu dispositivo. Podes gerir estas permissoes nas definicoes do teu dispositivo.",
+    usePersonalData: [
+      "Fornecer, operar e manter o servico.",
+      "Gerir a tua conta, autenticacao e funcionalidades relacionadas com o jogo.",
+      "Comunicar contigo sobre atualizacoes, suporte e questoes de seguranca.",
+      "Melhorar a fiabilidade, moderacao e experiencia geral dos jogadores.",
+      "Cumprir obrigacoes legais e proteger a plataforma contra abuso.",
+    ],
+    retention:
+      "Conservamos dados pessoais apenas durante o tempo necessario para prestar o servico, cumprir obrigacoes legais, resolver disputas e aplicar as nossas politicas. Quando adequado, os dados podem ser eliminados, agregados ou anonimizados.",
+    transfer:
+      "Os teus dados podem ser processados nos locais onde nos ou os nossos prestadores operam. Quando exigido, aplicamos salvaguardas razoaveis para transferencias internacionais.",
+    delete:
+      "Podes pedir acesso, correcao ou eliminacao dos teus dados pessoais. Algumas informacoes podem ser conservadas quando somos legalmente obrigados ou autorizados a faze-lo.",
+    businessTransactions:
+      "Se a empresa estiver envolvida numa fusao, aquisicao ou venda de ativos, os dados pessoais podem ser transferidos como parte dessa operacao.",
+    lawEnforcement:
+      "Podemos divulgar dados pessoais quando isso for exigido por lei ou em resposta a pedidos validos de autoridades publicas.",
+    otherLegal:
+      "Tambem podemos divulgar informacoes para proteger os nossos direitos, investigar abusos, prevenir danos ou defender-nos de reclamacoes legais.",
+    security:
+      "Trabalhamos para proteger os dados pessoais com medidas tecnicas e organizacionais razoaveis, mas nenhum metodo de transmissao ou armazenamento e totalmente seguro.",
+    children:
+      "O servico nao e dirigido a menores de 16 anos e nao recolhemos conscientemente dados pessoais desses utilizadores sem o consentimento exigido.",
+    links:
+      "O servico pode conter links para websites de terceiros. Nao somos responsaveis pelo respetivo conteudo nem pelas suas praticas de privacidade, e recomendamos que leias as suas politicas.",
+    changes:
+      "Podemos atualizar esta Politica de Privacidade periodicamente. Quando isso acontecer, publicaremos a versao atualizada nesta pagina e reveremos a data da ultima atualizacao.",
+  },
+} as const;
 
 export class PrivacyPage extends AbstractComponent {
   constructor() {
-    super('section', 'min-h-screen bg-black py-12 px-4 sm:px-6 flex flex-col items-center font-sans');
+    super("section", "min-h-screen bg-black px-4 py-12 sm:px-6 flex flex-col items-center font-sans");
   }
 
   public render(): void {
+    const content = privacyContent[i18n.getLocale()];
+    const definitionItems = content.definitions
+      .map(
+        (item) =>
+          `<li><strong class="text-neutral-200">${item.label}:</strong> ${item.text}</li>`
+      )
+      .join("");
+    const useItems = content.usePersonalData.map((item) => `<li>${item}</li>`).join("");
+
     this.element.innerHTML = `
       <div class="w-full max-w-4xl bg-[#111] border border-neutral-800 rounded-2xl shadow-[0_0_40px_rgba(0,255,255,0.05)] overflow-hidden flex flex-col mt-8">
-        
         <div class="bg-[#0a0a0a] px-8 py-6 border-b border-neutral-800 flex justify-between items-end">
           <div>
             <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 uppercase tracking-wider">
-              Privacy Policy
+              ${t("privacy.title")}
             </h1>
-            <p class="text-sm text-neutral-400 mt-2">Last updated: March 12, 2026</p>
+            <p class="text-sm text-neutral-400 mt-2">${t("privacy.lastUpdated")}</p>
           </div>
         </div>
 
         <div class="px-8 py-8 text-neutral-300 leading-relaxed max-h-[60vh] overflow-y-auto">
-          
           <div class="mb-8">
-            <p class="mb-4">This Privacy Policy describes Our policies and procedures on the collection, use and disclosure of Your information when You use the Service and tells You about Your privacy rights and how the law protects You.</p>
-            <p class="mb-4">We use Your Personal Data to provide and improve the Service. By using the Service, You agree to the collection and use of information in accordance with this Privacy Policy. This Privacy Policy has been created with the help of the <a href="https://www.termsfeed.com/privacy-policy-generator/" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline">TermsFeed Privacy Policy Generator</a>.</p>
+            <p class="mb-4">${t("privacy.intro1")}</p>
+            <p class="mb-4">
+              ${t("privacy.intro2Prefix")}
+              <a href="https://www.termsfeed.com/privacy-policy-generator/" target="_blank" rel="noreferrer" class="text-cyan-400 hover:text-cyan-300 underline">
+                ${t("privacy.intro2Link")}
+              </a>
+              ${t("privacy.intro2Suffix")}
+            </p>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Interpretation and Definitions
+              ${t("privacy.section.interpretation")}
             </h2>
-            
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-4">Interpretation</h3>
-            <p class="mb-4">The words whose initial letters are capitalized have meanings defined under the following conditions. The following definitions shall have the same meaning regardless of whether they appear in singular or in plural.</p>
-            
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Definitions</h3>
-            <p class="mb-2">For the purposes of this Privacy Policy:</p>
-            <ul class="list-disc pl-6 space-y-3 text-neutral-400 mb-4">
-              <li><strong class="text-neutral-200">Account:</strong> means a unique account created for You to access our Service or parts of our Service.</li>
-              <li><strong class="text-neutral-200">Affiliate:</strong> means an entity that controls, is controlled by, or is under common control with a party, where "control" means ownership of 50% or more of the shares, equity interest or other securities entitled to vote for election of directors or other managing authority.</li>
-              <li><strong class="text-neutral-200">Application:</strong> refers to Transcendence, the software program provided by the Company.</li>
-              <li><strong class="text-neutral-200">Company:</strong> (referred to as either "the Company", "We", "Us" or "Our" in this Privacy Policy) refers to Transcendence.</li>
-              <li><strong class="text-neutral-200">Country:</strong> refers to: Portugal</li>
-              <li><strong class="text-neutral-200">Device:</strong> means any device that can access the Service such as a computer, a cell phone or a digital tablet.</li>
-              <li><strong class="text-neutral-200">Personal Data:</strong> (or "Personal Information") is any information that relates to an identified or identifiable individual. We use "Personal Data" and "Personal Information" interchangeably unless a law uses a specific term.</li>
-              <li><strong class="text-neutral-200">Service:</strong> refers to the Application.</li>
-              <li><strong class="text-neutral-200">Service Provider:</strong> means any natural or legal person who processes the data on behalf of the Company. It refers to third-party companies or individuals employed by the Company to facilitate the Service, to provide the Service on behalf of the Company, to perform services related to the Service or to assist the Company in analyzing how the Service is used.</li>
-              <li><strong class="text-neutral-200">Usage Data:</strong> refers to data collected automatically, either generated by the use of the Service or from the Service infrastructure itself (for example, the duration of a page visit).</li>
-              <li><strong class="text-neutral-200">You:</strong> means the individual accessing or using the Service, or the company, or other legal entity on behalf of which such individual is accessing or using the Service, as applicable.</li>
-            </ul>
+
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-4">${t("privacy.subsection.interpretation")}</h3>
+            <p class="mb-4">${content.interpretation}</p>
+
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.definitions")}</h3>
+            <p class="mb-2">${t("privacy.definitionsIntro")}</p>
+            <ul class="list-disc pl-6 space-y-3 text-neutral-400 mb-4">${definitionItems}</ul>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Collecting and Using Your Personal Data
+              ${t("privacy.section.collecting")}
             </h2>
-            
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-4">Types of Data Collected</h3>
-            
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">Personal Data</h4>
-            <p class="mb-2">While using Our Service, We may ask You to provide Us with certain personally identifiable information that can be used to contact or identify You. Personally identifiable information may include, but is not limited to:</p>
-            <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>First name and last name</li>
-            </ul>
 
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">Usage Data</h4>
-            <p class="mb-2">Usage Data is collected automatically when using the Service.</p>
-            <p class="mb-2">Usage Data may include information such as Your Device's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that You visit, the time and date of Your visit, the time spent on those pages, unique device identifiers and other diagnostic data.</p>
-            <p class="mb-2">When You access the Service by or through a mobile device, We may collect certain information automatically, including, but not limited to, the type of mobile device You use, Your mobile device's unique ID, the IP address of Your mobile device, Your mobile operating system, the type of mobile Internet browser You use, unique device identifiers and other diagnostic data.</p>
-            <p class="mb-4">We may also collect information that Your browser sends whenever You visit Our Service or when You access the Service by or through a mobile device.</p>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-4">${t("privacy.subsection.typesCollected")}</h3>
 
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">Information Collected while Using the Application</h4>
-            <p class="mb-2">While using Our Application, in order to provide features of Our Application, We may collect, with Your prior permission:</p>
-            <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>Pictures and other information from your Device's camera and photo library</li>
-            </ul>
-            <p class="mb-2">We use this information to provide features of Our Service, to improve and customize Our Service. The information may be uploaded to the Company's servers and/or a Service Provider's server or it may be simply stored on Your device.</p>
-            <p class="mb-4">You can enable or disable access to this information at any time, through Your Device settings.</p>
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">${t("privacy.subsection.personalData")}</h4>
+            <p class="mb-4">${content.personalData}</p>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Use of Your Personal Data</h3>
-            <p class="mb-2">The Company may use Personal Data for the following purposes:</p>
-            <ul class="list-disc pl-6 space-y-3 text-neutral-400 mb-4">
-              <li><strong class="text-neutral-200">To provide and maintain our Service:</strong> including to monitor the usage of our Service.</li>
-              <li><strong class="text-neutral-200">To manage Your Account:</strong> to manage Your registration as a user of the Service. The Personal Data You provide can give You access to different functionalities of the Service that are available to You as a registered user.</li>
-              <li><strong class="text-neutral-200">For the performance of a contract:</strong> the development, compliance and undertaking of the purchase contract for the products, items or services You have purchased or of any other contract with Us through the Service.</li>
-              <li><strong class="text-neutral-200">To contact You:</strong> To contact You by email, telephone calls, SMS, or other equivalent forms of electronic communication, such as a mobile application's push notifications regarding updates or informative communications related to the functionalities, products or contracted services, including the security updates, when necessary or reasonable for their implementation.</li>
-              <li><strong class="text-neutral-200">To provide You:</strong> with news, special offers, and general information about other goods, services and events which We offer that are similar to those that you have already purchased or inquired about unless You have opted not to receive such information.</li>
-              <li><strong class="text-neutral-200">To manage Your requests:</strong> To attend and manage Your requests to Us.</li>
-              <li><strong class="text-neutral-200">For business transfers:</strong> We may use Your Personal Data to evaluate or conduct a merger, divestiture, restructuring, reorganization, dissolution, or other sale or transfer of some or all of Our assets, whether as a going concern or as part of bankruptcy, liquidation, or similar proceeding, in which Personal Data held by Us about our Service users is among the assets transferred.</li>
-              <li><strong class="text-neutral-200">For other purposes:</strong> We may use Your information for other purposes, such as data analysis, identifying usage trends, determining the effectiveness of our promotional campaigns and to evaluate and improve our Service, products, services, marketing and your experience.</li>
-            </ul>
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">${t("privacy.subsection.usageData")}</h4>
+            <p class="mb-4">${content.usageData}</p>
 
-            <p class="mb-2 mt-4">We may share Your Personal Data in the following situations:</p>
-            <ul class="list-disc pl-6 space-y-2 text-neutral-400 mb-4">
-              <li><strong class="text-neutral-200">With Service Providers:</strong> We may share Your Personal Data with Service Providers to monitor and analyze the use of our Service, to contact You.</li>
-              <li><strong class="text-neutral-200">For business transfers:</strong> We may share or transfer Your Personal Data in connection with, or during negotiations of, any merger, sale of Company assets, financing, or acquisition of all or a portion of Our business to another company.</li>
-              <li><strong class="text-neutral-200">With Affiliates:</strong> We may share Your Personal Data with Our affiliates, in which case we will require those affiliates to honor this Privacy Policy.</li>
-              <li><strong class="text-neutral-200">With business partners:</strong> We may share Your Personal Data with Our business partners to offer You certain products, services or promotions.</li>
-              <li><strong class="text-neutral-200">With other users:</strong> If Our Service offers public areas, when You share Personal Data or otherwise interact in the public areas with other users, such information may be viewed by all users and may be publicly distributed outside.</li>
-              <li><strong class="text-neutral-200">With Your consent:</strong> We may disclose Your Personal Data for any other purpose with Your consent.</li>
-            </ul>
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-4">${t("privacy.subsection.applicationInfo")}</h4>
+            <p class="mb-4">${content.applicationInfo}</p>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Retention of Your Personal Data</h3>
-            <p class="mb-4">The Company will retain Your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy. We will retain and use Your Personal Data to the extent necessary to comply with our legal obligations (for example, if We are required to retain Your data to comply with applicable laws), resolve disputes, and enforce our legal agreements and policies.</p>
-            <p class="mb-2">Where possible, We apply shorter retention periods and/or reduce identifiability by deleting, aggregating, or anonymizing data. We apply different retention periods to different categories of Personal Data based on the purpose of processing and legal obligations:</p>
-            <ul class="list-disc pl-6 space-y-4 text-neutral-400 mb-4">
-              <li>
-                <strong class="text-neutral-200">Account Information</strong>
-                <ul class="list-[circle] pl-6 mt-1 space-y-1">
-                  <li>User Accounts: retained for the duration of your account relationship plus up to 24 months after account closure to handle any post-termination issues or resolve disputes.</li>
-                </ul>
-              </li>
-              <li>
-                <strong class="text-neutral-200">Usage Data</strong>
-                <ul class="list-[circle] pl-6 mt-1 space-y-1">
-                  <li>Application usage statistics: up to 24 months to understand feature adoption and service improvements.</li>
-                  <li>Server logs (IP addresses, access times): up to 24 months for security monitoring and troubleshooting purposes.</li>
-                </ul>
-              </li>
-            </ul>
-            <p class="mb-2">We may retain Personal Data beyond the periods stated above for different reasons:</p>
-            <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>Legal obligation: We are required by law to retain specific data (e.g., financial records for tax authorities).</li>
-              <li>Legal claims: Data is necessary to establish, exercise, or defend legal claims.</li>
-              <li>Your explicit request: You ask Us to retain specific information.</li>
-              <li>Technical limitations: Data exists in backup systems that are scheduled for routine deletion.</li>
-            </ul>
-            <p class="mb-2">When retention periods expire, We securely delete or anonymize Personal Data according to the following procedures:</p>
-            <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>Deletion: Personal Data is removed from Our systems and no longer actively processed.</li>
-              <li>Backup retention: Residual copies may remain in encrypted backups for a limited period consistent with our backup retention schedule.</li>
-              <li>Anonymization: In some cases, We convert Personal Data into anonymous statistical data that cannot be linked back to You.</li>
-            </ul>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.usePersonalData")}</h3>
+            <ul class="list-disc pl-6 space-y-2 text-neutral-400 mb-4">${useItems}</ul>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Transfer of Your Personal Data</h3>
-            <p class="mb-4">Your information, including Personal Data, is processed at the Company's operating offices and in any other places where the parties involved in the processing are located. It means that this information may be transferred to — and maintained on — computers located outside of Your state, province, country or other governmental jurisdiction where the data protection laws may differ from those from Your jurisdiction.</p>
-            <p class="mb-4">Where required by applicable law, We will ensure that international transfers of Your Personal Data are subject to appropriate safeguards and supplementary measures where appropriate.</p>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.retention")}</h3>
+            <p class="mb-4">${content.retention}</p>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Delete Your Personal Data</h3>
-            <p class="mb-4">You have the right to delete or request that We assist in deleting the Personal Data that We have collected about You. Our Service may give You the ability to delete certain information about You from within the Service.</p>
-            <p class="mb-4">You may update, amend, or delete Your information at any time by signing in to Your Account, if you have one, and visiting the account settings section. You may also contact Us to request access to, correct, or delete any Personal Data that You have provided to Us.</p>
-            <p class="mb-4">Please note, however, that We may need to retain certain information when we have a legal obligation or lawful basis to do so.</p>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.transfer")}</h3>
+            <p class="mb-4">${content.transfer}</p>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Disclosure of Your Personal Data</h3>
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">Business Transactions</h4>
-            <p class="mb-4">If the Company is involved in a merger, acquisition or asset sale, Your Personal Data may be transferred. We will provide notice before Your Personal Data is transferred and becomes subject to a different Privacy Policy.</p>
-            
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">Law enforcement</h4>
-            <p class="mb-4">Under certain circumstances, the Company may be required to disclose Your Personal Data if required to do so by law or in response to valid requests by public authorities (e.g. a court or a government agency).</p>
-            
-            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">Other legal requirements</h4>
-            <p class="mb-2">The Company may disclose Your Personal Data in the good faith belief that such action is necessary to:</p>
-            <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>Comply with a legal obligation</li>
-              <li>Protect and defend the rights or property of the Company</li>
-              <li>Prevent or investigate possible wrongdoing in connection with the Service</li>
-              <li>Protect the personal safety of Users of the Service or the public</li>
-              <li>Protect against legal liability</li>
-            </ul>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.delete")}</h3>
+            <p class="mb-4">${content.delete}</p>
 
-            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">Security of Your Personal Data</h3>
-            <p class="mb-4">The security of Your Personal Data is important to Us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While We strive to use commercially reasonable means to protect Your Personal Data, We cannot guarantee its absolute security.</p>
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.disclosure")}</h3>
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">${t("privacy.subsection.businessTransactions")}</h4>
+            <p class="mb-4">${content.businessTransactions}</p>
+
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">${t("privacy.subsection.lawEnforcement")}</h4>
+            <p class="mb-4">${content.lawEnforcement}</p>
+
+            <h4 class="text-base font-semibold text-neutral-200 mb-2 mt-2">${t("privacy.subsection.otherLegal")}</h4>
+            <p class="mb-4">${content.otherLegal}</p>
+
+            <h3 class="text-lg font-semibold text-cyan-300 mb-2 mt-6">${t("privacy.subsection.security")}</h3>
+            <p class="mb-4">${content.security}</p>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Children's Privacy
+              ${t("privacy.section.children")}
             </h2>
-            <p class="mb-4">Our Service does not address anyone under the age of 16. We do not knowingly collect personally identifiable information from anyone under the age of 16. If You are a parent or guardian and You are aware that Your child has provided Us with Personal Data, please contact Us. If We become aware that We have collected Personal Data from anyone under the age of 16 without verification of parental consent, We take steps to remove that information from Our servers.</p>
-            <p class="mb-4">If We need to rely on consent as a legal basis for processing Your information and Your country requires consent from a parent, We may require Your parent's consent before We collect and use that information.</p>
+            <p class="mb-4">${content.children}</p>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Links to Other Websites
+              ${t("privacy.section.links")}
             </h2>
-            <p class="mb-4">Our Service may contain links to other websites that are not operated by Us. If You click on a third party link, You will be directed to that third party's site. We strongly advise You to review the Privacy Policy of every site You visit.</p>
-            <p class="mb-4">We have no control over and assume no responsibility for the content, privacy policies or practices of any third party sites or services.</p>
+            <p class="mb-4">${content.links}</p>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Changes to this Privacy Policy
+              ${t("privacy.section.changes")}
             </h2>
-            <p class="mb-4">We may update Our Privacy Policy from time to time. We will notify You of any changes by posting the new Privacy Policy on this page.</p>
-            <p class="mb-4">We will let You know via email and/or a prominent notice on Our Service, prior to the change becoming effective and update the "Last updated" date at the top of this Privacy Policy.</p>
-            <p class="mb-4">You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.</p>
+            <p class="mb-4">${content.changes}</p>
           </div>
 
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2 h-6 bg-cyan-500 rounded-full inline-block"></span>
-              Contact Us
+              ${t("privacy.section.contact")}
             </h2>
-            <p class="mb-2">If you have any questions about this Privacy Policy, You can contact us:</p>
+            <p class="mb-2">${t("privacy.contactIntro")}</p>
             <ul class="list-disc pl-6 space-y-1 text-neutral-400 mb-4">
-              <li>By email: <a href="mailto:office@mail.com" class="text-cyan-400 hover:text-cyan-300 hover:underline transition">office@mail.com</a></li>
+              <li>${t("privacy.contactEmailLabel")} <a href="mailto:office@mail.com" class="text-cyan-400 hover:text-cyan-300 hover:underline transition">office@mail.com</a></li>
             </ul>
           </div>
-
         </div>
 
         <div class="bg-[#0a0a0a] px-8 py-5 border-t border-neutral-800 flex justify-end">
@@ -211,23 +231,21 @@ export class PrivacyPage extends AbstractComponent {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Go Back
+              ${t("privacy.goBack")}
             </span>
           </button>
         </div>
-
       </div>
     `;
 
-    // Lógica para o botão de voltar atrás
-    const btnGoBack = this.element.querySelector('#btn-go-back');
+    const btnGoBack = this.element.querySelector("#btn-go-back");
     if (btnGoBack) {
-      btnGoBack.addEventListener('click', () => {
+      btnGoBack.addEventListener("click", () => {
         if (window.history.length > 1) {
           window.history.back();
         } else {
-          window.history.pushState({}, '', '/');
-          window.dispatchEvent(new PopStateEvent('popstate'));
+          window.history.pushState({}, "", "/");
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }
       });
     }

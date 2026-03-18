@@ -1,39 +1,36 @@
 import './style.css';
 
 
+import { setAppRouter } from './core/AppRouter';
 import { Router } from './core/Router';
 
-import { LoginPage } from './pages/Login';
-import { DashboardPage } from './pages/Dashboard';
-import { GamePage } from './pages/Game';
-import { TournamentPage } from './pages/Tournament';
-import { HomePage } from './pages/Home';
-import { ProfilePage } from './pages/Profile';
-import { LobbyPage } from './pages/Lobby';
-import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
 import AuthService from './services/AuthService';
-import { FindGamePage } from './pages/FindGame'
-import { SpacedOutPage } from './pages/SpacedOut';
-import { TermsPage } from './pages/Terms';
-import { PrivacyPage } from './pages/Privacy';
+import { i18n } from './services/I18nService';
+
+i18n.init();
 
 //? Initialize Router
 const router = new Router('#app');
+setAppRouter(router);
+
+i18n.subscribe(() => {
+  router.refresh();
+});
 
 //? Define Routes
-router.addRoute('/', HomePage);
-router.addRoute('/profile', ProfilePage);
-router.addRoute('/login', LoginPage);
-router.addRoute('/dashboard', DashboardPage);
-router.addRoute('/game', GamePage);
-router.addRoute('/lobby', LobbyPage);
-router.addRoute('/chat', ChatPage);
-router.addRoute('/find-game', FindGamePage);
-router.addRoute('/tournament', TournamentPage);
-router.addRoute('/spacedout', SpacedOutPage);
-router.addRoute('/terms', TermsPage);
-router.addRoute('/privacy', PrivacyPage);
+router.addLazyRoute('/', async () => (await import('./pages/Home')).HomePage);
+router.addLazyRoute('/profile', async () => (await import('./pages/Profile')).ProfilePage);
+router.addLazyRoute('/login', async () => (await import('./pages/Login')).LoginPage);
+router.addLazyRoute('/dashboard', async () => (await import('./pages/Dashboard')).DashboardPage);
+router.addLazyRoute('/game', async () => (await import('./pages/Game')).GamePage);
+router.addLazyRoute('/lobby', async () => (await import('./pages/Lobby')).LobbyPage);
+router.addLazyRoute('/chat', async () => (await import('./pages/Chat')).ChatPage);
+router.addLazyRoute('/find-game', async () => (await import('./pages/FindGame')).FindGamePage);
+router.addLazyRoute('/tournament', async () => (await import('./pages/Tournament')).TournamentPage);
+router.addLazyRoute('/spacedout', async () => (await import('./pages/SpacedOut')).SpacedOutPage);
+router.addLazyRoute('/terms', async () => (await import('./pages/Terms')).TermsPage);
+router.addLazyRoute('/privacy', async () => (await import('./pages/Privacy')).PrivacyPage);
 
 const searchParams = new URLSearchParams(window.location.search);
 const hasOAuthToken = Boolean(searchParams.get('token'));
@@ -62,6 +59,3 @@ if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pa
 
 // 5. Start the App
 router.init();
-
-// Export for debugging purposes if needed
-export { router };

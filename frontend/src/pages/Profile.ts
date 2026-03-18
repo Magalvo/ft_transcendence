@@ -4,6 +4,7 @@ import { Card } from '../components/ui/Card';
 import { UserService } from '../services/UserService';
 import AuthService from '../services/AuthService';
 import type { UserProfile, Match, Friend } from '../core/UserStore';
+import { formatDate, t } from '../services/I18nService';
 
 export class ProfilePage extends AbstractComponent {
   constructor() {
@@ -13,22 +14,17 @@ export class ProfilePage extends AbstractComponent {
   public async render(): Promise<void> {
     this.element.innerHTML = '';
 
-
     const navbar = new Navbar();
     navbar.render();
     this.element.appendChild(navbar.getElement());
 
-
     const user = await UserService.getProfile(true);
     const incomingRequests = await UserService.getIncomingFriendRequests();
-
 
     const container = document.createElement('div');
     container.className = 'container mx-auto p-6 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8';
 
-
     const identityCard = this.buildIdentityCard(user);
-
 
     const contentColumn = document.createElement('div');
     contentColumn.className = 'lg:col-span-2 space-y-8';
@@ -49,45 +45,42 @@ export class ProfilePage extends AbstractComponent {
     this.element.appendChild(container);
   }
 
-  // --- Sub-Components ---
-
-  private buildIdentityCard(user: Omit<UserProfile, 'avatarUrl'> & { avatarUrl?: string }): Card {
+  private buildIdentityCard(
+    user: Omit<UserProfile, 'avatarUrl'> & { avatarUrl?: string }
+  ): Card {
     const card = new Card('flex flex-col items-center text-center p-8');
-
 
     const avatarWrapper = document.createElement('div');
     avatarWrapper.className = 'relative group w-32 h-32 mb-4 cursor-pointer';
 
     const img = document.createElement('img');
-    img.src = user.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.username);
+    img.src = user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}`;
     img.className = 'w-full h-full rounded-full object-cover border-4 border-blue-500 shadow-lg';
 
     const overlay = document.createElement('div');
-    overlay.className = 'absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200';
-    overlay.innerHTML = '<span class="text-xs font-bold">CHANGE</span>';
+    overlay.className =
+      'absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200';
+    overlay.innerHTML = `<span class="text-xs font-bold">${t('profile.avatar.change')}</span>`;
 
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     fileInput.className = 'hidden';
-    fileInput.onchange = async (e: any) => {
-        if (e.target.files && e.target.files[0]) {
-            try {
-                const newUrl = await UserService.updateAvatar(e.target.files[0]);
-                img.src = newUrl;
-                console.log('Avatar updated successfully');
-            } catch (error) {
-                console.error('Failed to update avatar:', error);
-                alert('Failed to upload avatar');
-            }
+    fileInput.onchange = async (event: any) => {
+      if (event.target.files && event.target.files[0]) {
+        try {
+          const newUrl = await UserService.updateAvatar(event.target.files[0]);
+          img.src = newUrl;
+        } catch (error) {
+          console.error('Failed to update avatar:', error);
+          alert(t('profile.avatar.uploadFailed'));
         }
+      }
     };
 
     avatarWrapper.onclick = () => fileInput.click();
-    avatarWrapper.appendChild(img);
-    avatarWrapper.appendChild(overlay);
+    avatarWrapper.append(img, overlay);
 
-    // User
     const nameContainer = document.createElement('div');
     nameContainer.className = 'flex items-center gap-2 justify-center mb-2';
 
@@ -96,46 +89,52 @@ export class ProfilePage extends AbstractComponent {
     name.innerText = user.username;
 
     const editBtn = document.createElement('button');
-    editBtn.className = 'text-gray-400 hover:text-blue-400 transition p-1';
-    editBtn.innerHTML = '✏️';
-    editBtn.click = () => this.showEditUsernameModal(user, name);
+    editBtn.className = 'text-gray-400 hover:text-blue-400 transition p-1 text-sm';
+    editBtn.innerText = t('profile.identity.edit');
+    editBtn.title = t('profile.editUsername.title');
     editBtn.onclick = () => this.showEditUsernameModal(user, name);
 
-    nameContainer.appendChild(name);
-    nameContainer.appendChild(editBtn);
+    nameContainer.append(name, editBtn);
 
     const email = document.createElement('p');
     email.className = 'text-gray-400 text-sm mb-4';
     email.innerText = user.email;
 
     const statusBadge = document.createElement('div');
-    const statusColor = user.status === 'online' ? 'bg-green-500' : user.status === 'ingame' ? 'bg-blue-500' : 'bg-gray-500';
+    const statusColor =
+      user.status === 'online'
+        ? 'bg-green-500'
+        : user.status === 'ingame'
+          ? 'bg-blue-500'
+          : 'bg-gray-500';
     statusBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-opacity-20 text-white border ${statusColor} border-opacity-50 flex items-center gap-2`;
-    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full ${statusColor}"></span> ${user.status}`;
+    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full ${statusColor}"></span> ${this.getStatusLabel(user.status)}`;
 
-    card.getElement().appendChild(avatarWrapper);
-    card.getElement().appendChild(nameContainer);
-    card.getElement().appendChild(email);
-    card.getElement().appendChild(statusBadge);
-    card.getElement().appendChild(fileInput);
+    card.getElement().append(avatarWrapper, nameContainer, email, statusBadge, fileInput);
 
     return card;
   }
 
-  private buildStatsCard(user: Omit<UserProfile, 'avatarUrl'> & { avatarUrl?: string }): Card {
+  private buildStatsCard(
+    user: Omit<UserProfile, 'avatarUrl'> & { avatarUrl?: string }
+  ): Card {
     const card = new Card('grid grid-cols-3 gap-4 text-center py-6');
 
     const statItem = (label: string, value: string | number, colorClass: string) => `
-        <div>
-            <div class="text-3xl font-black ${colorClass}">${value}</div>
-            <div class="text-xs text-gray-500 uppercase font-bold mt-1">${label}</div>
-        </div>
+      <div>
+        <div class="text-3xl font-black ${colorClass}">${value}</div>
+        <div class="text-xs text-gray-500 uppercase font-bold mt-1">${label}</div>
+      </div>
     `;
 
     card.getElement().innerHTML = `
-        ${statItem('Wins', user.stats.wins, 'text-green-400')}
-        ${statItem('Losses', user.stats.losses, 'text-red-400')}
-        ${statItem('Rank', user.stats.rank || 'Unranked', 'text-yellow-400')}
+      ${statItem(t('profile.stats.wins'), user.stats.wins, 'text-green-400')}
+      ${statItem(t('profile.stats.losses'), user.stats.losses, 'text-red-400')}
+      ${statItem(
+        t('profile.stats.rank'),
+        user.stats.rank || t('profile.stats.unranked'),
+        'text-yellow-400'
+      )}
     `;
     return card;
   }
@@ -312,7 +311,7 @@ export class ProfilePage extends AbstractComponent {
 
     const header = document.createElement('div');
     header.className = 'p-4 bg-gray-800 border-b border-gray-700 font-bold';
-    header.innerText = 'Match History';
+    header.innerText = t('profile.history.title');
 
     const list = document.createElement('div');
     list.className = 'divide-y divide-gray-700';
@@ -320,39 +319,38 @@ export class ProfilePage extends AbstractComponent {
     if (matches.length === 0) {
       const emptyState = document.createElement('div');
       emptyState.className = 'p-8 text-center text-gray-500';
-      emptyState.innerText = 'No matches played yet';
+      emptyState.innerText = t('profile.history.empty');
       list.appendChild(emptyState);
     } else {
-      matches.forEach(match => {
+      matches.forEach((match) => {
         const row = document.createElement('div');
         row.className = 'p-4 flex justify-between items-center hover:bg-gray-800/50 transition';
         const isWin = match.result === 'WIN';
 
         row.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded bg-gray-700 flex items-center justify-center font-bold text-lg">
-                    ${match.opponent.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                    <div class="font-bold">${match.opponent}</div>
-                    <div class="text-xs text-gray-500">${new Date(match.date).toLocaleDateString()}</div>
-                </div>
+          <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded bg-gray-700 flex items-center justify-center font-bold text-lg">
+              ${match.opponent.charAt(0).toUpperCase()}
             </div>
-            <div class="text-right">
-                <div class="font-mono font-bold text-lg ${isWin ? 'text-green-400' : 'text-red-400'}">
-                    ${match.score}
-                </div>
-                <div class="text-[10px] uppercase font-bold tracking-wider ${isWin ? 'text-green-600' : 'text-red-600'}">
-                    ${match.result}
-                </div>
+            <div>
+              <div class="font-bold">${match.opponent}</div>
+              <div class="text-xs text-gray-500">${formatDate(match.date)}</div>
             </div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono font-bold text-lg ${isWin ? 'text-green-400' : 'text-red-400'}">
+              ${match.score}
+            </div>
+            <div class="text-[10px] uppercase font-bold tracking-wider ${isWin ? 'text-green-600' : 'text-red-600'}">
+              ${isWin ? t('profile.history.win') : t('profile.history.loss')}
+            </div>
+          </div>
         `;
         list.appendChild(row);
       });
     }
 
-    card.getElement().appendChild(header);
-    card.getElement().appendChild(list);
+    card.getElement().append(header, list);
     return card;
   }
 
@@ -364,46 +362,47 @@ export class ProfilePage extends AbstractComponent {
 
     const header = document.createElement('div');
     header.className = 'p-4 bg-gray-800 border-b border-gray-700 font-bold';
-    header.innerText = 'Friends';
+    header.innerText = t('profile.friends.title');
 
     const controls = document.createElement('div');
     controls.className = 'p-4 border-b border-gray-700 flex gap-2';
 
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Add friend by username';
-    input.className = 'flex-1 px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none';
+    input.placeholder = t('profile.friends.addPlaceholder');
+    input.className =
+      'flex-1 px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none';
 
     const addBtn = document.createElement('button');
-    addBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50';
-    addBtn.innerText = 'Send';
+    addBtn.className =
+      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50';
+    addBtn.innerText = t('profile.friends.send');
     addBtn.onclick = async () => {
       const username = input.value.trim();
       if (!username) return;
       addBtn.disabled = true;
-      addBtn.innerText = 'Sending...';
+      addBtn.innerText = t('profile.friends.sending');
       try {
         await UserService.addFriend(username);
         input.value = '';
-        alert('Friend request sent');
+        alert(t('profile.friends.requestSent'));
         await this.render();
       } catch (err: any) {
-        alert(err?.message || 'Failed to add friend');
+        alert(err?.message || t('profile.friends.addFailed'));
       } finally {
         addBtn.disabled = false;
-        addBtn.innerText = 'Send';
+        addBtn.innerText = t('profile.friends.send');
       }
     };
 
-    controls.appendChild(input);
-    controls.appendChild(addBtn);
+    controls.append(input, addBtn);
 
     const requestsSection = document.createElement('div');
     requestsSection.className = 'border-b border-gray-700';
 
     const requestsTitle = document.createElement('div');
     requestsTitle.className = 'px-4 py-3 text-sm font-semibold text-yellow-300 bg-gray-800/30';
-    requestsTitle.innerText = 'Incoming Requests';
+    requestsTitle.innerText = t('profile.friends.incoming');
     requestsSection.appendChild(requestsTitle);
 
     const requestsList = document.createElement('div');
@@ -412,7 +411,7 @@ export class ProfilePage extends AbstractComponent {
     if (incomingRequests.length === 0) {
       const emptyReq = document.createElement('div');
       emptyReq.className = 'p-4 text-sm text-gray-500 text-center';
-      emptyReq.innerText = 'No pending requests';
+      emptyReq.innerText = t('profile.friends.noPending');
       requestsList.appendChild(emptyReq);
     } else {
       incomingRequests.forEach((request) => {
@@ -427,37 +426,37 @@ export class ProfilePage extends AbstractComponent {
         actions.className = 'flex items-center gap-2';
 
         const acceptBtn = document.createElement('button');
-        acceptBtn.className = 'px-3 py-1 bg-green-700 text-white rounded hover:bg-green-600 transition text-sm';
-        acceptBtn.innerText = 'Confirm';
+        acceptBtn.className =
+          'px-3 py-1 bg-green-700 text-white rounded hover:bg-green-600 transition text-sm';
+        acceptBtn.innerText = t('profile.friends.confirm');
         acceptBtn.onclick = async () => {
           acceptBtn.disabled = true;
           try {
             await UserService.acceptFriendRequest(request.id);
             await this.render();
           } catch (err: any) {
-            alert(err?.message || 'Failed to confirm request');
+            alert(err?.message || t('profile.friends.confirmFailed'));
             acceptBtn.disabled = false;
           }
         };
 
         const declineBtn = document.createElement('button');
-        declineBtn.className = 'px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 transition text-sm';
-        declineBtn.innerText = 'Decline';
+        declineBtn.className =
+          'px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 transition text-sm';
+        declineBtn.innerText = t('profile.friends.decline');
         declineBtn.onclick = async () => {
           declineBtn.disabled = true;
           try {
             await UserService.declineFriendRequest(request.id);
             await this.render();
           } catch (err: any) {
-            alert(err?.message || 'Failed to decline request');
+            alert(err?.message || t('profile.friends.declineFailed'));
             declineBtn.disabled = false;
           }
         };
 
-        actions.appendChild(acceptBtn);
-        actions.appendChild(declineBtn);
-        row.appendChild(left);
-        row.appendChild(actions);
+        actions.append(acceptBtn, declineBtn);
+        row.append(left, actions);
         requestsList.appendChild(row);
       });
     }
@@ -470,60 +469,58 @@ export class ProfilePage extends AbstractComponent {
     if (friends.length === 0) {
       const emptyState = document.createElement('div');
       emptyState.className = 'p-6 text-center text-gray-500';
-      emptyState.innerText = 'No friends yet';
+      emptyState.innerText = t('profile.friends.empty');
       list.appendChild(emptyState);
     } else {
       friends.forEach((friend) => {
         const row = document.createElement('div');
         row.className = 'p-4 flex items-center justify-between hover:bg-gray-800/50 transition';
+
         const name = document.createElement('span');
         name.className = 'font-semibold';
         name.innerText = friend.username;
 
         const removeBtn = document.createElement('button');
-        removeBtn.className = 'px-3 py-1 bg-red-700 text-white rounded hover:bg-red-600 transition text-sm';
-        removeBtn.innerText = 'Remove';
+        removeBtn.className =
+          'px-3 py-1 bg-red-700 text-white rounded hover:bg-red-600 transition text-sm';
+        removeBtn.innerText = t('profile.friends.remove');
         removeBtn.onclick = async () => {
           removeBtn.disabled = true;
           try {
             await UserService.removeFriend(friend.id);
             await this.render();
           } catch (err: any) {
-            alert(err?.message || 'Failed to remove friend');
+            alert(err?.message || t('profile.friends.removeFailed'));
             removeBtn.disabled = false;
           }
         };
 
-        row.appendChild(name);
-        row.appendChild(removeBtn);
+        row.append(name, removeBtn);
         list.appendChild(row);
       });
     }
 
-    card.getElement().appendChild(header);
-    card.getElement().appendChild(controls);
-    card.getElement().appendChild(requestsSection);
-    card.getElement().appendChild(list);
+    card.getElement().append(header, controls, requestsSection, list);
     return card;
   }
 
   private showEditUsernameModal(user: any, nameElement: HTMLElement): void {
-    // Create modal backdrop
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
 
-    // Create modal content
     const modalContent = document.createElement('div');
-    modalContent.className = 'bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 border border-gray-700';
+    modalContent.className =
+      'bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 border border-gray-700';
 
     const title = document.createElement('h3');
     title.className = 'text-xl font-bold mb-4 text-white';
-    title.innerText = 'Edit Username';
+    title.innerText = t('profile.editUsername.title');
 
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'w-full px-4 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none mb-4';
-    input.placeholder = 'Enter new username';
+    input.className =
+      'w-full px-4 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none mb-4';
+    input.placeholder = t('profile.editUsername.placeholder');
     input.value = user.username;
     input.minLength = 3;
     input.maxLength = 20;
@@ -536,23 +533,24 @@ export class ProfilePage extends AbstractComponent {
 
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition';
-    cancelBtn.innerText = 'Cancel';
+    cancelBtn.innerText = t('profile.editUsername.cancel');
     cancelBtn.onclick = () => modal.remove();
 
     const saveBtn = document.createElement('button');
-    saveBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50';
-    saveBtn.innerText = 'Save';
+    saveBtn.className =
+      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50';
+    saveBtn.innerText = t('profile.editUsername.save');
     saveBtn.onclick = async () => {
       const newUsername = input.value.trim();
 
       if (!newUsername) {
-        error.innerText = 'Username cannot be empty';
+        error.innerText = t('profile.editUsername.emptyError');
         error.classList.remove('hidden');
         return;
       }
 
       if (newUsername.length < 3 || newUsername.length > 20) {
-        error.innerText = 'Username must be between 3 and 20 characters';
+        error.innerText = t('profile.editUsername.lengthError');
         error.classList.remove('hidden');
         return;
       }
@@ -563,33 +561,34 @@ export class ProfilePage extends AbstractComponent {
       }
 
       saveBtn.disabled = true;
-      saveBtn.innerText = 'Saving...';
+      saveBtn.innerText = t('profile.editUsername.saving');
 
       try {
         const updated = await UserService.updateUsername(newUsername);
         nameElement.innerText = updated;
         modal.remove();
       } catch (err: any) {
-        const errorMsg = err?.message || err?.toString?.() || 'Failed to update username';
+        const errorMsg =
+          err?.message || err?.toString?.() || t('profile.editUsername.updateFailed');
         error.innerText = errorMsg;
         error.classList.remove('hidden');
         saveBtn.disabled = false;
-        saveBtn.innerText = 'Save';
+        saveBtn.innerText = t('profile.editUsername.save');
       }
     };
 
-    buttonContainer.appendChild(cancelBtn);
-    buttonContainer.appendChild(saveBtn);
-
-    modalContent.appendChild(title);
-    modalContent.appendChild(input);
-    modalContent.appendChild(error);
-    modalContent.appendChild(buttonContainer);
-
+    buttonContainer.append(cancelBtn, saveBtn);
+    modalContent.append(title, input, error, buttonContainer);
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
 
     input.focus();
     input.select();
+  }
+
+  private getStatusLabel(status: UserProfile['status']): string {
+    if (status === 'online') return t('profile.status.online');
+    if (status === 'ingame') return t('profile.status.ingame');
+    return t('profile.status.offline');
   }
 }

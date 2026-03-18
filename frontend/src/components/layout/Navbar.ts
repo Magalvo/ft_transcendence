@@ -1,10 +1,22 @@
-import { AbstractComponent } from "../../core/Component";
-import { UserStore } from "../../core/UserStore";
-import { router } from "../../main";
-import AuthService from "../../services/AuthService";
+import { AbstractComponent } from '../../core/Component';
+import { navigateTo } from '../../core/AppRouter';
+import { UserStore } from '../../core/UserStore';
+import AuthService from '../../services/AuthService';
+import {
+  availableLocales,
+  i18n,
+  t,
+  type Locale,
+} from '../../services/I18nService';
 
 export class Navbar extends AbstractComponent {
+  private cleanupProfileImageSubscription: (() => void) | null = null;
+
   constructor() {
+    super(
+      'nav',
+      'w-full bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center fixed top-0 z-50 relative'
+    );
     super(
       "nav",
       "w-full bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center fixed top-0 z-50 relative",
@@ -12,6 +24,16 @@ export class Navbar extends AbstractComponent {
   }
 
   public render(): void {
+    this.element.innerHTML = '';
+
+    const brand = document.createElement('div');
+    brand.className = 'text-xl font-bold tracking-wider text-blue-400 cursor-pointer';
+    brand.textContent = 'FT_TRANSCENDENCE';
+    brand.addEventListener('click', () => this.navigate('/'));
+
+    const linksContainer = document.createElement('div');
+    linksContainer.className = 'flex gap-6';
+
     const brand = document.createElement("div");
     brand.className =
       "text-xl font-bold tracking-wider text-blue-400 cursor-pointer";
@@ -22,6 +44,12 @@ export class Navbar extends AbstractComponent {
     linksContainer.className = "flex gap-6";
 
     const links = [
+      { label: t('nav.createGame'), path: '/lobby' },
+      { label: t('nav.findGame'), path: '/find-game' },
+      { label: t('nav.spacedOut'), path: '/spacedout' },
+      { label: t('nav.tournament'), path: '/tournament' },
+      { label: t('nav.chat'), path: '/chat' },
+      { label: t('nav.dashboard'), path: '/dashboard' },
       { label: "Create Game", path: "/lobby" },
       { label: "Find Game", path: "/find-game" },
       { label: "SpacedOut", path: "/spacedout" },
@@ -47,10 +75,44 @@ export class Navbar extends AbstractComponent {
     rightSide.className = "flex items-center gap-4";
 
     rightSide.appendChild(linksContainer);
+    rightSide.appendChild(this.buildLanguageSwitcher());
     rightSide.appendChild(this.buildProfileImage());
 
     this.element.appendChild(brand);
     this.element.appendChild(rightSide);
+  }
+
+  public onDestroy(): void {
+    this.cleanupProfileImageSubscription?.();
+    this.cleanupProfileImageSubscription = null;
+  }
+
+  private buildLanguageSwitcher(): HTMLElement {
+    const wrapper = document.createElement('label');
+    wrapper.className = 'flex items-center gap-2 text-sm text-gray-300';
+
+    const text = document.createElement('span');
+    text.textContent = t('nav.languageLabel');
+
+    const select = document.createElement('select');
+    select.className =
+      'rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white outline-none focus:border-blue-500';
+    select.setAttribute('aria-label', t('nav.languageLabel'));
+    select.value = i18n.getLocale();
+
+    availableLocales.forEach((locale) => {
+      const option = document.createElement('option');
+      option.value = locale;
+      option.textContent = this.getLocaleLabel(locale);
+      select.appendChild(option);
+    });
+
+    select.addEventListener('change', () => {
+      i18n.setLocale(select.value as Locale);
+    });
+
+    wrapper.append(text, select);
+    return wrapper;
   }
 
   private buildProfileImage(): HTMLElement {
@@ -173,6 +235,10 @@ export class Navbar extends AbstractComponent {
   }
 
   private navigate(path: string): void {
-    router.navigate(path);
+    navigateTo(path);
+  }
+
+  private getLocaleLabel(locale: Locale): string {
+    return locale === 'pt' ? t('nav.languageName.pt') : t('nav.languageName.en');
   }
 }

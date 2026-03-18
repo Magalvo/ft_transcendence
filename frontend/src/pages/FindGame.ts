@@ -2,9 +2,10 @@ import { AbstractComponent } from '../core/Component';
 import { Navbar } from '../components/layout/Navbar';
 import { UserStore } from '../core/UserStore';
 import { socketService } from '../client/SocketService';
-import { router } from '../main';
+import { navigateTo } from '../core/AppRouter';
 import type { Socket } from 'socket.io-client';
 import type { UserProfile } from '../core/UserStore';
+import { formatTime, t } from '../services/I18nService';
 
 interface GameLobby {
   id: string;
@@ -31,75 +32,73 @@ export class FindGamePage extends AbstractComponent {
   private filterModeEl: HTMLSelectElement | null = null;
   private filterTypeEl: HTMLSelectElement | null = null;
   private createLobbyModal: HTMLElement | null = null;
-  private myLobbies: Map<string, string> = new Map();
+  private myLobbies = new Map<string, string>();
   private refreshTimer: number | null = null;
   private isRefreshing = false;
+
   private onSocketConnect = (): void => {
-    console.log('🔍 Connected to game finder');
     this.isRefreshing = false;
     this.refreshLobbies();
   };
+
   private onSocketDisconnect = (): void => {
-    console.log('❌ Disconnected from game finder');
     this.isRefreshing = false;
   };
+
   private onAvailableLobbies = (lobbies: GameLobby[] | undefined): void => {
-    const safeLobbies = Array.isArray(lobbies) ? lobbies : [];
-    console.log('📋 Received lobbies:', safeLobbies.length);
-    this.lobbies = safeLobbies;
+    this.lobbies = Array.isArray(lobbies) ? lobbies : [];
     this.isRefreshing = false;
     this.renderLobbies();
   };
+
   private onLobbyListChanged = (): void => {
-    console.log('🔄 Lobby list changed, refreshing...');
     this.refreshLobbies();
   };
+
   private onLobbyUpdated = (updatedLobby: GameLobby): void => {
-    console.log('🔄 Lobby updated:', updatedLobby.id);
-    // Find and update the specific lobby in the list
-    const index = this.lobbies.findIndex(lobby => lobby.id === updatedLobby.id);
+    const index = this.lobbies.findIndex((lobby) => lobby.id === updatedLobby.id);
     if (index !== -1) {
       this.lobbies[index] = updatedLobby;
-      this.renderLobbies();
     } else {
-      // Lobby not in list, add it
       this.lobbies.push(updatedLobby);
-      this.renderLobbies();
     }
+    this.renderLobbies();
   };
+
   private onLobbyDeleted = (data: { lobbyId: string }): void => {
-    console.log('🗑️ Lobby deleted:', data.lobbyId);
     const deletedLobby = this.lobbies.find((lobby) => lobby.id === data.lobbyId);
     const wasMyLobby = !!deletedLobby && this.currentUser?.id === deletedLobby.leader.id;
 
-    // Remove the lobby from the list
-    this.lobbies = this.lobbies.filter(lobby => lobby.id !== data.lobbyId);
+    this.lobbies = this.lobbies.filter((lobby) => lobby.id !== data.lobbyId);
     this.renderLobbies();
 
     if (wasMyLobby) {
-      this.showToast('Lobby removed successfully', 'success');
+      this.showToast(t('findGame.toast.removed'), 'success');
     }
   };
+
   private onLobbyCreated = (data: { lobbyId: string; code?: string }): void => {
-    console.log('✅ Lobby created:', data);
     if (data.code) {
       this.myLobbies.set(data.lobbyId, data.code);
     }
     this.refreshLobbies();
     this.closeCreateModal();
   };
+
   private onJoinLobbySuccess = (data: { lobbyId: string }): void => {
-    console.log('🎮 Successfully joined lobby:', data.lobbyId);
-    router.navigate(`/lobby?id=${encodeURIComponent(data.lobbyId)}`);
+    navigateTo(`/lobby?id=${encodeURIComponent(data.lobbyId)}`);
   };
+
   private onJoinLobbyError = (data: { message: string }): void => {
-    alert(`Failed to join lobby: ${data.message}`);
+    alert(t('findGame.error.join', { message: data.message }));
   };
+
   private onDeleteLobbyError = (data: { message: string }): void => {
-    this.showToast(`Failed to remove lobby: ${data.message}`, 'error');
+    this.showToast(t('findGame.error.remove', { message: data.message }), 'error');
   };
+
   private onSocketError = (error: unknown): void => {
-    console.error('🚨 Socket error:', error);
+    console.error('Socket error:', error);
   };
 
   constructor() {
@@ -118,53 +117,54 @@ export class FindGamePage extends AbstractComponent {
     container.innerHTML = `
       <div class="max-w-6xl mx-auto">
         <div class="mb-8">
-          <h1 class="text-3xl font-bold mb-2">Find a Game</h1>
-          <p class="text-neutral-400">Browse lobbies or create your own</p>
+          <h1 class="text-3xl font-bold mb-2">${t('findGame.title')}</h1>
+          <p class="text-neutral-400">${t('findGame.subtitle')}</p>
         </div>
 
         <div class="flex gap-4 mb-6">
           <div class="flex-1">
-            <input 
-              id="search-lobbies" 
-              type="text" 
-              placeholder="Search by leader name..." 
+            <input
+              id="search-lobbies"
+              type="text"
+              placeholder="${t('findGame.searchPlaceholder')}"
               class="w-full px-4 py-2 rounded bg-neutral-800 border border-neutral-700 focus:border-blue-500 outline-none"
             />
           </div>
-          <select 
-            id="filter-mode" 
+          <select
+            id="filter-mode"
             class="px-4 py-2 rounded bg-neutral-800 border border-neutral-700 focus:border-blue-500 outline-none"
           >
-            <option value="">All Modes</option>
-            <option value="1v1">1 vs 1</option>
-            <option value="2v2">2 vs 2</option>
-            <option value="3v3">3 vs 3</option>
+            <option value="">${t('findGame.filter.allModes')}</option>
+            <option value="1v1">${t('findGame.mode.1v1')}</option>
+            <option value="2v2">${t('findGame.mode.2v2')}</option>
+            <option value="3v3">${t('findGame.mode.3v3')}</option>
           </select>
-          <select 
-            id="filter-type" 
+          <select
+            id="filter-type"
             class="px-4 py-2 rounded bg-neutral-800 border border-neutral-700 focus:border-blue-500 outline-none"
           >
-            <option value="">All Types</option>
-            <option value="public">Public</option>
-            <option value="private">Private</option>
+            <option value="">${t('findGame.filter.allTypes')}</option>
+            <option value="public">${t('findGame.type.public')}</option>
+            <option value="private">${t('findGame.type.private')}</option>
           </select>
-          <button 
-            id="btn-create-lobby" 
+          <button
+            id="btn-create-lobby"
             class="px-6 py-2 rounded bg-blue-700 hover:bg-blue-600 font-medium transition"
           >
-            Create Lobby
+            ${t('findGame.action.createLobby')}
           </button>
-          <button 
-            id="btn-refresh-lobbies" 
+          <button
+            id="btn-refresh-lobbies"
             class="px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600 font-medium transition"
-            title="Refresh lobby list"
+            title="${t('findGame.action.refreshTitle')}"
+            aria-label="${t('findGame.action.refreshTitle')}"
           >
-            🔄
+            ↻
           </button>
         </div>
 
         <div id="lobbies-container" class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          <div class="col-span-full text-center text-neutral-400 py-8">Loading lobbies...</div>
+          <div class="col-span-full text-center text-neutral-400 py-8">${t('findGame.state.loading')}</div>
         </div>
       </div>
     `;
@@ -176,31 +176,26 @@ export class FindGamePage extends AbstractComponent {
     this.filterModeEl = container.querySelector('#filter-mode') as HTMLSelectElement;
     this.filterTypeEl = container.querySelector('#filter-type') as HTMLSelectElement;
 
-    // Add event listeners
     this.searchInputEl?.addEventListener('input', () => this.renderLobbies());
     this.filterModeEl?.addEventListener('change', () => this.renderLobbies());
     this.filterTypeEl?.addEventListener('change', () => this.renderLobbies());
-    container.querySelector('#btn-create-lobby')?.addEventListener('click', () => this.openCreateModal());
-    container.querySelector('#btn-refresh-lobbies')?.addEventListener('click', () => this.refreshLobbies());
+    container
+      .querySelector('#btn-create-lobby')
+      ?.addEventListener('click', () => this.openCreateModal());
+    container
+      .querySelector('#btn-refresh-lobbies')
+      ?.addEventListener('click', () => this.refreshLobbies());
 
-    // Initialize user subscription
     this.setupUserSubscription();
-    
-    // Initialize socket
     this.initSocket();
-    
-    // Start auto-refresh timer
     this.startAutoRefresh();
   }
 
   private setupUserSubscription(): void {
-    // Get initial user
     this.currentUser = UserStore.getUser();
-    
-    // Subscribe to user changes
+
     this.userStoreSubscription = UserStore.subscribe((user) => {
       this.currentUser = user;
-      console.log('👤 User data updated in FindGame:', user?.username);
 
       if (user?.id) {
         this.socket = socketService.init(undefined, user.id);
@@ -209,13 +204,11 @@ export class FindGamePage extends AbstractComponent {
         }
       }
 
-      // Re-render to update "my lobbies" indicators if user changed
       this.renderLobbies();
     });
   }
 
   private startAutoRefresh(): void {
-    // Refresh lobbies every 5 seconds
     this.refreshTimer = window.setInterval(() => {
       if (this.socket?.connected && !this.isRefreshing) {
         this.refreshLobbies();
@@ -226,14 +219,12 @@ export class FindGamePage extends AbstractComponent {
   private refreshLobbies(): void {
     if (this.isRefreshing) return;
     this.isRefreshing = true;
-    console.log('🔄 Refreshing lobby list...');
     this.socket?.emit('requestAvailableLobbies');
   }
 
   private initSocket(): void {
     const currentUser = UserStore.getUser();
-    const userId = currentUser?.id;
-    this.socket = socketService.init(undefined, userId);
+    this.socket = socketService.init(undefined, currentUser?.id);
 
     this.socket.on('connect', this.onSocketConnect);
     this.socket.on('disconnect', this.onSocketDisconnect);
@@ -248,7 +239,6 @@ export class FindGamePage extends AbstractComponent {
     this.socket.on('error', this.onSocketError);
 
     if (this.socket.connected) {
-      console.log('📡 Already connected, requesting lobbies');
       this.refreshLobbies();
     }
   }
@@ -270,8 +260,11 @@ export class FindGamePage extends AbstractComponent {
     });
 
     if (filtered.length === 0) {
-      this.lobbyListEl.innerHTML =
-        '<div class="col-span-full text-center text-neutral-400 py-8">No lobbies found. Create one!</div>';
+      this.lobbyListEl.innerHTML = `
+        <div class="col-span-full text-center text-neutral-400 py-8">
+          ${t('findGame.state.empty')}
+        </div>
+      `;
       return;
     }
 
@@ -290,31 +283,32 @@ export class FindGamePage extends AbstractComponent {
     const isPrivate = lobby.isPrivate;
     const isFull = lobby.players >= lobby.maxPlayers;
     const isMyLobby = this.currentUser?.id === lobby.leader.id;
-
     const statusColor =
       lobby.status === 'playing' ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300';
 
     card.innerHTML = `
       <div class="flex justify-between items-start mb-3">
         <div>
-          <h3 class="text-lg font-bold text-white">${lobby.leader.username}'s Game</h3>
+          <h3 class="text-lg font-bold text-white">${t('findGame.card.title', {
+            leader: lobby.leader.username,
+          })}</h3>
           <p class="text-sm text-neutral-400">
-            ${isPrivate ? '🔐 Private' : '🔓 Public'} • ${lobby.mode}
+            ${isPrivate ? t('findGame.type.private') : t('findGame.type.public')} &bull; ${this.getModeLabel(lobby.mode)}
           </p>
         </div>
         <span class="px-2 py-1 rounded text-xs font-medium ${statusColor}">
-          ${lobby.status.toUpperCase()}
+          ${this.getStatusLabel(lobby.status)}
         </span>
       </div>
 
       <div class="grid grid-cols-2 gap-2 mb-4 text-sm">
         <div class="bg-neutral-900 rounded p-2">
-          <div class="text-neutral-400">Players</div>
+          <div class="text-neutral-400">${t('findGame.card.players')}</div>
           <div class="text-lg font-bold">${lobby.players}/${lobby.maxPlayers}</div>
         </div>
         <div class="bg-neutral-900 rounded p-2">
-          <div class="text-neutral-400">Created</div>
-          <div class="text-xs font-bold">${new Date(lobby.createdAt).toLocaleTimeString()}</div>
+          <div class="text-neutral-400">${t('findGame.card.created')}</div>
+          <div class="text-xs font-bold">${formatTime(lobby.createdAt)}</div>
         </div>
       </div>
 
@@ -322,10 +316,10 @@ export class FindGamePage extends AbstractComponent {
         isPrivate && isMyLobby && this.myLobbies.has(lobby.id)
           ? `
         <div class="mb-3 p-2 bg-neutral-900 rounded border border-neutral-600">
-          <div class="text-xs text-neutral-400 mb-1">Code</div>
+          <div class="text-xs text-neutral-400 mb-1">${t('findGame.card.code')}</div>
           <div class="flex items-center gap-2">
             <code class="flex-1 text-sm font-mono font-bold text-blue-400">${this.myLobbies.get(lobby.id) || ''}</code>
-            <button class="copy-code-btn px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition" data-code="${this.myLobbies.get(lobby.id) || ''}">Copy</button>
+            <button class="copy-code-btn px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition" data-code="${this.myLobbies.get(lobby.id) || ''}">${t('findGame.card.copy')}</button>
           </div>
         </div>
       `
@@ -336,54 +330,40 @@ export class FindGamePage extends AbstractComponent {
         ${
           isMyLobby
             ? `
-              <button class="flex-1 px-3 py-2 rounded bg-blue-700 hover:bg-blue-600 text-sm font-medium transition" data-action="manage" data-lobby-id="${lobby.id}">Manage</button>
-              <button class="flex-1 px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-sm font-medium transition" data-action="remove" data-lobby-id="${lobby.id}">Remove</button>
+              <button class="flex-1 px-3 py-2 rounded bg-blue-700 hover:bg-blue-600 text-sm font-medium transition" data-action="manage" data-lobby-id="${lobby.id}">${t('findGame.card.manage')}</button>
+              <button class="flex-1 px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-sm font-medium transition" data-action="remove" data-lobby-id="${lobby.id}">${t('findGame.card.remove')}</button>
             `
             : `<button class="flex-1 px-3 py-2 rounded ${
                 isFull ? 'bg-neutral-700 cursor-not-allowed opacity-50' : 'bg-green-700 hover:bg-green-600'
               } text-sm font-medium transition join-lobby-btn" data-lobby-id="${lobby.id}" ${isFull ? 'disabled' : ''}>
-                ${isFull ? 'FULL' : 'JOIN'}
+                ${isFull ? t('findGame.card.full') : t('findGame.card.join')}
               </button>`
         }
       </div>
     `;
 
-    // Copy code button
-    card.querySelector('.copy-code-btn')?.addEventListener('click', (e) => {
-      const code = (e.target as HTMLButtonElement).dataset.code;
-      if (code) {
-        navigator.clipboard.writeText(code);
-        const btn = e.target as HTMLButtonElement;
-        const original = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => {
-          btn.textContent = original;
-        }, 2000);
-      }
+    card.querySelector('.copy-code-btn')?.addEventListener('click', (event) => {
+      const button = event.target as HTMLButtonElement;
+      const code = button.dataset.code;
+      if (!code) return;
+
+      navigator.clipboard.writeText(code);
+      button.textContent = t('findGame.card.copied');
+      setTimeout(() => {
+        button.textContent = t('findGame.card.copy');
+      }, 2000);
     });
 
-    // Join button
     card.querySelector('.join-lobby-btn')?.addEventListener('click', () => {
-      const lobbyId = (card.querySelector('.join-lobby-btn') as HTMLElement).dataset.lobbyId;
-      if (lobbyId) {
-        this.joinLobby(lobby);
-      }
+      this.joinLobby(lobby);
     });
 
-    // Manage button
     card.querySelector('[data-action="manage"]')?.addEventListener('click', () => {
-      const lobbyId = (card.querySelector('[data-action="manage"]') as HTMLElement).dataset.lobbyId;
-      if (lobbyId) {
-        this.navigateToLobby(lobbyId);
-      }
+      this.navigateToLobby(lobby.id);
     });
 
-    // Remove button
     card.querySelector('[data-action="remove"]')?.addEventListener('click', () => {
-      const lobbyId = (card.querySelector('[data-action="remove"]') as HTMLElement).dataset.lobbyId;
-      if (lobbyId) {
-        this.removeLobby(lobbyId);
-      }
+      this.removeLobby(lobby.id);
     });
 
     return card;
@@ -391,47 +371,46 @@ export class FindGamePage extends AbstractComponent {
 
   private openCreateModal(): void {
     const modal = document.createElement('div');
-    modal.className =
-      'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50';
     modal.innerHTML = `
       <div class="bg-neutral-800 rounded-lg p-6 w-full max-w-md border border-neutral-700">
-        <h2 class="text-2xl font-bold mb-4">Create Lobby</h2>
+        <h2 class="text-2xl font-bold mb-4">${t('findGame.modal.title')}</h2>
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-2">Game Mode</label>
+            <label class="block text-sm font-medium mb-2">${t('findGame.modal.gameMode')}</label>
             <select id="mode-select" class="w-full px-3 py-2 rounded bg-neutral-700 border border-neutral-600 focus:border-blue-500 outline-none">
-              <option value="1v1">1 vs 1</option>
-              <option value="2v2">2 vs 2</option>
-              <option value="3v3">3 vs 3</option>
+              <option value="1v1">${t('findGame.mode.1v1')}</option>
+              <option value="2v2">${t('findGame.mode.2v2')}</option>
+              <option value="3v3">${t('findGame.mode.3v3')}</option>
             </select>
           </div>
 
           <div>
-            <label class="block text-sm font-medium mb-2">Lobby Type</label>
+            <label class="block text-sm font-medium mb-2">${t('findGame.modal.lobbyType')}</label>
             <div class="flex gap-3">
               <label class="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="lobby-type" value="public" checked class="w-4 h-4" />
-                <span class="text-sm">Public</span>
+                <span class="text-sm">${t('findGame.type.public')}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="lobby-type" value="private" class="w-4 h-4" />
-                <span class="text-sm">Private (generate code)</span>
+                <span class="text-sm">${t('findGame.modal.privateGenerate')}</span>
               </label>
             </div>
           </div>
 
           <div id="code-preview" class="hidden p-3 bg-neutral-900 rounded border border-neutral-600">
-            <div class="text-xs text-neutral-400 mb-2">Your Lobby Code</div>
+            <div class="text-xs text-neutral-400 mb-2">${t('findGame.modal.codePreview')}</div>
             <div class="flex items-center gap-2">
               <code id="preview-code" class="flex-1 text-sm font-mono font-bold text-blue-400"></code>
-              <button id="copy-preview" type="button" class="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition">Copy</button>
+              <button id="copy-preview" type="button" class="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition">${t('findGame.card.copy')}</button>
             </div>
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button id="btn-cancel" type="button" class="flex-1 px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600 font-medium transition">Cancel</button>
-            <button id="btn-create" type="button" class="flex-1 px-4 py-2 rounded bg-blue-700 hover:bg-blue-600 font-medium transition">Create</button>
+            <button id="btn-cancel" type="button" class="flex-1 px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600 font-medium transition">${t('findGame.modal.cancel')}</button>
+            <button id="btn-create" type="button" class="flex-1 px-4 py-2 rounded bg-blue-700 hover:bg-blue-600 font-medium transition">${t('findGame.modal.create')}</button>
           </div>
         </div>
       </div>
@@ -440,7 +419,6 @@ export class FindGamePage extends AbstractComponent {
     document.body.appendChild(modal);
     this.createLobbyModal = modal;
 
-    // Handle lobby type radio change
     const radios = modal.querySelectorAll('input[name="lobby-type"]');
     const codePreview = modal.querySelector('#code-preview');
     const previewCode = modal.querySelector('#preview-code');
@@ -449,7 +427,6 @@ export class FindGamePage extends AbstractComponent {
       radio.addEventListener('change', () => {
         const isPrivate = (radio as HTMLInputElement).value === 'private';
         if (isPrivate && codePreview) {
-          // Generate code
           const code = this.generateLobbyCode();
           if (previewCode) previewCode.textContent = code;
           codePreview.classList.remove('hidden');
@@ -461,79 +438,74 @@ export class FindGamePage extends AbstractComponent {
 
     modal.querySelector('#copy-preview')?.addEventListener('click', () => {
       const code = (previewCode as HTMLElement)?.textContent;
-      if (code) {
-        navigator.clipboard.writeText(code);
-        const btn = modal.querySelector('#copy-preview') as HTMLButtonElement;
-        const original = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => {
-          btn.textContent = original;
-        }, 2000);
-      }
+      const button = modal.querySelector('#copy-preview') as HTMLButtonElement | null;
+      if (!code || !button) return;
+
+      navigator.clipboard.writeText(code);
+      button.textContent = t('findGame.card.copied');
+      setTimeout(() => {
+        button.textContent = t('findGame.card.copy');
+      }, 2000);
     });
 
-    // Create button
     modal.querySelector('#btn-create')?.addEventListener('click', () => {
       const modeSelect = modal.querySelector('#mode-select') as HTMLSelectElement;
-      const typeRadio = modal.querySelector('input[name="lobby-type"]:checked') as HTMLInputElement;
+      const typeRadio = modal.querySelector(
+        'input[name="lobby-type"]:checked'
+      ) as HTMLInputElement;
       const mode = modeSelect.value;
       const isPrivate = typeRadio.value === 'private';
-      const code = isPrivate ? ((previewCode as HTMLElement)?.textContent || '') : '';
+      const code = isPrivate ? (previewCode as HTMLElement)?.textContent || '' : '';
 
       this.createLobby(mode, isPrivate, code);
     });
 
-    // Cancel button
     modal.querySelector('#btn-cancel')?.addEventListener('click', () => {
       this.closeCreateModal();
     });
 
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
         this.closeCreateModal();
       }
     });
   }
 
   private closeCreateModal(): void {
-    if (this.createLobbyModal && this.createLobbyModal.parentNode) {
+    if (this.createLobbyModal?.parentNode) {
       this.createLobbyModal.parentNode.removeChild(this.createLobbyModal);
       this.createLobbyModal = null;
     }
   }
 
   private generateLobbyCode(): string {
-    // Generate a 6-character alphanumeric code like: ABC123
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 6; i += 1) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
   }
 
   private createLobby(mode: string, isPrivate: boolean, code: string): void {
-    console.log(`📋 Creating ${isPrivate ? 'private' : 'public'} ${mode} lobby`);
     const user = this.currentUser;
     this.socket?.emit('createLobby', {
       mode,
       isPrivate,
       code: isPrivate ? code : undefined,
-      leaderName: user?.username || 'Unknown',
+      leaderName: user?.username || t('findGame.user.unknown'),
       leaderAvatar: user?.avatarUrl || null,
     });
   }
 
   private joinLobby(lobby: GameLobby): void {
-    console.log(`🎮 Attempting to join lobby ${lobby.id}`);
     let privateCode: string | undefined;
     if (lobby.isPrivate) {
-      const input = window.prompt('Enter private lobby code:');
+      const input = window.prompt(t('findGame.prompt.privateCode'));
       if (input === null) return;
       privateCode = input.trim().toUpperCase();
       if (!privateCode) {
-        alert('Lobby code is required.');
+        alert(t('findGame.validation.codeRequired'));
         return;
       }
     }
@@ -542,18 +514,17 @@ export class FindGamePage extends AbstractComponent {
     this.socket?.emit('joinLobbyById', {
       lobbyId: lobby.id,
       code: privateCode,
-      username: user?.username || 'Unknown',
+      username: user?.username || t('findGame.user.unknown'),
       avatarUrl: user?.avatarUrl || null,
     });
   }
 
   private navigateToLobby(lobbyId: string): void {
-    console.log(`🎮 Navigating to lobby ${lobbyId}`);
-    router.navigate(`/lobby?id=${lobbyId}`);
+    navigateTo(`/lobby?id=${lobbyId}`);
   }
 
   private removeLobby(lobbyId: string): void {
-    const confirmed = window.confirm('Remove this lobby?');
+    const confirmed = window.confirm(t('findGame.confirm.removeLobby'));
     if (!confirmed) return;
 
     this.socket?.emit('deleteLobby', { lobbyId });
@@ -561,7 +532,8 @@ export class FindGamePage extends AbstractComponent {
 
   private showToast(message: string, type: 'success' | 'error' = 'success'): void {
     const toast = document.createElement('div');
-    const baseClasses = 'fixed top-4 right-4 z-[1000] px-4 py-3 rounded-md text-sm font-medium shadow-lg border';
+    const baseClasses =
+      'fixed top-4 right-4 z-[1000] px-4 py-3 rounded-md text-sm font-medium shadow-lg border';
     const variantClasses =
       type === 'success'
         ? 'bg-green-900 text-green-200 border-green-700'
@@ -577,9 +549,6 @@ export class FindGamePage extends AbstractComponent {
   }
 
   public onDestroy(): void {
-    console.log('🧹 FindGame cleanup: Removing listeners and subscriptions');
-    
-    // Clean up socket listeners
     if (this.socket) {
       this.socket.off('connect', this.onSocketConnect);
       this.socket.off('disconnect', this.onSocketDisconnect);
@@ -593,25 +562,32 @@ export class FindGamePage extends AbstractComponent {
       this.socket.off('deleteLobbyError', this.onDeleteLobbyError);
       this.socket.off('error', this.onSocketError);
     }
-    
-    // Clean up user store subscription
+
     if (this.userStoreSubscription) {
       this.userStoreSubscription();
       this.userStoreSubscription = null;
     }
-    
-    // Clean up refresh timer
+
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    
-    // Clean up modal
+
     this.closeCreateModal();
-    
-    // Reset state
     this.lobbies = [];
     this.currentUser = null;
     this.isRefreshing = false;
+  }
+
+  private getModeLabel(mode: GameLobby['mode']): string {
+    if (mode === '2v2') return t('findGame.mode.2v2');
+    if (mode === '3v3') return t('findGame.mode.3v3');
+    return t('findGame.mode.1v1');
+  }
+
+  private getStatusLabel(status: GameLobby['status']): string {
+    if (status === 'playing') return t('findGame.status.playing');
+    if (status === 'ready') return t('findGame.status.ready');
+    return t('findGame.status.waiting');
   }
 }

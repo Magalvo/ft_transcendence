@@ -10,6 +10,7 @@ import {
   type GroupVisibility,
 } from "../services/ChatService";
 import { io, type Socket } from "socket.io-client";
+import { formatTime, t } from "../services/I18nService";
 import { TokenManager } from "../services/TokenManager";
 import { WS_URL } from "../services/RuntimeConfig";
 
@@ -69,63 +70,63 @@ export class ChatPage extends AbstractComponent {
       <aside class="flex min-h-0 w-72 flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-3">
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <div class="flex min-h-0 flex-1 flex-col">
-            <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">Users</h2>
+            <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">${t("chat.users")}</h2>
             <div id="chat-users" class="min-h-0 flex flex-1 flex-col gap-2 overflow-auto pb-2"></div>
           </div>
           <div class="flex min-h-0 flex-1 flex-col">
-            <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">Channels</h2>
+            <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">${t("chat.channels")}</h2>
             <div id="chat-groups" class="min-h-0 flex flex-1 flex-col gap-2 overflow-auto pb-2"></div>
           </div>
         </div>
         <div class="mt-3 shrink-0 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Create Channel</h3>
-          <input id="create-name" type="text" placeholder="name" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
+          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">${t("chat.createChannel")}</h3>
+          <input id="create-name" type="text" placeholder="${t("chat.channelNamePlaceholder")}" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
           <select id="create-visibility" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm">
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-            <option value="protected">Protected</option>
+            <option value="public">${t("chat.visibility.public")}</option>
+            <option value="private">${t("chat.visibility.private")}</option>
+            <option value="protected">${t("chat.visibility.protected")}</option>
           </select>
-          <input id="create-password" type="password" placeholder="password (for protected)" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
-          <button id="create-channel-btn" type="button" class="w-full rounded bg-blue-700 px-2 py-1 text-sm font-medium hover:bg-blue-600">Create</button>
+          <input id="create-password" type="password" placeholder="${t("chat.passwordProtectedPlaceholder")}" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
+          <button id="create-channel-btn" type="button" class="w-full rounded bg-blue-700 px-2 py-1 text-sm font-medium hover:bg-blue-600">${t("chat.create")}</button>
         </div>
       </aside>
 
       <section class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
         <header class="shrink-0 flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <h2 id="chat-title" class="text-lg font-semibold">Chat</h2>
+          <h2 id="chat-title" class="text-lg font-semibold">${t("chat.title")}</h2>
           <div class="flex items-center gap-2">
-            <button id="chat-dm-block" type="button" class="hidden rounded-md bg-rose-700 px-3 py-1 text-sm font-medium hover:bg-rose-600">Block</button>
-            <button id="chat-invite" type="button" class="rounded-md bg-emerald-700 px-3 py-1 text-sm font-medium hover:bg-emerald-600">Invite to Pong</button>
+            <button id="chat-dm-block" type="button" class="hidden rounded-md bg-rose-700 px-3 py-1 text-sm font-medium hover:bg-rose-600">${t("chat.block")}</button>
+            <button id="chat-invite" type="button" class="rounded-md bg-emerald-700 px-3 py-1 text-sm font-medium hover:bg-emerald-600">${t("chat.invitePong")}</button>
           </div>
         </header>
         <ol id="chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 pb-6"></ol>
         <form id="chat-form" class="shrink-0 flex gap-2 border-t border-neutral-800 p-3">
-          <input id="chat-input" type="text" placeholder="Type message..." class="flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-blue-500" />
-          <button id="chat-send" type="submit" class="rounded-md bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500">Send</button>
+          <input id="chat-input" type="text" placeholder="${t("chat.messagePlaceholder")}" class="flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-blue-500" />
+          <button id="chat-send" type="submit" class="rounded-md bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500">${t("chat.send")}</button>
         </form>
       </section>
 
       <aside id="chat-admin-panel" class="flex min-h-0 w-80 flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-        <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">Channel Admin</h2>
-        <div id="chat-role" class="mb-3 text-sm text-neutral-300">Role: -</div>
+        <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">${t("chat.channelAdmin")}</h2>
+        <div id="chat-role" class="mb-3 text-sm text-neutral-300">${t("chat.role", { role: t("chat.role.none") })}</div>
         <div id="invite-member-section" class="mb-3 shrink-0 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-          <div class="mb-2 text-xs text-neutral-400">Invite Member (by user name)</div>
+          <div class="mb-2 text-xs text-neutral-400">${t("chat.inviteMember")}</div>
           <div class="flex gap-2">
-            <input id="invite-member-input" type="text" placeholder="user name" class="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
-            <button id="invite-member-btn" type="button" class="rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600">Invite</button>
+            <input id="invite-member-input" type="text" placeholder="${t("chat.inviteMemberPlaceholder")}" class="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
+            <button id="invite-member-btn" type="button" class="rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600">${t("chat.invite")}</button>
           </div>
         </div>
         <div class="mb-3 shrink-0 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-          <div class="mb-2 text-xs text-neutral-400">Channel Settings (Owner)</div>
+          <div class="mb-2 text-xs text-neutral-400">${t("chat.channelSettings")}</div>
           <select id="settings-visibility" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm">
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-            <option value="protected">Protected</option>
+            <option value="public">${t("chat.visibility.public")}</option>
+            <option value="private">${t("chat.visibility.private")}</option>
+            <option value="protected">${t("chat.visibility.protected")}</option>
           </select>
-          <input id="settings-password" type="password" placeholder="new password" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
-          <button id="settings-save-btn" type="button" class="w-full rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600">Apply</button>
+          <input id="settings-password" type="password" placeholder="${t("chat.settingsPasswordPlaceholder")}" class="mb-2 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm" />
+          <button id="settings-save-btn" type="button" class="w-full rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600">${t("chat.apply")}</button>
         </div>
-        <div class="mb-2 shrink-0 text-xs text-neutral-400">Members</div>
+        <div class="mb-2 shrink-0 text-xs text-neutral-400">${t("chat.members")}</div>
         <div id="chat-members" class="min-h-0 flex flex-1 flex-col gap-2 overflow-auto pb-2"></div>
       </aside>
     `;
@@ -162,7 +163,7 @@ export class ChatPage extends AbstractComponent {
     this.inviteBtnEl?.addEventListener("click", () => {
       const targetId = this.currentDmTargetId;
       if (!targetId || !this.currentUser) {
-        window.alert("Open a private chat to invite user to Pong");
+        window.alert(t("chat.error.inviteContext"));
         return;
       }
 
@@ -181,7 +182,7 @@ export class ChatPage extends AbstractComponent {
       }
 
       if (this.currentPrivateChatId === null) {
-        window.alert("Open a private chat to invite user to Pong");
+        window.alert(t("chat.error.inviteContext"));
         return;
       }
 
@@ -192,7 +193,7 @@ export class ChatPage extends AbstractComponent {
           this.renderMessages();
           this.openInviteLobby(inviteUrl);
         } catch (e: any) {
-          window.alert(e?.response?.data?.error || e?.message || "Failed to send game invite");
+          window.alert(e?.response?.data?.error || e?.message || t("chat.error.sendGameInvite"));
         }
       })();
     });
@@ -275,7 +276,9 @@ export class ChatPage extends AbstractComponent {
       btn.className = `w-full rounded-md px-3 py-2 text-left text-sm transition ${
         active ? "bg-blue-700 text-white" : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700"
       }`;
-      btn.textContent = `${group.name || `Group ${group.id_group}`} ${group.visibility ? `(${group.visibility})` : ""}`;
+      const groupName = group.name || t("chat.groupFallback", { id: group.id_group });
+      const visibilityLabel = group.visibility ? this.getVisibilityLabel(group.visibility) : "";
+      btn.textContent = visibilityLabel ? `${groupName} (${visibilityLabel})` : groupName;
       btn.addEventListener("click", () => void this.selectGroup(group.id_group));
       this.groupsEl?.appendChild(btn);
     });
@@ -287,7 +290,7 @@ export class ChatPage extends AbstractComponent {
     if (!this.users.length) {
       const empty = document.createElement("div");
       empty.className = "text-xs text-neutral-500";
-      empty.textContent = "No users";
+      empty.textContent = t("chat.noUsers");
       this.usersEl.appendChild(empty);
       return;
     }
@@ -303,7 +306,7 @@ export class ChatPage extends AbstractComponent {
         <span class="truncate">${user.username}</span>
         <span class="ml-2 inline-flex items-center gap-1 text-[11px] ${user.online ? "text-emerald-400" : "text-neutral-500"}">
           <span class="inline-block h-2 w-2 rounded-full ${user.online ? "bg-emerald-400" : "bg-neutral-600"}"></span>
-          ${user.online ? "online" : "offline"}
+          ${this.getUserStatusLabel(user.online)}
         </span>
       `;
       btn.addEventListener("click", () => void this.openPrivateChat(user.id, user.username));
@@ -324,20 +327,20 @@ export class ChatPage extends AbstractComponent {
     } catch (e: any) {
       const errorText = String(e?.response?.data?.error || e?.message || "");
       if (errorText.toLowerCase().includes("password")) {
-        const pass = window.prompt("Channel password:");
+        const pass = window.prompt(t("chat.prompt.channelPassword"));
         if (pass) {
           await ChatService.joinGroup(groupId, pass);
         } else {
           return;
         }
       } else {
-        window.alert(errorText || "Failed to join channel");
+        window.alert(errorText || t("chat.error.joinChannel"));
         return;
       }
     }
 
     const selected = this.groups.find((g) => g.id_group === groupId);
-    if (this.titleEl) this.titleEl.textContent = selected ? `# ${selected.name}` : "Chat";
+    if (this.titleEl) this.titleEl.textContent = selected ? `# ${selected.name}` : t("chat.title");
     this.inviteBtnEl?.classList.add("hidden");
     if (this.settingsVisibilityEl) this.settingsVisibilityEl.value = selected?.visibility || "public";
     this.chatSocket?.emit("chat_join_group", { groupId });
@@ -347,7 +350,7 @@ export class ChatPage extends AbstractComponent {
       await this.refreshGroupMeta();
       this.renderMessages();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to load channel messages");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.loadChannelMessages"));
     }
   }
 
@@ -371,7 +374,7 @@ export class ChatPage extends AbstractComponent {
       this.renderMessages();
     } catch (e: any) {
       this.currentPrivateChatId = null;
-      window.alert(e?.response?.data?.error || e?.message || "Failed to open private chat");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.openPrivateChat"));
     }
   }
 
@@ -406,7 +409,7 @@ export class ChatPage extends AbstractComponent {
 
     this.chatSocket.on("chat_error", (err: any) => {
       this.realtimeReady = false;
-      const msg = err?.message || "Chat realtime error";
+      const msg = err?.message || t("chat.error.realtime");
       if (msg) window.alert(msg);
     });
 
@@ -455,7 +458,7 @@ export class ChatPage extends AbstractComponent {
     if (!this.messages.length) {
       const empty = document.createElement("li");
       empty.className = "text-sm text-neutral-400";
-      empty.textContent = "No messages yet.";
+      empty.textContent = t("chat.messages.empty");
       this.listEl.appendChild(empty);
       return;
     }
@@ -473,15 +476,19 @@ export class ChatPage extends AbstractComponent {
       const sender = document.createElement("button");
       sender.type = "button";
       sender.className = "mb-1 text-xs opacity-70 underline-offset-2 hover:underline";
-      sender.textContent = msg.sender_name || `User ${msg.id_usersender}`;
+      sender.textContent = msg.sender_name || t("chat.userFallback", { id: msg.id_usersender });
       sender.addEventListener("click", async () => {
         try {
           const profile = await ChatService.getUserProfile(msg.id_usersender);
           window.alert(
-            `User: ${profile.username}\nEmail: ${profile.email ?? "-"}\nOnline: ${profile.online ? "yes" : "no"}`
+            t("chat.profileModal", {
+              username: profile.username,
+              email: profile.email ?? "-",
+              online: profile.online ? t("chat.profileOnline.yes") : t("chat.profileOnline.no"),
+            })
           );
         } catch {
-          window.alert("Failed to load profile");
+          window.alert(t("chat.error.loadProfile"));
         }
       });
 
@@ -489,19 +496,19 @@ export class ChatPage extends AbstractComponent {
       const text = document.createElement("div");
       text.className = "break-words text-sm";
       text.textContent = inviteData
-        ? (isMe ? "Pong invite sent" : "Pong invite received")
+        ? (isMe ? t("chat.invite.sent") : t("chat.invite.received"))
         : msg.messagem;
 
       const time = document.createElement("div");
       time.className = "mt-1 text-right text-[10px] opacity-60";
-      time.textContent = new Date(msg.timestamp).toLocaleTimeString();
+      time.textContent = formatTime(msg.timestamp);
 
       bubble.append(sender, text);
       if (inviteData && isMe) {
         const openBtn = document.createElement("button");
         openBtn.type = "button";
         openBtn.className = "mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium hover:bg-blue-600";
-        openBtn.textContent = "Open Lobby";
+        openBtn.textContent = t("chat.invite.openLobby");
         openBtn.addEventListener("click", () => {
           window.location.href = this.buildInviteUrl(inviteData.url, inviteData.sessionId);
         });
@@ -511,7 +518,7 @@ export class ChatPage extends AbstractComponent {
         const acceptBtn = document.createElement("button");
         acceptBtn.type = "button";
         acceptBtn.className = "mt-2 rounded bg-emerald-700 px-3 py-1 text-xs font-medium hover:bg-emerald-600";
-        acceptBtn.textContent = "Accept Pong";
+        acceptBtn.textContent = t("chat.invite.accept");
         acceptBtn.addEventListener("click", () => {
           window.location.href = this.buildInviteUrl(
             inviteData?.url || msg.invite_url,
@@ -575,9 +582,11 @@ export class ChatPage extends AbstractComponent {
     if (!this.membersEl) return;
     this.membersEl.innerHTML = "";
 
-    if (this.roleEl) this.roleEl.textContent = `Role: ${this.currentRole || "-"}`;
+    if (this.roleEl) {
+      this.roleEl.textContent = t("chat.role", { role: this.getRoleLabel(this.currentRole) });
+    }
     if (!this.currentGroupId) {
-      if (this.roleEl) this.roleEl.textContent = "Role: DM mode";
+      if (this.roleEl) this.roleEl.textContent = t("chat.role.dm");
     }
 
     const canModerate = this.currentGroupId !== null && (this.currentRole === "owner" || this.currentRole === "admin");
@@ -599,7 +608,7 @@ export class ChatPage extends AbstractComponent {
     if (!this.currentGroupId) {
       const info = document.createElement("div");
       info.className = "text-sm text-neutral-500";
-      info.textContent = "Direct message chat";
+      info.textContent = t("chat.dmInfo");
       this.membersEl.appendChild(info);
       return;
     }
@@ -607,7 +616,7 @@ export class ChatPage extends AbstractComponent {
     if (!this.members.length) {
       const empty = document.createElement("div");
       empty.className = "text-sm text-neutral-500";
-      empty.textContent = "No members";
+      empty.textContent = t("chat.noMembers");
       this.membersEl.appendChild(empty);
       return;
     }
@@ -625,7 +634,7 @@ export class ChatPage extends AbstractComponent {
           <span class="inline-block h-2 w-2 rounded-full ${member.online ? "bg-emerald-400" : "bg-neutral-600"}"></span>
           ${member.username}
         </span>
-        <span class="text-xs text-neutral-400">${isBanned ? "banned" : member.role}</span>
+        <span class="text-xs text-neutral-400">${isBanned ? t("chat.memberStatus.banned") : this.getRoleLabel(member.role)}</span>
       `;
 
       const actions = document.createElement("div");
@@ -646,23 +655,23 @@ export class ChatPage extends AbstractComponent {
 
       if (ownerOnly) {
         addAction(
-          member.role === "admin" ? "Demote" : "Promote",
+          member.role === "admin" ? t("chat.action.demote") : t("chat.action.promote"),
           () => void this.handleSetAdmin(member.id, member.role !== "admin"),
           isSelf || targetIsOwner || isBanned
         );
       }
-      addAction("Profile", () => void this.handleProfile(member.id));
+      addAction(t("chat.action.profile"), () => void this.handleProfile(member.id));
 
       if (canModerate) {
         if (isBanned) {
-          addAction("Unban", () => void this.handleUnban(member.id), isSelf);
+          addAction(t("chat.action.unban"), () => void this.handleUnban(member.id), isSelf);
         } else {
-          addAction("Kick", () => void this.handleKick(member.id), isSelf || targetIsOwner);
-          addAction("Ban", () => void this.handleBan(member.id), isSelf || targetIsOwner);
+          addAction(t("chat.action.kick"), () => void this.handleKick(member.id), isSelf || targetIsOwner);
+          addAction(t("chat.action.ban"), () => void this.handleBan(member.id), isSelf || targetIsOwner);
           if (isMuted) {
-            addAction("Unmute", () => void this.handleUnmute(member.id), isSelf);
+            addAction(t("chat.action.unmute"), () => void this.handleUnmute(member.id), isSelf);
           } else {
-            addAction("Mute 60s", () => void this.handleMute(member.id, 60), isSelf || targetIsOwner);
+            addAction(t("chat.action.mute60"), () => void this.handleMute(member.id, 60), isSelf || targetIsOwner);
           }
         }
       }
@@ -689,7 +698,7 @@ export class ChatPage extends AbstractComponent {
       this.createNameEl.value = "";
       if (this.createPasswordEl) this.createPasswordEl.value = "";
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to create channel");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.createChannel"));
     } finally {
       this.createBtnEl.disabled = false;
     }
@@ -704,7 +713,7 @@ export class ChatPage extends AbstractComponent {
       this.inviteMemberEl.value = "";
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Invite failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.inviteMember"));
     }
   }
 
@@ -720,7 +729,7 @@ export class ChatPage extends AbstractComponent {
       this.renderGroups();
       if (this.settingsPasswordEl) this.settingsPasswordEl.value = "";
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to update settings");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.updateSettings"));
     }
   }
 
@@ -730,7 +739,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.setAdmin(this.currentGroupId, targetId, enabled);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to change admin role");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.changeAdmin"));
     }
   }
 
@@ -740,7 +749,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.kick(this.currentGroupId, targetId);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Kick failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.kick"));
     }
   }
 
@@ -750,7 +759,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.ban(this.currentGroupId, targetId);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Ban failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.ban"));
     }
   }
 
@@ -760,7 +769,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.unban(this.currentGroupId, targetId);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Unban failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.unban"));
     }
   }
 
@@ -770,7 +779,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.mute(this.currentGroupId, targetId, seconds);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Mute failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.mute"));
     }
   }
 
@@ -780,7 +789,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.unmute(this.currentGroupId, targetId);
       await this.refreshGroupMeta();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Unmute failed");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.unmute"));
     }
   }
 
@@ -788,10 +797,14 @@ export class ChatPage extends AbstractComponent {
     try {
       const profile = await ChatService.getUserProfile(userId);
       window.alert(
-        `User: ${profile.username}\nEmail: ${profile.email ?? "-"}\nOnline: ${profile.online ? "yes" : "no"}`
+        t("chat.profileModal", {
+          username: profile.username,
+          email: profile.email ?? "-",
+          online: profile.online ? t("chat.profileOnline.yes") : t("chat.profileOnline.no"),
+        })
       );
     } catch {
-      window.alert("Failed to load profile");
+      window.alert(t("chat.error.loadProfile"));
     }
   }
 
@@ -800,7 +813,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.blockUser(targetId);
       this.blockedUserIds.add(targetId);
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to block user");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.block"));
     }
   }
 
@@ -809,7 +822,7 @@ export class ChatPage extends AbstractComponent {
       await ChatService.unblockUser(targetId);
       this.blockedUserIds.delete(targetId);
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to unblock user");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.unblock"));
     }
   }
 
@@ -830,7 +843,7 @@ export class ChatPage extends AbstractComponent {
     if (!inDm || !dmTargetId) return;
 
     const isBlocked = this.blockedUserIds.has(dmTargetId);
-    this.dmBlockBtnEl.textContent = isBlocked ? "Unblock" : "Block";
+    this.dmBlockBtnEl.textContent = isBlocked ? t("chat.unblock") : t("chat.block");
     this.dmBlockBtnEl.classList.toggle("bg-rose-700", !isBlocked);
     this.dmBlockBtnEl.classList.toggle("hover:bg-rose-600", !isBlocked);
     this.dmBlockBtnEl.classList.toggle("bg-amber-700", isBlocked);
@@ -880,10 +893,39 @@ export class ChatPage extends AbstractComponent {
       }
       this.inputEl.value = "";
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || "Failed to send message");
+      window.alert(e?.response?.data?.error || e?.message || t("chat.error.sendMessage"));
     } finally {
       this.sendBtnEl.disabled = false;
     }
+  }
+
+  private getVisibilityLabel(visibility?: GroupVisibility | null): string {
+    switch (visibility) {
+      case "private":
+        return t("chat.visibility.private");
+      case "protected":
+        return t("chat.visibility.protected");
+      case "public":
+      default:
+        return t("chat.visibility.public");
+    }
+  }
+
+  private getRoleLabel(role: "owner" | "admin" | "member" | null): string {
+    switch (role) {
+      case "owner":
+        return t("chat.role.owner");
+      case "admin":
+        return t("chat.role.admin");
+      case "member":
+        return t("chat.role.member");
+      default:
+        return t("chat.role.none");
+    }
+  }
+
+  private getUserStatusLabel(isOnline: boolean): string {
+    return isOnline ? t("chat.userStatus.online") : t("chat.userStatus.offline");
   }
 
   public onDestroy(): void {

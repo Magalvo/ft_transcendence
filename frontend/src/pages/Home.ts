@@ -4,9 +4,10 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { HyperspeedWrapper } from '../components/ui/HyperspeedWrapper';
 import { hyperspeedPresets } from '../components/react/HyperspeedPresets';
+import { navigateTo } from '../core/AppRouter';
 import { UserService } from '../services/UserService';
 import { TokenManager } from '../services/TokenManager';
-import { router } from '../main';
+import { t } from '../services/I18nService';
 
 export class HomePage extends AbstractComponent {
   constructor() {
@@ -40,7 +41,7 @@ export class HomePage extends AbstractComponent {
         <h1 class="text-6xl font-extrabold mb-4 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
             FT_TRANSCENDENCE
         </h1>
-        <p class="text-xl text-gray-400 mb-8">The ultimate retro pong experience.</p>
+        <p class="text-xl text-gray-400 mb-8">${t('home.subtitle')}</p>
     `;
 
     const grid = document.createElement('div');
@@ -57,7 +58,7 @@ export class HomePage extends AbstractComponent {
         `;
         
         const btn = new Button(btnText, () => {
-            router.navigate(path);
+            navigateTo(path);
         }, 'primary');
         btn.getElement().classList.add('w-full');
 
@@ -66,9 +67,9 @@ export class HomePage extends AbstractComponent {
         return card;
     };
 
-    const playCard = createActionCard('Quick Match', 'Jump straight into a classic 1v1 pong game against AI or Local.', 'PLAY NOW', '/lobby', 'border-blue-500');
-    const tournCard = createActionCard('Tournament', 'Create a bracket and challenge 3 friends to a championship.', 'ORGANIZE', '/tournament', 'border-purple-500');
-    const profileCard = createActionCard('Your Profile', 'Check your stats, match history, and customize your avatar.', 'VIEW PROFILE', '/profile', 'border-green-500');
+    const playCard = createActionCard(t('home.quickMatch.title'), t('home.quickMatch.description'), t('home.quickMatch.cta'), '/lobby', 'border-blue-500');
+    const tournCard = createActionCard(t('home.tournament.title'), t('home.tournament.description'), t('home.tournament.cta'), '/tournament', 'border-purple-500');
+    const profileCard = createActionCard(t('home.profile.title'), t('home.profile.description'), t('home.profile.cta'), '/profile', 'border-green-500');
 
     grid.appendChild(playCard.getElement());
     grid.appendChild(tournCard.getElement());
