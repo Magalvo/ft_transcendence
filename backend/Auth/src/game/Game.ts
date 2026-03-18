@@ -79,11 +79,17 @@ export class Game {
     const socket = this.io.sockets.sockets.get(player.socket_id || "");
     if (!socket) return;
 
-    const socketId = player.socket_id || "";
-    if (!this.socketHandlers.has(socketId)) {
-      this.socketHandlers.set(socketId, new Map());
-    }
-    const handlers = this.socketHandlers.get(socketId)!;
+        const socketId = player.socket_id || "";
+        if (!this.socketHandlers.has(socketId)) {
+            this.socketHandlers.set(socketId, new Map());
+        }
+        const handlers = this.socketHandlers.get(socketId)!;
+
+        // Skip if we already set up handlers for this socket (multi-player on same socket)
+        if (handlers.has('renderReady')) {
+            console.log(`Socket ${socketId} already has handlers set up, skipping duplicate setup`);
+            return;
+        }
 
     const teamPlayers = this.engine.data.players.filter(
       (p) => p.side === player.side,
@@ -102,45 +108,55 @@ export class Game {
     socket.on("requestGameInit", requestGameInitHandler);
     handlers.set("requestGameInit", requestGameInitHandler);
 
-    const renderReadyHandler = () => {
-      console.log(`Player ${player.socket_id} is ready to start!`);
-      this.humansReady++;
-      if (this.humansReady >= this.totalHumans) this.startGameLoop();
-    };
-    socket.on("renderReady", renderReadyHandler);
-    handlers.set("renderReady", renderReadyHandler);
+        const renderReadyHandler = () => {
+            console.log(`Player ${player.socket_id} is ready to start!`);
+            // For tournament matches or multiple humans on same socket,
+            // count all humans on this socket as ready
+            if ((this as any).isTournamentMatch) {
+                const socketsHumans = this.engine.data.players.filter(p => p.socket_id === socketId && p.type === 'human').length;
+                this.humansReady += socketsHumans;
+            } else {
+                this.humansReady++;
+            }
+            if (this.humansReady >= this.totalHumans)
+                this.startGameLoop();
+        };
+        socket.on('renderReady', renderReadyHandler);
+        handlers.set('renderReady', renderReadyHandler);
 
-    if (player.side !== "spectator") {
-      const inputHandler = (data: any) => {
-        if (this.engine.data.status !== GameStatus.RUNNING) return;
-        if (data.side === player.side) {
-          if (player.side === "left")
-            this.engine.data.inputs.left[myIndex] = data.cmd;
-          else this.engine.data.inputs.right[myIndex] = data.cmd;
+        // Only set up input handlers for non-spectators
+        if (player.side === 'spectator') {
+            return;
         }
-      };
-      socket.on("input", inputHandler);
-      handlers.set("input", inputHandler);
 
-      const pauseGameHandler = () => {
-        const data = this.engine.data;
-        const now = Date.now();
-        const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
+        const inputHandler = (data: any) => {
+            if (this.engine.data.status !== GameStatus.RUNNING) return;
+            if (data.side === player.side) {
+                if (player.side === 'left') this.engine.data.inputs.left[myIndex] = data.cmd;
+                else this.engine.data.inputs.right[myIndex] = data.cmd;
+            }
+        };
+        socket.on('input', inputHandler);
+        handlers.set('input', inputHandler);
 
-        if (now - data.lastPauseToggle < cooldown) return;
-        data.lastPauseToggle = now;
+        const pauseGameHandler = () => {
+            const data = this.engine.data;
+            const now = Date.now();
+            const cooldown = (CONFIG as any).PAUSE_COOLDOWN_MS ?? 500;
 
-        if (data.status === GameStatus.RUNNING) {
-          data.status = GameStatus.PAUSED;
-          this.emitToRoom("gamePaused");
-        } else if (data.status === GameStatus.PAUSED) {
-          data.status = GameStatus.RUNNING;
-          this.emitToRoom("gameResumed");
-        }
-      };
-      socket.on("pauseGame", pauseGameHandler);
-      handlers.set("pauseGame", pauseGameHandler);
-    }
+            if (now - data.lastPauseToggle < cooldown) return;
+            data.lastPauseToggle = now;
+
+            if (data.status === GameStatus.RUNNING) {
+                data.status = GameStatus.PAUSED;
+                this.emitToRoom('gamePaused');
+            } else if (data.status === GameStatus.PAUSED) {
+                data.status = GameStatus.RUNNING;
+                this.emitToRoom('gameResumed');
+            }
+        };
+        socket.on('pauseGame', pauseGameHandler);
+        handlers.set('pauseGame', pauseGameHandler);
 
     // Handle player leaving the game mid-session
     const leaveGameHandler = (data: any) => {

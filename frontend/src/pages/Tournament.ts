@@ -1,6 +1,6 @@
 import { AbstractComponent } from '../core/Component';
 import { Navbar } from '../components/layout/Navbar';
-import { TournamentForm } from '../components/tournament/TournamentForm';
+import { TournamentForm, type TournamentParticipant } from '../components/tournament/TournamentForm';
 import { TournamentBracket } from '../components/tournament/TournamentBracket';
 import { TournamentManager } from '../core/TournamentManager';
 
@@ -20,18 +20,19 @@ export class TournamentPage extends AbstractComponent {
     container.className = 'container mx-auto p-6 mt-10 flex flex-col items-center';
 
     const manager = TournamentManager.getInstance();
-    const matches = manager.getMatches();
+    const currentTournament = manager.getCurrentTournament();
 
-    if (matches.length === 0) {
-      const form = new TournamentForm((aliases) => {
-        manager.startTournament(aliases);
+    if (!currentTournament) {
+      // Show form to create new tournament
+      const form = new TournamentForm((participants: TournamentParticipant[]) => {
+        manager.startLocalTournament(participants);
         this.render(); 
       });
       form.render();
       container.appendChild(form.getElement());
     } else {
-    
-      const bracket = new TournamentBracket(matches);
+      // Show bracket
+      const bracket = new TournamentBracket(currentTournament.matches);
       bracket.render();
       container.appendChild(bracket.getElement());
 

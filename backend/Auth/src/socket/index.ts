@@ -1,9 +1,12 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { Lobby } from "../game/Lobby.js";
+import { Game, GameConfiguration, GamePlayer } from "../game/index.js";
 import { attachChatRealtime } from "./chatRealtime.js";
+import { getOrCreatePrivateChat, createPrivateMessage } from "../services/chat.js";
 
 const socketToUserMap = new Map<string, string>();
+const userToSocketsMap = new Map<string, Set<string>>();
 
 const lobbiesRegistry = new Map<
   string,
@@ -22,6 +25,72 @@ function generateLobbyId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
+async function startTournamentGame(matchKey: string, matchId: string, pendingMatch: any, io: Server) {
+  try {
+    console.log(`🏆 Starting tournament game for match: ${matchId}`);
+    
+    // Create a temporary game room for the tournament match
+    const roomId = `tournament:${pendingMatch.tournamentId}:${matchId}`;
+    
+    // Create game configuration for 1v1
+    const gameConfig = new GameConfiguration("normal", "one_for_one");
+    
+    // Create players from the slots, sorted by side (left first, then right)
+    const sortedSlots = pendingMatch.slots.sort((a, b) => a.side === 'left' ? -1 : 1);
+    const players: GamePlayer[] = sortedSlots.map((slot: any) => 
+      new GamePlayer('human', slot.socketId, slot.side, slot.username, slot.userId)
+    );
+
+    const game = new Game(io, gameConfig, players, roomId, () => {
+      console.log(`🏆 Tournament match game ended: ${matchId}`);
+    });
+
+    // Join sockets to the game room
+    for (const slot of pendingMatch.slots) {
+      const socket = io.sockets.sockets.get(slot.socketId);
+      if (socket) {
+        socket.join(roomId);
+      }
+    }
+    
+    // Mark as tournament match for special handling
+    (game as any).isTournamentMatch = true;
+
+    // Start the game (initializes engine and binds socket events)
+    game.start();
+
+    // Send init events to both players
+    for (const slot of pendingMatch.slots) {
+      const socket = io.sockets.sockets.get(slot.socketId);
+      if (socket) {
+        const playerIndex = players.findIndex(p => p.userId === slot.userId);
+        socket.emit('init', {
+          side: slot.side,
+          index: playerIndex,
+          configs: gameConfig,
+          isTournamentMatch: true,
+          players: pendingMatch.slots.map((s: any) => s.userId)
+        });
+      }
+    }
+
+    // Remove from pending matches
+    pendingTournamentMatches.delete(matchKey);
+    
+    console.log(`✅ Tournament match game started: ${matchId}`);
+  } catch (error: any) {
+    console.error("❌ Error starting tournament game:", error);
+    // Notify both players of the error
+    for (const slot of pendingMatch.slots) {
+      const socket = io.sockets.sockets.get(slot.socketId);
+      if (socket) {
+        socket.emit("error", { message: error.message || "Failed to start tournament match" });
+      }
+    }
+    pendingTournamentMatches.delete(matchId);
+  }
+}
+
 export function setupSocketIO(httpServer: any) {
   const io = new Server(httpServer, {
     cors: {
@@ -30,6 +99,20 @@ export function setupSocketIO(httpServer: any) {
       credentials: true,
     },
   });
+
+  const pendingTournamentMatches = new Map<
+    string,
+    {
+      tournamentId: string;
+      matchId: string;
+      slots: Array<{
+        side: "left" | "right";
+        userId: string;
+        socketId: string;
+        username: string;
+      }>;
+    }
+  >();
 
   const mainLobby = new Lobby(io, socketToUserMap, "lobby:main");
 
@@ -171,9 +254,9 @@ export function setupSocketIO(httpServer: any) {
     if (authUserId) {
       socketToUserMap.set(socket.id, authUserId);
       socket.data.userId = authUserId;
-      console.log(
-        `Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`,
-      );
+      if (!userToSocketsMap.has(authUserId)) userToSocketsMap.set(authUserId, new Set());
+      userToSocketsMap.get(authUserId)!.add(socket.id);
+      console.log(`Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`);
     }
 
     const authTokenRaw =
@@ -189,9 +272,9 @@ export function setupSocketIO(httpServer: any) {
           if (decoded?.userId) {
             socketToUserMap.set(socket.id, decoded.userId);
             socket.data.userId = decoded.userId;
-            console.log(
-              `Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`,
-            );
+            if (!userToSocketsMap.has(decoded.userId)) userToSocketsMap.set(decoded.userId, new Set());
+            userToSocketsMap.get(decoded.userId)!.add(socket.id);
+            console.log(`Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`);
           }
         }
       } catch (error) {
@@ -207,8 +290,8 @@ export function setupSocketIO(httpServer: any) {
       if (data.userId) {
         socketToUserMap.set(socket.id, data.userId);
         socket.data.userId = data.userId;
-        console.log(`Mapped socket ${socket.id} to user ${data.userId}`);
-
+      if (!userToSocketsMap.has(data.userId)) userToSocketsMap.set(data.userId, new Set());
+      userToSocketsMap.get(data.userId)!.add(socket.id);
         getActiveLobby(socket.id).broadcastStatePublic();
       }
     });
@@ -506,8 +589,150 @@ export function setupSocketIO(httpServer: any) {
       getActiveLobby(socket.id).startGame(socket.id),
     );
 
+    // Tournament match handler
+    socket.on("requestTournamentMatch", async (data: {
+      tournamentId: string;
+      matchId: string;
+      player1_id: string;
+      player2_id: string;
+      player1_name?: string;
+      player2_name?: string;
+
+    }) => {
+      try {
+        console.log(`🏆 Tournament match requested: ${data.matchId}`);
+        
+        const { tournamentId, matchId, player1_id, player2_id, player1_name, player2_name } = data;
+        const matchKey = `${tournamentId}:${matchId}`;
+        const userId = socketToUserMap.get(socket.id);
+
+        if (!userId) {
+          socket.emit("error", { message: "User not authenticated" });
+          return;
+        }
+
+        // When requesting a tournament match, any user (host or participant)
+        // can trigger the invite. The match starts once both players connect.
+
+        const isPlayer1 = userId === player1_id;
+        const isPlayer2 = userId === player2_id;
+        const requesterSide = isPlayer1 ? "left" : "right";
+        const requesterName = isPlayer1 ? player1_name : player2_name;
+
+        // Check if match is already pending
+        const existingMatch = pendingTournamentMatches.get(matchKey);
+        if (existingMatch) {
+          // If this player already joined, ignore and keep waiting
+          const existingSlot = existingMatch.slots.find(s => s.userId === userId);
+          if (existingSlot) {
+            socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
+            return;
+          }
+
+          // Add this player to the pending match
+          const side = userId === player1_id ? "left" : "right";
+          existingMatch.slots.push({
+            side,
+            userId: userId,
+            socketId: socket.id,
+            username: requesterName || userId,
+          });
+
+          // Start when both players have joined
+          if (existingMatch.slots.length >= 2) {
+            await startTournamentGame(matchKey, matchId, existingMatch, io);
+          } else {
+            socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
+          }
+          return;
+        }
+
+        // Create new pending tournament match (empty until players join)
+        const pendingMatch: any = {
+          tournamentId,
+          matchId,
+          slots: [],
+        };
+
+        // If the requester is one of the players, add them immediately
+        if (isPlayer1 || isPlayer2) {
+          pendingMatch.slots.push({
+            side: requesterSide,
+            userId: userId,
+            socketId: socket.id,
+            username: requesterName || userId,
+          });
+        }
+
+        pendingTournamentMatches.set(matchKey, pendingMatch);
+
+        // Send chat invite to opponent
+        const inviteUrl = `/game?tournamentId=${tournamentId}&matchId=${matchId}&p1=${player1_id}&p2=${player2_id}`;
+        const inviteSession = `tournament_${tournamentId}_${matchId}`;
+        
+        // Use the same invite format as regular game invites
+        const encodedUrl = encodeURIComponent(inviteUrl);
+        const encodedSession = encodeURIComponent(inviteSession);
+        const inviteMessage = `__PONG_INVITE__|${encodedUrl}|${encodedSession}`;
+
+        // Send private message invite to both players (and to requester for confirmation)
+        try {
+          // Use the requester as the sender for invite messages
+          const targets = new Set([player1_id, player2_id, userId]);
+
+          // Send invite to each target by creating/using the private chat with the requester
+          for (const targetId of targets) {
+            if (!targetId) continue;
+            const chat = await getOrCreatePrivateChat(userId, targetId);
+            const msg = await createPrivateMessage(Number(chat.id_privatechat), userId, inviteMessage);
+
+            const targetSockets = userToSocketsMap.get(targetId);
+            if (!targetSockets) continue;
+
+            for (const targetSocketId of targetSockets) {
+              const targetSocket = io.sockets.sockets.get(targetSocketId);
+              if (targetSocket) {
+                targetSocket.emit("chat_private_message", msg);
+              }
+            }
+          }
+        } catch (chatError) {
+          console.error("Failed to send tournament invite via chat:", chatError);
+          socket.emit("error", { message: "Failed to send tournament invitation" });
+          pendingTournamentMatches.delete(matchId);
+          return;
+        }
+
+        socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
+        console.log(`✅ Tournament invite sent for match: ${matchId}`);
+      } catch (error: any) {
+        console.error("❌ Error setting up tournament match:", error);
+        socket.emit("error", { message: error.message || "Failed to setup tournament match" });
+      }
+    });
+
     socket.on("disconnect", async () => {
+      const userId = socketToUserMap.get(socket.id);
       socketToUserMap.delete(socket.id);
+      if (userId) {
+        const set = userToSocketsMap.get(userId);
+        set?.delete(socket.id);
+        if (set && set.size === 0) userToSocketsMap.delete(userId);
+        
+        // Clean up pending tournament matches for this user
+        for (const [matchId, match] of pendingTournamentMatches.entries()) {
+          const userSlot = match.slots.find(s => s.userId === userId);
+          if (userSlot) {
+            // Remove the user's slot from the match
+            match.slots = match.slots.filter(s => s.userId !== userId);
+            // If no slots left, remove the entire match
+            if (match.slots.length === 0) {
+              pendingTournamentMatches.delete(matchId);
+            }
+            break;
+          }
+        }
+      }
       leaveActiveLobby(socket.id);
       await broadcastLobbyList();
       console.log("User disconnected:", socket.id);
