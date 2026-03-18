@@ -61,6 +61,19 @@ services:
     networks:
       - transcendencenet
     restart: on-failure
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    container_name: Mailpit
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - transcendencenet
+    restart: unless-stopped
 
   frontend:
     container_name: Frontend

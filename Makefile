@@ -25,6 +25,10 @@ setup:
 		echo "FRONTEND_URL=https://localhost:8443" >> $(ENV_FILE); \
 		echo "PORT=3000" >> $(ENV_FILE); \
 		echo "DB_FILE=dev.sqlite" >> $(ENV_FILE); \
+		echo "SMTP_HOST=mailpit" >> $(ENV_FILE); \
+		echo "SMTP_PORT=1025" >> $(ENV_FILE); \
+		echo "SMTP_USER=noreply@ft.local" >> $(ENV_FILE); \
+		echo "SMTP_PASS=devpass" >> $(ENV_FILE); \
 		echo ".env file generated"; \
 	fi
 

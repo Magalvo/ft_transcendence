@@ -18,6 +18,11 @@ export class LoginPage extends AbstractComponent {
   private passwordInput: Input;
   private emailInput: Input;
   private acceptTermsChecked = false;
+  private isForgotPasswordModalOpen = false;
+  private forgotPasswordEmail = '';
+  private forgotPasswordError = '';
+  private forgotPasswordSuccess = '';
+  private isForgotPasswordSubmitting = false;
 
   constructor() {
     super(
@@ -111,7 +116,7 @@ export class LoginPage extends AbstractComponent {
       link.innerText = t('login.forgotPassword');
       link.onclick = (event) => {
         event.preventDefault();
-        void this.handleForgotPassword();
+        this.openForgotPasswordModal();
       };
 
       forgotLink.appendChild(link);
@@ -176,6 +181,10 @@ export class LoginPage extends AbstractComponent {
     }
 
     this.element.appendChild(card.getElement());
+
+    if (!this.isRegisterMode && this.isForgotPasswordModalOpen) {
+      this.element.appendChild(this.renderForgotPasswordModal());
+    }
   }
 
   private renderSocialLogin(card: Card): void {
@@ -302,23 +311,144 @@ export class LoginPage extends AbstractComponent {
   }
 
   private async handleForgotPassword(): Promise<void> {
-    const email = prompt(t('login.forgotPassword.prompt'));
+    const email = this.forgotPasswordEmail.trim();
+    this.forgotPasswordError = '';
+    this.forgotPasswordSuccess = '';
 
-    if (!email) return;
-
-    if (!AuthService.parseEmail(email)) {
-      alert(t('login.forgotPassword.invalidEmail'));
+    if (!email) {
+      this.forgotPasswordError = t('login.forgotPassword.requiredEmail');
+      this.render();
       return;
     }
 
+    if (!AuthService.parseEmail(email)) {
+      this.forgotPasswordError = t('login.forgotPassword.invalidEmail');
+      this.render();
+      return;
+    }
+
+    this.isForgotPasswordSubmitting = true;
+    this.render();
+
     try {
       await AuthService.forgotPassword(email);
-      alert(t('login.forgotPassword.success'));
+      this.forgotPasswordSuccess = t('login.forgotPassword.success');
+      this.forgotPasswordEmail = '';
     } catch (error: any) {
-      const errorMsg =
+      this.forgotPasswordError =
         error.response?.data?.error || t('login.forgotPassword.failure');
-      alert(errorMsg);
+    } finally {
+      this.isForgotPasswordSubmitting = false;
+      this.render();
     }
+  }
+
+  private openForgotPasswordModal(): void {
+    this.isForgotPasswordModalOpen = true;
+    this.forgotPasswordError = '';
+    this.forgotPasswordSuccess = '';
+    this.render();
+  }
+
+  private closeForgotPasswordModal(): void {
+    if (this.isForgotPasswordSubmitting) return;
+    this.isForgotPasswordModalOpen = false;
+    this.forgotPasswordError = '';
+    this.forgotPasswordSuccess = '';
+    this.forgotPasswordEmail = '';
+    this.render();
+  }
+
+  private renderForgotPasswordModal(): HTMLElement {
+    const overlay = document.createElement('div');
+    overlay.className =
+      'fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4';
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        this.closeForgotPasswordModal();
+      }
+    });
+
+    const modal = document.createElement('div');
+    modal.className = 'w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 p-6 shadow-2xl';
+
+    const title = document.createElement('h3');
+    title.className = 'text-2xl font-bold text-white mb-2';
+    title.textContent = t('login.forgotPassword.modalTitle');
+
+    const description = document.createElement('p');
+    description.className = 'text-sm text-gray-400 mb-4';
+    description.textContent = t('login.forgotPassword.prompt');
+
+    const form = document.createElement('form');
+    form.className = 'space-y-4';
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      void this.handleForgotPassword();
+    };
+
+    const emailLabel = document.createElement('label');
+    emailLabel.className = 'block text-sm font-medium text-gray-300';
+    emailLabel.textContent = t('login.forgotPassword.emailLabel');
+
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.value = this.forgotPasswordEmail;
+    emailInput.placeholder = t('login.forgotPassword.emailPlaceholder');
+    emailInput.className =
+      'mt-1 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-white outline-none focus:border-indigo-400';
+    emailInput.disabled = this.isForgotPasswordSubmitting;
+    emailInput.autofocus = true;
+    emailInput.oninput = () => {
+      this.forgotPasswordEmail = emailInput.value;
+      if (this.forgotPasswordError) {
+        this.forgotPasswordError = '';
+      }
+    };
+
+    emailLabel.appendChild(emailInput);
+    form.appendChild(emailLabel);
+
+    if (this.forgotPasswordError) {
+      const errorText = document.createElement('p');
+      errorText.className = 'text-sm text-red-400';
+      errorText.textContent = this.forgotPasswordError;
+      form.appendChild(errorText);
+    }
+
+    if (this.forgotPasswordSuccess) {
+      const successText = document.createElement('p');
+      successText.className = 'text-sm text-emerald-400';
+      successText.textContent = this.forgotPasswordSuccess;
+      form.appendChild(successText);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center justify-end gap-3 pt-2';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'rounded-md border border-gray-600 px-4 py-2 text-sm text-gray-200 hover:bg-gray-800 transition';
+    cancelBtn.textContent = t('login.forgotPassword.cancel');
+    cancelBtn.disabled = this.isForgotPasswordSubmitting;
+    cancelBtn.onclick = () => this.closeForgotPasswordModal();
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.className =
+      'rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition disabled:cursor-not-allowed disabled:opacity-70';
+    submitBtn.disabled = this.isForgotPasswordSubmitting;
+    submitBtn.textContent = this.isForgotPasswordSubmitting
+      ? t('login.forgotPassword.submitting')
+      : t('login.forgotPassword.submit');
+
+    actions.append(cancelBtn, submitBtn);
+    form.appendChild(actions);
+
+    modal.append(title, description, form);
+    overlay.appendChild(modal);
+
+    return overlay;
   }
 
   private render2FAModal(): void {

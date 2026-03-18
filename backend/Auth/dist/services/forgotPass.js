@@ -3,10 +3,18 @@ import crypto from "crypto";
 import { sendMail } from "../utils/email.js";
 import db from '../db.js';
 function getFrontendBaseUrl(headers) {
+    const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
+    if (configuredFrontendUrl) {
+        return configuredFrontendUrl.replace(/\/+$/g, "");
+    }
     const forwardedProto = String(headers["x-forwarded-proto"] || "").trim();
     const forwardedHost = String(headers["x-forwarded-host"] || "").trim();
+    const forwardedPort = String(headers["x-forwarded-port"] || "").trim();
     const origin = String(headers.origin || "").trim();
     if (forwardedProto && forwardedHost) {
+        if (forwardedPort && !forwardedHost.includes(":")) {
+            return `${forwardedProto}://${forwardedHost}:${forwardedPort}`;
+        }
         return `${forwardedProto}://${forwardedHost}`;
     }
     if (origin) {

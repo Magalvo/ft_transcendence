@@ -15,7 +15,7 @@ export class Router {
   private routes: Route[] = [];
   private rootElement: HTMLElement;
   private currentComponent: AbstractComponent | null = null;
-  private readonly publicRoutes = ["/login", "/404", "/terms", "/privacy"];
+  private readonly publicRoutes = ["/login", "/404", "/terms", "/privacy", "/reset-password"];
   private navigationRequestId = 0;
 
   constructor(rootSelector: string) {

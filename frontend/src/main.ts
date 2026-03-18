@@ -31,9 +31,13 @@ router.addLazyRoute('/tournament', async () => (await import('./pages/Tournament
 router.addLazyRoute('/spacedout', async () => (await import('./pages/SpacedOut')).SpacedOutPage);
 router.addLazyRoute('/terms', async () => (await import('./pages/Terms')).TermsPage);
 router.addLazyRoute('/privacy', async () => (await import('./pages/Privacy')).PrivacyPage);
+router.addLazyRoute('/reset-password', async () => (await import('./pages/PasswordResetPage')).PasswordResetPage);
 
 const searchParams = new URLSearchParams(window.location.search);
-const hasOAuthToken = Boolean(searchParams.get('token'));
+const hasOAuthToken =
+  searchParams.get('provider') === 'google' &&
+  Boolean(searchParams.get('token')) &&
+  Boolean(searchParams.get('refreshToken'));
 
 if (hasOAuthToken) {
   void AuthService.handleGoogleCallback()
@@ -50,7 +54,7 @@ if (hasOAuthToken) {
     });
 }
 
-const publicRoutes = ['/login', '/404', '/terms', '/privacy'];
+const publicRoutes = ['/login', '/404', '/terms', '/privacy', '/reset-password'];
 
 if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pathname)) {
   // If we want to enforce login immediately:
