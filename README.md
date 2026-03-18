@@ -30,7 +30,7 @@ Make sure you have the following installed on your machine:
     ```
 
 3.  **Access the application:**
-    * **Frontend (App):** [http://localhost:5173](http://localhost:8080)
+    * **Frontend (App):** [http://localhost:8080](http://localhost:8080)
 
 ## 🛑 Stopping the Application
 
