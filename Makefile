@@ -24,6 +24,7 @@ setup:
 		echo "GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback" >> $(ENV_FILE); \
 		echo "FRONTEND_URL=https://localhost:8443" >> $(ENV_FILE); \
 		echo "PORT=3000" >> $(ENV_FILE); \
+		echo "DB_FILE=dev.sqlite" >> $(ENV_FILE); \
 		echo ".env file generated"; \
 	fi
 
@@ -39,6 +40,22 @@ setup:
 		chmod 600 $(GOOGLE_SECRET_FILE); \
 		echo "Google Client Secret saved"; \
 	fi
+
+	@JWT_SECRET_VALUE="$$(tr -d '\r\n' < $(JWT_SECRET_FILE))"; \
+	if grep -q '^JWT_SECRET=' $(ENV_FILE); then \
+		sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$$JWT_SECRET_VALUE|" $(ENV_FILE); \
+	else \
+		echo "JWT_SECRET=$$JWT_SECRET_VALUE" >> $(ENV_FILE); \
+	fi; \
+	rm -f $(ENV_FILE).bak
+
+	@GOOGLE_SECRET_VALUE="$$(tr -d '\r\n' < $(GOOGLE_SECRET_FILE))"; \
+	if grep -q '^GOOGLE_CLIENT_SECRET=' $(ENV_FILE); then \
+		sed -i.bak "s|^GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE|" $(ENV_FILE); \
+	else \
+		echo "GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE" >> $(ENV_FILE); \
+	fi; \
+	rm -f $(ENV_FILE).bak
 
 # Start the application in detached mode with build
 up: setup
