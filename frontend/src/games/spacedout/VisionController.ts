@@ -146,10 +146,3 @@ export class VisionController {
     this.requestAnimationFrameId = requestAnimationFrame(this.predictWebcam);
   };
 }
-
-
-git switch new
-git add frontend
-git commit -m "WIP: i18n and routing changes"
-git fetch upstream
-git rebase upstream/main
