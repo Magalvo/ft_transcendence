@@ -5,7 +5,10 @@ import { attachChatRealtime } from "./chatRealtime.js";
 
 const socketToUserMap = new Map<string, string>();
 
-const lobbiesRegistry = new Map<string, { lobby: Lobby; code?: string; isPrivate: boolean; createdAt: number }>();
+const lobbiesRegistry = new Map<
+  string,
+  { lobby: Lobby; code?: string; isPrivate: boolean; createdAt: number }
+>();
 const inviteLobbies = new Map<string, Lobby>();
 const inviteSessionToLobbyId = new Map<string, string>();
 const inviteLobbyIdToSession = new Map<string, string>();
@@ -75,7 +78,10 @@ export function setupSocketIO(httpServer: any) {
     return getLobbyById(activeLobbyId) ?? mainLobby;
   };
 
-  const moveSocketToLobby = (socketId: string, targetLobbyId: string): boolean => {
+  const moveSocketToLobby = (
+    socketId: string,
+    targetLobbyId: string,
+  ): boolean => {
     const targetLobby = getLobbyById(targetLobbyId);
     if (!targetLobby) {
       return false;
@@ -118,8 +124,13 @@ export function setupSocketIO(httpServer: any) {
           .filter((slot) => slot.content === "human").length;
 
         const leaderSocketId = lobbyState.leader;
-        const playerDataBySocket = (lobbyState.playerData ?? {}) as Record<string, { userId: string; username: string }>;
-        const leaderData = leaderSocketId ? playerDataBySocket[leaderSocketId] : undefined;
+        const playerDataBySocket = (lobbyState.playerData ?? {}) as Record<
+          string,
+          { userId: string; username: string }
+        >;
+        const leaderData = leaderSocketId
+          ? playerDataBySocket[leaderSocketId]
+          : undefined;
 
         return {
           id: lobbyId,
@@ -133,13 +144,13 @@ export function setupSocketIO(httpServer: any) {
             lobbyState.config.players_per_side === 1
               ? "1v1"
               : lobbyState.config.players_per_side === 2
-              ? "2v2"
-              : "3v3",
+                ? "2v2"
+                : "3v3",
           isPrivate: entry.isPrivate,
           createdAt: entry.createdAt,
           status: "waiting" as const,
         };
-      })
+      }),
     );
   };
 
@@ -154,26 +165,33 @@ export function setupSocketIO(httpServer: any) {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-
-    const authUserId = (socket.handshake.auth?.userId as string | undefined) || (socket.data.userId as string | undefined);
+    const authUserId =
+      (socket.handshake.auth?.userId as string | undefined) ||
+      (socket.data.userId as string | undefined);
     if (authUserId) {
       socketToUserMap.set(socket.id, authUserId);
       socket.data.userId = authUserId;
-      console.log(`Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`);
+      console.log(
+        `Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`,
+      );
     }
 
-
-    const authTokenRaw = socket.handshake.auth?.token || socket.handshake.headers.authorization;
+    const authTokenRaw =
+      socket.handshake.auth?.token || socket.handshake.headers.authorization;
     if (authTokenRaw && !socketToUserMap.has(socket.id)) {
       try {
-        const token = String(authTokenRaw).replace(/^Bearer\s+/i, "").trim();
+        const token = String(authTokenRaw)
+          .replace(/^Bearer\s+/i, "")
+          .trim();
         const JWT_SECRET = process.env.JWT_SECRET as string;
         if (JWT_SECRET && token) {
           const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
           if (decoded?.userId) {
             socketToUserMap.set(socket.id, decoded.userId);
             socket.data.userId = decoded.userId;
-            console.log(`Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`);
+            console.log(
+              `Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`,
+            );
           }
         }
       } catch (error) {
@@ -199,6 +217,20 @@ export function setupSocketIO(httpServer: any) {
     activeLobbyBySocket.set(socket.id, "main");
     attachChatRealtime(io, socket);
 
+    // Explicit logout from a client tab: ensure the socket leaves any active
+    // lobby and is no longer associated with a user to avoid stale game
+    // participation or duplicate sessions for the same player.
+    socket.on("userLogout", () => {
+      const userId = socketToUserMap.get(socket.id);
+      console.log(
+        `🔌 Explicit userLogout from socket ${socket.id}${userId ? ` (user ${userId})` : ""}`,
+      );
+
+      leaveActiveLobby(socket.id);
+      socketToUserMap.delete(socket.id);
+      socket.data.userId = undefined;
+    });
+
     // ===== Find Game / Lobbies =====
     socket.on("requestAvailableLobbies", async () => {
       console.log(`🔍 Client ${socket.id} requesting available lobbies`);
@@ -207,54 +239,65 @@ export function setupSocketIO(httpServer: any) {
       socket.emit("availableLobbies", lobbies);
     });
 
-    socket.on("createLobby", async (data: { mode: string; isPrivate: boolean; code?: string }) => {
-      console.log(`📋 Client ${socket.id} creating lobby: ${data.mode} (${data.isPrivate ? "private" : "public"})`);
+    socket.on(
+      "createLobby",
+      async (data: { mode: string; isPrivate: boolean; code?: string }) => {
+        console.log(
+          `📋 Client ${socket.id} creating lobby: ${data.mode} (${data.isPrivate ? "private" : "public"})`,
+        );
 
-      const lobbyId = generateLobbyId();
-      const newLobby = new Lobby(io, socketToUserMap, `lobby:${lobbyId}`);
-      newLobby.setRemoveCallback(() => {
-        // Remove lobby if empty after game ends
-        if (newLobby.getClientCount() === 0) {
-          lobbiesRegistry.delete(lobbyId);
-          broadcastLobbyList();
+        const lobbyId = generateLobbyId();
+        const newLobby = new Lobby(io, socketToUserMap, `lobby:${lobbyId}`);
+        newLobby.setRemoveCallback(() => {
+          // Remove lobby if empty after game ends
+          if (newLobby.getClientCount() === 0) {
+            lobbiesRegistry.delete(lobbyId);
+            broadcastLobbyList();
+          }
+        });
+
+        const modeMap: Record<
+          string,
+          "one_for_one" | "two_for_two" | "three_for_three"
+        > = {
+          "1v1": "one_for_one",
+          "2v2": "two_for_two",
+          "3v3": "three_for_three",
+        };
+
+        newLobby.setGameMode(socket.id, modeMap[data.mode] || "one_for_one");
+
+        const privateCode = data.isPrivate
+          ? normalizeLobbyCode(data.code)
+          : undefined;
+        if (data.isPrivate && !privateCode) {
+          socket.emit("joinLobbyError", {
+            message: "Private lobby requires a valid code",
+          });
+          return;
         }
-      });
 
+        lobbiesRegistry.set(lobbyId, {
+          lobby: newLobby,
+          code: privateCode,
+          isPrivate: data.isPrivate,
+          createdAt: Date.now(),
+        });
 
-      const modeMap: Record<string, 'one_for_one' | 'two_for_two' | 'three_for_three'> = {
-        '1v1': 'one_for_one',
-        '2v2': 'two_for_two',
-        '3v3': 'three_for_three',
-      };
+        moveSocketToLobby(socket.id, lobbyId);
 
-      newLobby.setGameMode(socket.id, modeMap[data.mode] || 'one_for_one');
+        socket.emit("lobbyCreated", {
+          lobbyId,
+          code: privateCode,
+        });
 
-      const privateCode = data.isPrivate ? normalizeLobbyCode(data.code) : undefined;
-      if (data.isPrivate && !privateCode) {
-        socket.emit("joinLobbyError", { message: "Private lobby requires a valid code" });
-        return;
-      }
+        socket.emit("joinLobbySuccess", { lobbyId });
 
-      lobbiesRegistry.set(lobbyId, {
-        lobby: newLobby,
-        code: privateCode,
-        isPrivate: data.isPrivate,
-        createdAt: Date.now(),
-      });
+        await newLobby.broadcastStatePublic();
 
-      moveSocketToLobby(socket.id, lobbyId);
-
-      socket.emit("lobbyCreated", {
-        lobbyId,
-        code: privateCode
-      });
-
-      socket.emit("joinLobbySuccess", { lobbyId });
-
-      await newLobby.broadcastStatePublic();
-
-      await broadcastLobbyList();
-    });
+        await broadcastLobbyList();
+      },
+    );
 
     socket.on("deleteLobby", async (data: { lobbyId: string }) => {
       const lobbyId = data?.lobbyId;
@@ -271,7 +314,9 @@ export function setupSocketIO(httpServer: any) {
 
       const state = await entry.lobby.getStatePublic();
       if (state.leader !== socket.id) {
-        socket.emit("deleteLobbyError", { message: "Only the lobby leader can remove this lobby" });
+        socket.emit("deleteLobbyError", {
+          message: "Only the lobby leader can remove this lobby",
+        });
         return;
       }
 
@@ -290,48 +335,65 @@ export function setupSocketIO(httpServer: any) {
       await broadcastLobbyList();
     });
 
-    socket.on("joinLobbyById", async (data: { lobbyId: string; code?: string }) => {
-      console.log(`🎮 Client ${socket.id} attempting to join lobby ${data.lobbyId}`);
+    socket.on(
+      "joinLobbyById",
+      async (data: { lobbyId: string; code?: string }) => {
+        console.log(
+          `🎮 Client ${socket.id} attempting to join lobby ${data.lobbyId}`,
+        );
 
-      const entry = lobbiesRegistry.get(data.lobbyId);
-      if (!entry) {
-        socket.emit("joinLobbyError", { message: "Lobby not found" });
-        return;
-      }
-
-      if (entry.isPrivate) {
-        console.log(`Submitted Code: ${data.lobbyId}, Expected Code: ${entry.code}`);
-        const submittedCode = normalizeLobbyCode(data.code);
-        const expectedCode = normalizeLobbyCode(entry.code);
-        if (!submittedCode || submittedCode !== expectedCode) {
-          socket.emit("joinLobbyError", { message: "Invalid private lobby code" });
+        const entry = lobbiesRegistry.get(data.lobbyId);
+        if (!entry) {
+          socket.emit("joinLobbyError", { message: "Lobby not found" });
           return;
         }
-      }
 
-      if (!moveSocketToLobby(socket.id, data.lobbyId)) {
-        socket.emit("joinLobbyError", { message: "Could not join lobby" });
-        return;
-      }
+        if (entry.isPrivate) {
+          console.log(
+            `Submitted Code: ${data.lobbyId}, Expected Code: ${entry.code}`,
+          );
+          const submittedCode = normalizeLobbyCode(data.code);
+          const expectedCode = normalizeLobbyCode(entry.code);
+          if (!submittedCode || submittedCode !== expectedCode) {
+            socket.emit("joinLobbyError", {
+              message: "Invalid private lobby code",
+            });
+            return;
+          }
+        }
 
-      socket.emit("joinLobbySuccess", { lobbyId: data.lobbyId });
+        if (!moveSocketToLobby(socket.id, data.lobbyId)) {
+          socket.emit("joinLobbyError", { message: "Could not join lobby" });
+          return;
+        }
 
-      await entry.lobby.broadcastStatePublic();
-      await broadcastLobbyList();
-    });
+        socket.emit("joinLobbySuccess", { lobbyId: data.lobbyId });
+
+        await entry.lobby.broadcastStatePublic();
+        await broadcastLobbyList();
+      },
+    );
 
     socket.on("joinLobby", async (data?: { inviteSession?: string }) => {
-      console.log(`Lobby: Client ${socket.id} joining main lobby`, data?.inviteSession ? `(via invite: ${data.inviteSession})` : '');
+      console.log(
+        `Lobby: Client ${socket.id} joining main lobby`,
+        data?.inviteSession ? `(via invite: ${data.inviteSession})` : "",
+      );
 
       const inviteSession = normalizeInviteSession(data?.inviteSession);
       if (inviteSession) {
         const inviteLobbyId = ensureInviteLobby(inviteSession);
         if (!moveSocketToLobby(socket.id, inviteLobbyId)) {
-          socket.emit("joinLobbyError", { message: "Could not join invited lobby" });
+          socket.emit("joinLobbyError", {
+            message: "Could not join invited lobby",
+          });
           return;
         }
 
-        socket.emit("joinLobbySuccess", { lobbyId: inviteLobbyId, inviteSession });
+        socket.emit("joinLobbySuccess", {
+          lobbyId: inviteLobbyId,
+          inviteSession,
+        });
         await (getLobbyById(inviteLobbyId) ?? mainLobby).broadcastStatePublic();
         return;
       }
@@ -373,46 +435,60 @@ export function setupSocketIO(httpServer: any) {
       await getActiveLobby(socket.id).broadcastStatePublic();
     });
 
-    socket.on("lobby_setMode", (mode: "one_for_one" | "two_for_two" | "three_for_three") =>
-      getActiveLobby(socket.id).setGameMode(socket.id, mode)
+    socket.on(
+      "lobby_setMode",
+      (mode: "one_for_one" | "two_for_two" | "three_for_three") =>
+        getActiveLobby(socket.id).setGameMode(socket.id, mode),
     );
 
     socket.on("lobby_setDuration", (duration: "fast" | "normal" | "long") =>
-      getActiveLobby(socket.id).setGameDuration(socket.id, duration)
+      getActiveLobby(socket.id).setGameDuration(socket.id, duration),
     );
 
     socket.on("lobby_setPowerUps", (enabled: boolean) =>
-      getActiveLobby(socket.id).setPowerUps(socket.id, enabled)
+      getActiveLobby(socket.id).setPowerUps(socket.id, enabled),
     );
 
-    socket.on("lobby_movePlayer", (data: { targetId: string; side: "left" | "right"; slotIndex: number }) =>
-      getActiveLobby(socket.id).movePlayerToSlot(
-        socket.id,
-        data.targetId,
-        data.side,
-        data.slotIndex
-      )
+    socket.on(
+      "lobby_movePlayer",
+      (data: { targetId: string; side: "left" | "right"; slotIndex: number }) =>
+        getActiveLobby(socket.id).movePlayerToSlot(
+          socket.id,
+          data.targetId,
+          data.side,
+          data.slotIndex,
+        ),
     );
 
-    socket.on("lobby_addBot", (data: { side: "left" | "right"; slotIndex: number }) =>
-      getActiveLobby(socket.id).addBot(socket.id, data.side, data.slotIndex)
+    socket.on(
+      "lobby_addBot",
+      (data: { side: "left" | "right"; slotIndex: number }) =>
+        getActiveLobby(socket.id).addBot(socket.id, data.side, data.slotIndex),
     );
 
     socket.on("lobby_moveToBench", (targetId: string) =>
-      getActiveLobby(socket.id).movePlayerToBench(socket.id, targetId)
+      getActiveLobby(socket.id).movePlayerToBench(socket.id, targetId),
     );
 
-    socket.on("lobby_removeBot", (data: { side: "left" | "right"; slotIndex: number }) =>
-      getActiveLobby(socket.id).removeBot(socket.id, data.side, data.slotIndex)
+    socket.on(
+      "lobby_removeBot",
+      (data: { side: "left" | "right"; slotIndex: number }) =>
+        getActiveLobby(socket.id).removeBot(
+          socket.id,
+          data.side,
+          data.slotIndex,
+        ),
     );
 
-    socket.on("lobby_botLevel", (data: { side: "left" | "right"; slotIndex: number; delta: number }) =>
-      getActiveLobby(socket.id).changeBotLevel(
-        socket.id,
-        data.side,
-        data.slotIndex,
-        data.delta
-      )
+    socket.on(
+      "lobby_botLevel",
+      (data: { side: "left" | "right"; slotIndex: number; delta: number }) =>
+        getActiveLobby(socket.id).changeBotLevel(
+          socket.id,
+          data.side,
+          data.slotIndex,
+          data.delta,
+        ),
     );
 
     socket.on("lobby_leave", async () => {
@@ -427,7 +503,7 @@ export function setupSocketIO(httpServer: any) {
     });
 
     socket.on("lobby_start", () =>
-      getActiveLobby(socket.id).startGame(socket.id)
+      getActiveLobby(socket.id).startGame(socket.id),
     );
 
     socket.on("disconnect", async () => {

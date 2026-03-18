@@ -5,20 +5,27 @@ import crypto from "crypto";
 import fastifyOauth2 from "@fastify/oauth2";
 import { access, mkdir, writeFile } from "fs/promises";
 import { extname, join } from "path";
-import {sendError } from "../utils/respond.js";
+import { sendError, sendSuccess } from "../utils/respond.js";
 import registerUser from "../services/register.js";
-import Login from "../services/login.js"
+import Login from "../services/login.js";
 import refreshToken from "../services/refreshToken.js";
 import forgotPass from "../services/forgotPass.js";
 import resetPass from "../services/resetPass.js";
 import faSetup from "../services/faSetup.js";
 import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
-import { recordMatch, recordTeamMatch, getPlayerStats, getPlayerMatches, getMatchDetails } from "../services/matchService.js";
+import {
+  recordMatch,
+  recordTeamMatch,
+  getPlayerStats,
+  getPlayerMatches,
+  getMatchDetails,
+} from "../services/matchService.js";
 import UserProfileResponseDTO from "../dto/userProfile.response.dto.js";
 import UserStatsDTO from "../dto/userStats.dto.js";
 
-const AVATARS_PATH = process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
+const AVATARS_PATH =
+  process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
 
 function getFrontendBaseUrl(headers: Record<string, unknown>): string {
   const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
@@ -87,7 +94,10 @@ async function reserveUniqueUsername(baseUsername: string): Promise<string> {
     candidate = `${baseUsername.slice(0, maxBaseLength)}${suffix}`;
   }
 
-  return `${baseUsername.slice(0, 8)}_${Date.now().toString().slice(-6)}`.slice(0, 20);
+  return `${baseUsername.slice(0, 8)}_${Date.now().toString().slice(-6)}`.slice(
+    0,
+    20,
+  );
 }
 
 export default async function authRoutes(app: FastifyInstance) {
@@ -99,140 +109,221 @@ export default async function authRoutes(app: FastifyInstance) {
   // --- Google OAuth2 ---
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI) {
     try {
-      app.register(fastifyOauth2, {
-        name: "googleOAuth2",
-        scope: ["profile", "email"],
-        credentials: {
-          client: { id: GOOGLE_CLIENT_ID, secret: GOOGLE_CLIENT_SECRET },
-          auth: {
-            authorizeHost: "https://accounts.google.com",
-            authorizePath: "/o/oauth2/v2/auth",
-            tokenHost: "https://oauth2.googleapis.com",
-            tokenPath: "/token",
+      app
+        .register(fastifyOauth2, {
+          name: "googleOAuth2",
+          scope: ["profile", "email"],
+          credentials: {
+            client: { id: GOOGLE_CLIENT_ID, secret: GOOGLE_CLIENT_SECRET },
+            auth: {
+              authorizeHost: "https://accounts.google.com",
+              authorizePath: "/o/oauth2/v2/auth",
+              tokenHost: "https://oauth2.googleapis.com",
+              tokenPath: "/token",
+            },
           },
-        },
-        startRedirectPath: "/google/login",
-        callbackUri: GOOGLE_REDIRECT_URI,
-      }).after(() => {
-        app.get("/google/callback", async (req, reply) => {
-          try {
-            const client = (app as any).googleOAuth2;
-            const token = await client.getAccessTokenFromAuthorizationCodeFlow(req);
+          startRedirectPath: "/google/login",
+          callbackUri: GOOGLE_REDIRECT_URI,
+        })
+        .after(() => {
+          app.get("/google/callback", async (req, reply) => {
+            try {
+              const client = (app as any).googleOAuth2;
+              const token =
+                await client.getAccessTokenFromAuthorizationCodeFlow(req);
 
-            const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-              headers: { Authorization: `Bearer ${token.token.access_token}` },
-            });
+              const userInfoRes = await fetch(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                {
+                  headers: {
+                    Authorization: `Bearer ${token.token.access_token}`,
+                  },
+                },
+              );
 
-            if (!userInfoRes.ok) {
-              const body = await userInfoRes.text();
-              app.log.error(`Failed to fetch Google profile: ${body}`);
-              return sendError(reply, "Failed to fetch Google profile", 500);
-            }
-
-            const profile = await userInfoRes.json() as any;
-            const rawUser: any = await db.raw("SELECT * FROM users WHERE email = ? LIMIT 1", [profile.email]);
-            let user: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
-            const nowIso = new Date().toISOString();
-            const googleAvatarUrl = normalizeGoogleAvatarUrl(profile);
-
-            if (!user) {
-              const id = crypto.randomUUID();
-              const username = await reserveUniqueUsername(normalizeGoogleUsername(profile));
-              await db.raw("INSERT INTO users (id, username, email, avatarUrl, online, last_request, accepted_terms) VALUES (?, ?, ?, ?, ?, ?, ?)", [
-                id, username, profile.email, googleAvatarUrl, true, nowIso, true,
-              ]);
-              user = { id, username, email: profile.email, online: true };
-            } else {
-              const existingAvatar = String((user as any).avatarUrl || "").trim();
-              const usesGoogleAvatar = existingAvatar.includes("googleusercontent.com");
-              const hasCustomLocalAvatar = existingAvatar.startsWith("/avatars/");
-
-              if (googleAvatarUrl && (!existingAvatar || usesGoogleAvatar) && !hasCustomLocalAvatar) {
-                await db.raw("UPDATE users SET avatarUrl = ? WHERE id = ?", [
-                  googleAvatarUrl,
-                  user.id,
-                ]);
+              if (!userInfoRes.ok) {
+                const body = await userInfoRes.text();
+                app.log.error(`Failed to fetch Google profile: ${body}`);
+                return sendError(reply, "Failed to fetch Google profile", 500);
               }
-            }
 
-            await db.raw("UPDATE users SET online = ?, last_request = ? WHERE id = ?", [
-              true,
-              nowIso,
-              user.id,
-            ]);
-
-            const jwtToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
-            const refreshToken = crypto.randomBytes(64).toString("hex");
-            const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-            const existingRefreshToken: any = await db.raw(
-              "SELECT id FROM refresh_tokens WHERE userId = ? LIMIT 1",
-              [user.id],
-            );
-
-            if (Array.isArray(existingRefreshToken[0]) && existingRefreshToken[0][0]) {
-              await db.raw(
-                "UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?",
-                [refreshToken, refreshExpiresAt, nowIso, user.id],
+              const profile = (await userInfoRes.json()) as any;
+              const rawUser: any = await db.raw(
+                "SELECT * FROM users WHERE email = ? LIMIT 1",
+                [profile.email],
               );
-            } else {
-              await db.raw(
-                "INSERT INTO refresh_tokens (username, userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)",
-                [user.username, user.id, refreshToken, refreshExpiresAt, nowIso],
-              );
-            }
+              let user: User | null = Array.isArray(rawUser[0])
+                ? (rawUser[0][0] ?? null)
+                : (rawUser[0] ?? null);
+              const nowIso = new Date().toISOString();
+              const googleAvatarUrl = normalizeGoogleAvatarUrl(profile);
 
-            const frontendBaseUrl = getFrontendBaseUrl(
-              req.headers as Record<string, unknown>,
-            );
-            const redirectUrl = new URL(`${frontendBaseUrl}/login`);
-            redirectUrl.searchParams.set("token", jwtToken);
-            redirectUrl.searchParams.set("refreshToken", refreshToken);
-            redirectUrl.searchParams.set("provider", "google");
-            reply.redirect(redirectUrl.toString());
-          } catch (err: any) {
-            app.log.error("Google OAuth error:", err);
-            sendError(reply, "Google login failed", 500);
-          }
+              if (!user) {
+                const id = crypto.randomUUID();
+                const username = await reserveUniqueUsername(
+                  normalizeGoogleUsername(profile),
+                );
+                await db.raw(
+                  "INSERT INTO users (id, username, email, avatarUrl, online, last_request, accepted_terms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  [
+                    id,
+                    username,
+                    profile.email,
+                    googleAvatarUrl,
+                    true,
+                    nowIso,
+                    true,
+                  ],
+                );
+                user = { id, username, email: profile.email, online: true };
+              } else {
+                const existingAvatar = String(
+                  (user as any).avatarUrl || "",
+                ).trim();
+                const usesGoogleAvatar = existingAvatar.includes(
+                  "googleusercontent.com",
+                );
+                const hasCustomLocalAvatar =
+                  existingAvatar.startsWith("/avatars/");
+
+                if (
+                  googleAvatarUrl &&
+                  (!existingAvatar || usesGoogleAvatar) &&
+                  !hasCustomLocalAvatar
+                ) {
+                  await db.raw("UPDATE users SET avatarUrl = ? WHERE id = ?", [
+                    googleAvatarUrl,
+                    user.id,
+                  ]);
+                }
+              }
+
+              await db.raw(
+                "UPDATE users SET online = ?, last_request = ? WHERE id = ?",
+                [true, nowIso, user.id],
+              );
+
+              const jwtToken = jwt.sign(
+                { userId: user.id, email: user.email },
+                JWT_SECRET,
+                { expiresIn: "1h" },
+              );
+              const refreshToken = crypto.randomBytes(64).toString("hex");
+              const refreshExpiresAt = new Date(
+                Date.now() + 7 * 24 * 60 * 60 * 1000,
+              ).toISOString();
+
+              const existingRefreshToken: any = await db.raw(
+                "SELECT id FROM refresh_tokens WHERE userId = ? LIMIT 1",
+                [user.id],
+              );
+
+              if (
+                Array.isArray(existingRefreshToken[0]) &&
+                existingRefreshToken[0][0]
+              ) {
+                await db.raw(
+                  "UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?",
+                  [refreshToken, refreshExpiresAt, nowIso, user.id],
+                );
+              } else {
+                await db.raw(
+                  "INSERT INTO refresh_tokens (username, userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)",
+                  [
+                    user.username,
+                    user.id,
+                    refreshToken,
+                    refreshExpiresAt,
+                    nowIso,
+                  ],
+                );
+              }
+
+              const frontendBaseUrl = getFrontendBaseUrl(
+                req.headers as Record<string, unknown>,
+              );
+              const redirectUrl = new URL(`${frontendBaseUrl}/login`);
+              redirectUrl.searchParams.set("token", jwtToken);
+              redirectUrl.searchParams.set("refreshToken", refreshToken);
+              redirectUrl.searchParams.set("provider", "google");
+              reply.redirect(redirectUrl.toString());
+            } catch (err: any) {
+              app.log.error("Google OAuth error:", err);
+              sendError(reply, "Google login failed", 500);
+            }
+          });
         });
-      });
     } catch (err: any) {
       app.log.error("Failed to register google OAuth plugin:", err);
     }
   }
 
   // --- REGISTER ---
-app.post("/register", async (req, reply) => {
-    return await registerUser(req,reply);
-});
+  app.post("/register", async (req, reply) => {
+    return await registerUser(req, reply);
+  });
 
- // --- LOGIN ---
-app.post("/login", async (req, reply) => {
-    return await Login(req,reply);
-});
+  // --- LOGIN ---
+  app.post("/login", async (req, reply) => {
+    return await Login(req, reply);
+  });
+
+  // --- LOGOUT ---
+  app.post("/logout", async (req, reply) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const JWT_SECRET = process.env.JWT_SECRET;
+      if (!authHeader || !JWT_SECRET) {
+        // Even if we cannot identify the user, respond OK so client can clear state
+        return sendSuccess(reply, { message: "Logged out" });
+      }
+
+      const token = String(authHeader)
+        .replace(/^Bearer\s+/i, "")
+        .trim();
+      if (!token) {
+        return sendSuccess(reply, { message: "Logged out" });
+      }
+
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
+      const userId = decoded?.userId;
+
+      // Broadcast a best-effort logout hint to the Socket.IO layer so that
+      // any active sockets for this user can leave lobbies / games.
+      if (userId && app.io) {
+        app.io.to(`user:${userId}`).emit("forceLogout");
+      }
+
+      return sendSuccess(reply, { message: "Logged out" });
+    } catch (err) {
+      app.log.error(err);
+      // Still respond success – the frontend will clear tokens regardless
+      return sendSuccess(reply, { message: "Logged out" });
+    }
+  });
 
   // --- REFRESH TOKEN ---
   app.post("/token/refresh", async (req, reply) => {
-    return await refreshToken(req,reply);
+    return await refreshToken(req, reply);
   });
 
   // --- FORGOT / RESET PASSWORD ---
-  app.post("/forgot",async (req, reply) => {
-    return await forgotPass(req,reply);
+  app.post("/forgot", async (req, reply) => {
+    return await forgotPass(req, reply);
   });
 
-  app.post("/reset-password",async (req, reply) => {
-    return await resetPass(req,reply);
+  app.post("/reset-password", async (req, reply) => {
+    return await resetPass(req, reply);
   });
 
   // --- 2FA SETUP ---
   app.post("/2fa/setup", async (req, reply) => {
-    return await faSetup(req,reply);
-});
+    return await faSetup(req, reply);
+  });
 
   // --- 2FA VERIFY ---
   app.post("/2fa/verify", async (req, reply) => {
-    return await faVerify(req,reply);
+    return await faVerify(req, reply);
   });
 
   // --- GET CURRENT USER ---
@@ -253,11 +344,10 @@ app.post("/login", async (req, reply) => {
 
       const rawUser: any = await db.raw(
         "SELECT id, username, email, avatarUrl, online FROM users WHERE id = ? LIMIT 1",
-        [decoded.userId]
+        [decoded.userId],
       );
 
-      const user =
-        Array.isArray(rawUser[0]) ? rawUser[0][0] : rawUser[0];
+      const user = Array.isArray(rawUser[0]) ? rawUser[0][0] : rawUser[0];
 
       if (!user) {
         return sendError(reply, "User not found", 404);
@@ -268,12 +358,14 @@ app.post("/login", async (req, reply) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        avatarUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
+        avatarUrl:
+          user.avatarUrl ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
         online: user.online,
-        status: user.online ? 'online' : 'offline',
+        status: user.online ? "online" : "offline",
         wins: 0,
         losses: 0,
-        rank: 'Unranked'
+        rank: "Unranked",
       };
 
       return profile;
@@ -352,7 +444,11 @@ app.post("/login", async (req, reply) => {
         return sendError(reply, "Username is required", 400);
       }
       if (normalized.length < 3 || normalized.length > 20) {
-        return sendError(reply, "Username must be between 3 and 20 characters", 400);
+        return sendError(
+          reply,
+          "Username must be between 3 and 20 characters",
+          400,
+        );
       }
 
       const existing = await db("users")
@@ -388,7 +484,9 @@ app.post("/login", async (req, reply) => {
     return decoded.userId;
   };
 
-  const isOnlineByLastRequest = (lastRequest?: string | number | null): boolean => {
+  const isOnlineByLastRequest = (
+    lastRequest?: string | number | null,
+  ): boolean => {
     if (!lastRequest) return false;
     const ts =
       typeof lastRequest === "number"
@@ -431,8 +529,10 @@ app.post("/login", async (req, reply) => {
 
       const existing = await db("friend_requests")
         .where(function () {
-          this.where({ requester_id: requesterId, target_id: targetUser.id })
-            .orWhere({ requester_id: targetUser.id, target_id: requesterId });
+          this.where({
+            requester_id: requesterId,
+            target_id: targetUser.id,
+          }).orWhere({ requester_id: targetUser.id, target_id: requesterId });
         })
         .first();
 
@@ -460,7 +560,11 @@ app.post("/login", async (req, reply) => {
       if (err.message === "Missing or invalid Authorization header") {
         return sendError(reply, err.message, 401);
       }
-      return sendError(reply, err.message || "Failed to send friend request", 500);
+      return sendError(
+        reply,
+        err.message || "Failed to send friend request",
+        500,
+      );
     }
   };
 
@@ -489,7 +593,11 @@ app.post("/login", async (req, reply) => {
       if (err.message === "Missing or invalid Authorization header") {
         return sendError(reply, err.message, 401);
       }
-      return sendError(reply, err.message || "Failed to fetch incoming requests", 500);
+      return sendError(
+        reply,
+        err.message || "Failed to fetch incoming requests",
+        500,
+      );
     }
   });
 
@@ -564,9 +672,17 @@ app.post("/login", async (req, reply) => {
       const friends = await db("friendships as f")
         .join("users as u", function () {
           this.on(function () {
-            this.on("f.user_a", "=", db.raw("?", [userId])).andOn("u.id", "=", "f.user_b");
+            this.on("f.user_a", "=", db.raw("?", [userId])).andOn(
+              "u.id",
+              "=",
+              "f.user_b",
+            );
           }).orOn(function () {
-            this.on("f.user_b", "=", db.raw("?", [userId])).andOn("u.id", "=", "f.user_a");
+            this.on("f.user_b", "=", db.raw("?", [userId])).andOn(
+              "u.id",
+              "=",
+              "f.user_a",
+            );
           });
         })
         .select("u.id", "u.username", "u.last_request")
@@ -598,9 +714,7 @@ app.post("/login", async (req, reply) => {
       }
 
       const [userA, userB] = [myUserId, friendId].sort();
-      await db("friendships")
-        .where({ user_a: userA, user_b: userB })
-        .delete();
+      await db("friendships").where({ user_a: userA, user_b: userB }).delete();
 
       return { success: true };
     } catch (err: any) {
@@ -615,9 +729,23 @@ app.post("/login", async (req, reply) => {
   // --- RECORD MATCH ---
   app.post("/matches", async (req, reply) => {
     try {
-      const { player1_id, player2_id, player1_score, player2_score, game_mode, status, started_at, ended_at } = req.body as any;
+      const {
+        player1_id,
+        player2_id,
+        player1_score,
+        player2_score,
+        game_mode,
+        status,
+        started_at,
+        ended_at,
+      } = req.body as any;
 
-      if (!player1_id || !player2_id || player1_score === undefined || player2_score === undefined) {
+      if (
+        !player1_id ||
+        !player2_id ||
+        player1_score === undefined ||
+        player2_score === undefined
+      ) {
         return sendError(reply, "Missing required match fields", 400);
       }
 
@@ -642,9 +770,24 @@ app.post("/login", async (req, reply) => {
   // --- RECORD TEAM GAME ---
   app.post("/team-games", async (req, reply) => {
     try {
-      const { leftTeamPlayers, rightTeamPlayers, leftTeamScore, rightTeamScore, duration, powerups, gameMode, started_at, ended_at } = req.body as any;
+      const {
+        leftTeamPlayers,
+        rightTeamPlayers,
+        leftTeamScore,
+        rightTeamScore,
+        duration,
+        powerups,
+        gameMode,
+        started_at,
+        ended_at,
+      } = req.body as any;
 
-      if (!leftTeamPlayers || !rightTeamPlayers || leftTeamScore === undefined || rightTeamScore === undefined) {
+      if (
+        !leftTeamPlayers ||
+        !rightTeamPlayers ||
+        leftTeamScore === undefined ||
+        rightTeamScore === undefined
+      ) {
         return sendError(reply, "Missing required team game fields", 400);
       }
 
@@ -693,7 +836,7 @@ app.post("/login", async (req, reply) => {
         current_win_streak: stats.current_win_streak,
         longest_win_streak: stats.longest_win_streak,
         last_match_at: stats.last_match_at,
-        updated_at: stats.updated_at
+        updated_at: stats.updated_at,
       };
       return statsResponse;
     } catch (err: any) {
@@ -712,7 +855,10 @@ app.post("/login", async (req, reply) => {
         return sendError(reply, "User ID is required", 400);
       }
 
-      const matches = await getPlayerMatches(userId, limit ? parseInt(limit) : 10);
+      const matches = await getPlayerMatches(
+        userId,
+        limit ? parseInt(limit) : 10,
+      );
       return matches;
     } catch (err: any) {
       app.log.error(err);

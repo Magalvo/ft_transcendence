@@ -10,7 +10,9 @@ type SocketEventMap = {
 };
 
 type SocketEventName = keyof SocketEventMap;
-type SocketListener<T extends SocketEventName> = (payload: SocketEventMap[T]) => void;
+type SocketListener<T extends SocketEventName> = (
+  payload: SocketEventMap[T],
+) => void;
 
 function buildSocketUrl(baseUrl: string, token?: string): string {
   const url = new URL(baseUrl, window.location.origin);
@@ -23,14 +25,21 @@ function buildSocketUrl(baseUrl: string, token?: string): string {
 export class SpacedOutSocketClient {
   private readonly url: string;
   private socket: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimer: number | null = null;
   private readonly handleOpen = (event: Event): void => {
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
     this.emit("open", event);
   };
   private readonly handleClose = (event: CloseEvent): void => {
     this.emit("close", event);
+    this.scheduleReconnect();
   };
   private readonly handleError = (event: Event): void => {
     this.emit("error", event);
+    // Errors often precede close; rely on close to drive reconnect.
   };
   private readonly handleMessage = (
     event: MessageEvent<string | ArrayBuffer>,
@@ -80,6 +89,27 @@ export class SpacedOutSocketClient {
     this.socket.addEventListener("message", this.handleMessage);
   }
 
+  private scheduleReconnect(): void {
+    if (this.maxReconnectAttempts <= 0) return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    const delay = Math.min(16000, 1000 * Math.pow(2, this.reconnectAttempts));
+    this.reconnectAttempts += 1;
+
+    this.clearReconnectTimer();
+    this.reconnectTimer = window.setTimeout(() => {
+      this.connect();
+    }, delay);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
   public sendJson(payload: SpacedOutSocketPayload): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return;
@@ -94,7 +124,10 @@ export class SpacedOutSocketClient {
     this.socket.send(payload);
   }
 
-  public on<T extends SocketEventName>(eventName: T, listener: SocketListener<T>): () => void {
+  public on<T extends SocketEventName>(
+    eventName: T,
+    listener: SocketListener<T>,
+  ): () => void {
     const listeners = this.listeners[eventName] as Set<SocketListener<T>>;
     listeners.add(listener);
     return () => {
@@ -107,6 +140,9 @@ export class SpacedOutSocketClient {
       return;
     }
 
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
+
     this.socket.removeEventListener("open", this.handleOpen);
     this.socket.removeEventListener("close", this.handleClose);
     this.socket.removeEventListener("error", this.handleError);
@@ -115,7 +151,10 @@ export class SpacedOutSocketClient {
     this.socket = null;
   }
 
-  private emit<T extends SocketEventName>(eventName: T, payload: SocketEventMap[T]): void {
+  private emit<T extends SocketEventName>(
+    eventName: T,
+    payload: SocketEventMap[T],
+  ): void {
     const listeners = this.listeners[eventName] as Set<SocketListener<T>>;
     listeners.forEach((listener) => listener(payload));
   }

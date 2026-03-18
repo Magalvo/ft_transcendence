@@ -39,6 +39,9 @@ const MIN_FLIGHT_SPEED = 100;
 const MAX_FLIGHT_SPEED = 350;
 const THROTTLE_ACCELERATION = 120;
 const AIRBRAKE_DECELERATION = 180;
+const THROTTLE_WHEEL_STEP = Math.round(
+  (THROTTLE_ACCELERATION + AIRBRAKE_DECELERATION) / 12,
+);
 const LASER_REPEAT_INTERVAL_MS = 250;
 const MISSILE_FIRE_KEY = "q";
 const GAMEPLAY_KEYS = new Set([
@@ -51,8 +54,6 @@ const GAMEPLAY_KEYS = new Set([
   "arrowdown",
   "arrowleft",
   "arrowright",
-  "shift",
-  "control",
   "alt",
   "meta",
   "q",
@@ -449,7 +450,9 @@ export class SpacedOutGame {
       this.visionFailed = true;
       this.updateCalibrationControls();
       if (this.webcamRequired) {
-        this.setStatus("Webcam access is required for SpacedOut face tracking.");
+        this.setStatus(
+          "Webcam access is required for SpacedOut face tracking.",
+        );
       } else {
         this.setStatus("Webcam unavailable. Keyboard testing mode is active.");
       }
@@ -512,7 +515,10 @@ export class SpacedOutGame {
     this.earthAnchor = earthAnchor;
     this.terrainSystem = new TerrainSystem(terrainGroup);
     this.terrainSystem.setConfig(this.terrainConfig);
-    this.remotePilotSystem = new RemotePilotSystem(earthAnchor, this.labelsMount);
+    this.remotePilotSystem = new RemotePilotSystem(
+      earthAnchor,
+      this.labelsMount,
+    );
     this.playerRig = playerRig;
     this.localShip = localShip;
     this.combatManager = new CombatManager(
@@ -545,6 +551,17 @@ export class SpacedOutGame {
     };
     const keydownHandler = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+
+      // Optional: block preventable browser shortcuts while actively flying.
+      // Note: reserved ones like Ctrl+Shift+W may still bypass this.
+      if (
+        this.canControlShip() &&
+        (event.ctrlKey || event.metaKey) &&
+        ["w", "r"].includes(key)
+      ) {
+        event.preventDefault();
+      }
+
       if (this.shouldCaptureGameplayKey(event, key)) {
         event.preventDefault();
       }
@@ -625,10 +642,52 @@ export class SpacedOutGame {
       this.pressedKeys.delete(key);
     };
 
+    const wheelHandler = (event: WheelEvent) => {
+      if (!this.sessionAccepted || this.isDestroyed || !this.canControlShip()) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (event.deltaY < 0) {
+        this.adjustThrottle(1);
+      } else if (event.deltaY > 0) {
+        this.adjustThrottle(-1);
+      }
+    };
+
+    const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+      const inActiveMatch =
+        this.sessionAccepted &&
+        this.terrainLockedByServer &&
+        this.localTeam !== "SPECTATOR" &&
+        !this.isPaused;
+
+      if (!inActiveMatch) {
+        return;
+      }
+
+      // Triggers native "Leave site?" prompt
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
     window.addEventListener("resize", resizeHandler);
     window.addEventListener("blur", blurHandler);
     window.addEventListener("keydown", keydownHandler);
     window.addEventListener("keyup", keyupHandler);
+    this.mount.addEventListener("wheel", wheelHandler, { passive: false });
+    window.addEventListener("beforeunload", beforeUnloadHandler);
 
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("resize", resizeHandler),
@@ -641,6 +700,12 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("keyup", keyupHandler),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.mount.removeEventListener("wheel", wheelHandler),
+    );
+    this.cleanupCallbacks.push(() =>
+      window.removeEventListener("beforeunload", beforeUnloadHandler),
     );
   }
 
@@ -782,8 +847,14 @@ export class SpacedOutGame {
     this.aimAssistMaxPull.addEventListener("input", onAimAssistInput);
     this.aimAssistEngage.addEventListener("input", onAimAssistInput);
     this.aimAssistRelease.addEventListener("input", onAimAssistInput);
-    this.webcamRequiredInput.addEventListener("change", onWebcamRequirementChange);
-    this.webcamOptionalInput.addEventListener("change", onWebcamRequirementChange);
+    this.webcamRequiredInput.addEventListener(
+      "change",
+      onWebcamRequirementChange,
+    );
+    this.webcamOptionalInput.addEventListener(
+      "change",
+      onWebcamRequirementChange,
+    );
 
     inputs.forEach((input) =>
       this.cleanupCallbacks.push(() =>
@@ -1276,6 +1347,14 @@ export class SpacedOutGame {
     return this.canControlShip() && !!this.combatManager && !!this.localShip;
   }
 
+  private adjustThrottle(direction: 1 | -1): void {
+    this.speed = THREE.MathUtils.clamp(
+      this.speed + direction * THROTTLE_WHEEL_STEP,
+      MIN_FLIGHT_SPEED,
+      MAX_FLIGHT_SPEED,
+    );
+  }
+
   private shouldCaptureGameplayKey(event: KeyboardEvent, key: string): boolean {
     if (!this.sessionAccepted || this.isDestroyed || !GAMEPLAY_KEYS.has(key)) {
       return false;
@@ -1683,18 +1762,11 @@ export class SpacedOutGame {
       this.controlMode === "FACE" ? this.vision.pitchInput : manualPitch;
 
     if (this.canControlShip()) {
-      if (this.pressedKeys.has("shift")) {
-        this.speed = Math.min(
-          MAX_FLIGHT_SPEED,
-          this.speed + THROTTLE_ACCELERATION * delta,
-        );
-      }
-      if (this.pressedKeys.has("control")) {
-        this.speed = Math.max(
-          MIN_FLIGHT_SPEED,
-          this.speed - AIRBRAKE_DECELERATION * delta,
-        );
-      }
+      this.speed = THREE.MathUtils.clamp(
+        this.speed,
+        MIN_FLIGHT_SPEED,
+        MAX_FLIGHT_SPEED,
+      );
     }
 
     if (this.canFireWeapons()) {
@@ -2330,24 +2402,32 @@ export class SpacedOutGame {
     this.aimAssistCone.value = this.aimAssistTuning.cone.toFixed(2);
     this.aimAssistGain.value = this.aimAssistTuning.gain.toFixed(2);
     this.aimAssistMaxPull.value = this.aimAssistTuning.maxPull.toFixed(3);
-    this.aimAssistEngage.value = String(Math.round(this.aimAssistTuning.engageLerp));
-    this.aimAssistRelease.value = String(Math.round(this.aimAssistTuning.releaseLerp));
+    this.aimAssistEngage.value = String(
+      Math.round(this.aimAssistTuning.engageLerp),
+    );
+    this.aimAssistRelease.value = String(
+      Math.round(this.aimAssistTuning.releaseLerp),
+    );
 
     this.aimAssistConeValue.textContent = this.aimAssistTuning.cone.toFixed(2);
     this.aimAssistGainValue.textContent = this.aimAssistTuning.gain.toFixed(2);
-    this.aimAssistMaxPullValue.textContent = this.aimAssistTuning.maxPull.toFixed(3);
-    this.aimAssistEngageValue.textContent = this.aimAssistTuning.engageLerp.toFixed(0);
-    this.aimAssistReleaseValue.textContent = this.aimAssistTuning.releaseLerp.toFixed(0);
+    this.aimAssistMaxPullValue.textContent =
+      this.aimAssistTuning.maxPull.toFixed(3);
+    this.aimAssistEngageValue.textContent =
+      this.aimAssistTuning.engageLerp.toFixed(0);
+    this.aimAssistReleaseValue.textContent =
+      this.aimAssistTuning.releaseLerp.toFixed(0);
   }
 
   private applyAimAssistInputs(): void {
-    this.aimAssistTuning = this.combatManager?.setAimAssistTuning({
-      cone: Number(this.aimAssistCone.value),
-      gain: Number(this.aimAssistGain.value),
-      maxPull: Number(this.aimAssistMaxPull.value),
-      engageLerp: Number(this.aimAssistEngage.value),
-      releaseLerp: Number(this.aimAssistRelease.value),
-    }) ?? this.aimAssistTuning;
+    this.aimAssistTuning =
+      this.combatManager?.setAimAssistTuning({
+        cone: Number(this.aimAssistCone.value),
+        gain: Number(this.aimAssistGain.value),
+        maxPull: Number(this.aimAssistMaxPull.value),
+        engageLerp: Number(this.aimAssistEngage.value),
+        releaseLerp: Number(this.aimAssistRelease.value),
+      }) ?? this.aimAssistTuning;
 
     this.syncAimAssistInputs();
   }
