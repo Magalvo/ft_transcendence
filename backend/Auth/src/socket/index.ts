@@ -4,6 +4,9 @@ import { Lobby } from "../game/Lobby.js";
 import { Game, GameConfiguration, GamePlayer } from "../game/index.js";
 import { attachChatRealtime } from "./chatRealtime.js";
 import { getOrCreatePrivateChat, createPrivateMessage } from "../services/chat.js";
+import db from "../db.js";
+import { createTournamentMatchInvites } from "../services/tournamentInviteService.js";
+import { tryRegisterGameUsers } from "../game/ActiveGameRegistry.js";
 
 const socketToUserMap = new Map<string, string>();
 const userToSocketsMap = new Map<string, Set<string>>();
@@ -25,7 +28,25 @@ function generateLobbyId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-async function startTournamentGame(matchKey: string, matchId: string, pendingMatch: any, io: Server) {
+async function startTournamentGame(
+  matchKey: string,
+  matchId: string,
+  pendingMatch: any,
+  io: Server,
+  pendingTournamentMatches: Map<
+    string,
+    {
+      tournamentId: string;
+      matchId: string;
+      slots: Array<{
+        side: "left" | "right";
+        userId: string;
+        socketId: string;
+        username: string;
+      }>;
+    }
+  >
+) {
   try {
     console.log(`🏆 Starting tournament game for match: ${matchId}`);
     
@@ -87,7 +108,7 @@ async function startTournamentGame(matchKey: string, matchId: string, pendingMat
         socket.emit("error", { message: error.message || "Failed to start tournament match" });
       }
     }
-    pendingTournamentMatches.delete(matchId);
+    pendingTournamentMatches.delete(matchKey);
   }
 }
 
@@ -113,6 +134,143 @@ export function setupSocketIO(httpServer: any) {
       }>;
     }
   >();
+  const localTournamentGames = new Map<string, Game>();
+
+  const resolveTournamentMatchContext = async (tournamentId: string, matchId: string) => {
+    const match = await db("tournament_matches")
+      .where({ id: matchId, tournament_id: tournamentId })
+      .first();
+
+    if (!match) throw new Error("Tournament match not found");
+    if (!match.player1_id || !match.player2_id) {
+      throw new Error("Tournament match is not ready yet");
+    }
+
+    const users = await db("users")
+      .whereIn("id", [match.player1_id, match.player2_id])
+      .select("id", "username");
+    const names = new Map<string, string>(users.map((u: any) => [String(u.id), String(u.username)]));
+
+    return {
+      player1_id: String(match.player1_id),
+      player2_id: String(match.player2_id),
+      player1_name: names.get(String(match.player1_id)) || String(match.player1_id),
+      player2_name: names.get(String(match.player2_id)) || String(match.player2_id),
+    };
+  };
+
+  const addUserToPendingTournamentMatch = async (
+    socketId: string,
+    tournamentId: string,
+    matchId: string
+  ) => {
+    const userId = socketToUserMap.get(socketId);
+    if (!userId) throw new Error("User not authenticated");
+
+    const matchKey = `${tournamentId}:${matchId}`;
+    const context = await resolveTournamentMatchContext(tournamentId, matchId);
+    const isPlayer1 = userId === context.player1_id;
+    const isPlayer2 = userId === context.player2_id;
+
+    if (!isPlayer1 && !isPlayer2) {
+      throw new Error("User is not a participant in this match");
+    }
+
+    const existingMatch = pendingTournamentMatches.get(matchKey) || {
+      tournamentId,
+      matchId,
+      slots: [] as Array<{
+        side: "left" | "right";
+        userId: string;
+        socketId: string;
+        username: string;
+      }>,
+    };
+
+    const existingSlot = existingMatch.slots.find((s) => s.userId === userId);
+    if (!existingSlot) {
+      existingMatch.slots.push({
+        side: isPlayer1 ? "left" : "right",
+        userId,
+        socketId,
+        username: isPlayer1 ? context.player1_name : context.player2_name,
+      });
+    } else {
+      existingSlot.socketId = socketId;
+    }
+
+    pendingTournamentMatches.set(matchKey, existingMatch);
+
+    if (existingMatch.slots.length >= 2) {
+      await startTournamentGame(matchKey, matchId, existingMatch, io, pendingTournamentMatches);
+      return { started: true };
+    }
+
+    return { started: false };
+  };
+
+  const emitTournamentInviteToUser = async (
+    fromUserId: string,
+    toUserId: string,
+    payload: {
+      tournamentId: string;
+      matchId: string;
+      token: string;
+      expiresAt: number;
+      player1_id: string;
+      player2_id: string;
+      player1_name: string;
+      player2_name: string;
+    }
+  ) => {
+    const inviteUrl = `/game?tournamentInviteToken=${encodeURIComponent(payload.token)}`;
+
+    const targetSockets = userToSocketsMap.get(toUserId);
+    if (targetSockets) {
+      for (const sid of targetSockets) {
+        const targetSocket = io.sockets.sockets.get(sid);
+        if (targetSocket) {
+          targetSocket.emit("tournamentInvite", {
+            tournamentId: payload.tournamentId,
+            matchId: payload.matchId,
+            inviteToken: payload.token,
+            inviteUrl,
+            expiresAt: payload.expiresAt,
+            player1_id: payload.player1_id,
+            player2_id: payload.player2_id,
+            player1_name: payload.player1_name,
+            player2_name: payload.player2_name,
+          });
+        }
+      }
+    }
+
+    if (fromUserId !== toUserId) {
+      const chat = await getOrCreatePrivateChat(fromUserId, toUserId);
+      const encodedUrl = encodeURIComponent(inviteUrl);
+      const inviteMessage = `__PONG_INVITE__|${encodedUrl}|`;
+      const msg = await createPrivateMessage(Number(chat.id_privatechat), fromUserId, inviteMessage);
+
+      if (targetSockets) {
+        for (const sid of targetSockets) {
+          const targetSocket = io.sockets.sockets.get(sid);
+          if (targetSocket) {
+            targetSocket.emit("chat_private_message", msg);
+          }
+        }
+      }
+
+      const fromSockets = userToSocketsMap.get(fromUserId);
+      if (fromSockets) {
+        for (const sid of fromSockets) {
+          const fromSocket = io.sockets.sockets.get(sid);
+          if (fromSocket) {
+            fromSocket.emit("chat_private_message", msg);
+          }
+        }
+      }
+    }
+  };
 
   const mainLobby = new Lobby(io, socketToUserMap, "lobby:main");
 
@@ -589,125 +747,170 @@ export function setupSocketIO(httpServer: any) {
       getActiveLobby(socket.id).startGame(socket.id),
     );
 
-    // Tournament match handler
-    socket.on("requestTournamentMatch", async (data: {
+    socket.on("requestLocalTournamentMatch", async (data: {
       tournamentId: string;
       matchId: string;
       player1_id: string;
       player2_id: string;
       player1_name?: string;
       player2_name?: string;
-
     }) => {
       try {
-        console.log(`🏆 Tournament match requested: ${data.matchId}`);
-        
-        const { tournamentId, matchId, player1_id, player2_id, player1_name, player2_name } = data;
-        const matchKey = `${tournamentId}:${matchId}`;
         const userId = socketToUserMap.get(socket.id);
-
         if (!userId) {
           socket.emit("error", { message: "User not authenticated" });
           return;
         }
 
-        // When requesting a tournament match, any user (host or participant)
-        // can trigger the invite. The match starts once both players connect.
+        const tournamentId = String(data?.tournamentId || "");
+        const matchId = String(data?.matchId || "");
+        const player1Id = String(data?.player1_id || "");
+        const player2Id = String(data?.player2_id || "");
 
-        const isPlayer1 = userId === player1_id;
-        const isPlayer2 = userId === player2_id;
-        const requesterSide = isPlayer1 ? "left" : "right";
-        const requesterName = isPlayer1 ? player1_name : player2_name;
-
-        // Check if match is already pending
-        const existingMatch = pendingTournamentMatches.get(matchKey);
-        if (existingMatch) {
-          // If this player already joined, ignore and keep waiting
-          const existingSlot = existingMatch.slots.find(s => s.userId === userId);
-          if (existingSlot) {
-            socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
-            return;
-          }
-
-          // Add this player to the pending match
-          const side = userId === player1_id ? "left" : "right";
-          existingMatch.slots.push({
-            side,
-            userId: userId,
-            socketId: socket.id,
-            username: requesterName || userId,
-          });
-
-          // Start when both players have joined
-          if (existingMatch.slots.length >= 2) {
-            await startTournamentGame(matchKey, matchId, existingMatch, io);
-          } else {
-            socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
-          }
+        if (!tournamentId || !matchId || !player1Id || !player2Id) {
+          socket.emit("error", { message: "Missing local tournament match context" });
           return;
         }
 
-        // Create new pending tournament match (empty until players join)
-        const pendingMatch: any = {
-          tournamentId,
-          matchId,
-          slots: [],
-        };
-
-        // If the requester is one of the players, add them immediately
-        if (isPlayer1 || isPlayer2) {
-          pendingMatch.slots.push({
-            side: requesterSide,
-            userId: userId,
-            socketId: socket.id,
-            username: requesterName || userId,
-          });
-        }
-
-        pendingTournamentMatches.set(matchKey, pendingMatch);
-
-        // Send chat invite to opponent
-        const inviteUrl = `/game?tournamentId=${tournamentId}&matchId=${matchId}&p1=${player1_id}&p2=${player2_id}`;
-        const inviteSession = `tournament_${tournamentId}_${matchId}`;
-        
-        // Use the same invite format as regular game invites
-        const encodedUrl = encodeURIComponent(inviteUrl);
-        const encodedSession = encodeURIComponent(inviteSession);
-        const inviteMessage = `__PONG_INVITE__|${encodedUrl}|${encodedSession}`;
-
-        // Send private message invite to both players (and to requester for confirmation)
-        try {
-          // Use the requester as the sender for invite messages
-          const targets = new Set([player1_id, player2_id, userId]);
-
-          // Send invite to each target by creating/using the private chat with the requester
-          for (const targetId of targets) {
-            if (!targetId) continue;
-            const chat = await getOrCreatePrivateChat(userId, targetId);
-            const msg = await createPrivateMessage(Number(chat.id_privatechat), userId, inviteMessage);
-
-            const targetSockets = userToSocketsMap.get(targetId);
-            if (!targetSockets) continue;
-
-            for (const targetSocketId of targetSockets) {
-              const targetSocket = io.sockets.sockets.get(targetSocketId);
-              if (targetSocket) {
-                targetSocket.emit("chat_private_message", msg);
-              }
-            }
-          }
-        } catch (chatError) {
-          console.error("Failed to send tournament invite via chat:", chatError);
-          socket.emit("error", { message: "Failed to send tournament invitation" });
-          pendingTournamentMatches.delete(matchId);
+        const userIsP1 = userId === player1Id;
+        const userIsP2 = userId === player2Id;
+        if (!userIsP1 && !userIsP2) {
+          socket.emit("error", { message: "You are not a participant in this match" });
           return;
         }
 
-        socket.emit("tournamentMatchWaiting", { matchId, message: "Waiting for opponent to join..." });
-        console.log(`✅ Tournament invite sent for match: ${matchId}`);
+        const aiId = userIsP1 ? player2Id : player1Id;
+        if (!aiId.startsWith("ai-")) {
+          socket.emit("error", { message: "Local tournament supports only Human vs AI matches" });
+          return;
+        }
+
+        const humanSide: "left" | "right" = userIsP1 ? "left" : "right";
+        const botSide: "left" | "right" = userIsP1 ? "right" : "left";
+        const humanName = userIsP1
+          ? String(data?.player1_name || "Player")
+          : String(data?.player2_name || "Player");
+        const botName = userIsP1
+          ? String(data?.player2_name || "AI Bot")
+          : String(data?.player1_name || "AI Bot");
+
+        const roomId = `local-tournament:${tournamentId}:${matchId}:${userId}`;
+        const existing = localTournamentGames.get(roomId);
+        if (existing) {
+          socket.join(roomId);
+          socket.emit("localTournamentMatchStarted", { matchId });
+          return;
+        }
+
+        const registryResult = tryRegisterGameUsers([userId], roomId);
+        if (!registryResult.ok) {
+          socket.emit("error", {
+            message: "You are already in another active game.",
+            conflicts: registryResult.conflicts,
+          });
+          return;
+        }
+
+        socket.join(roomId);
+
+        const gameConfig = new GameConfiguration("normal", "one_for_one");
+        const players: GamePlayer[] = [
+          new GamePlayer("human", socket.id, humanSide, humanName, userId),
+          new GamePlayer("bot", 5, botSide, botName),
+        ];
+
+        const game = new Game(io, gameConfig, players, roomId, () => {
+          localTournamentGames.delete(roomId);
+          console.log(`🏁 Local tournament match ended: ${matchId}`);
+        });
+
+        (game as any).isTournamentMatch = true;
+        localTournamentGames.set(roomId, game);
+        game.start();
+
+        socket.emit("localTournamentMatchStarted", { matchId });
+        socket.emit("init", {
+          side: humanSide,
+          index: 0,
+          configs: gameConfig,
+          isTournamentMatch: true,
+          isLocalTournament: true,
+          players: [player1Id, player2Id],
+        });
+      } catch (error: any) {
+        console.error("❌ Error starting local tournament match:", error);
+        socket.emit("error", { message: error.message || "Failed to start local tournament match" });
+      }
+    });
+
+    socket.on("requestTournamentMatch", async (data: {
+      tournamentId: string;
+      matchId: string;
+    }) => {
+      try {
+        const userId = socketToUserMap.get(socket.id);
+        if (!userId) {
+          socket.emit("error", { message: "User not authenticated" });
+          return;
+        }
+
+        const tournamentId = String(data?.tournamentId || "");
+        const matchId = String(data?.matchId || "");
+        if (!tournamentId || !matchId) {
+          socket.emit("error", { message: "Missing tournament match context" });
+          return;
+        }
+
+        const inviteDispatch = await createTournamentMatchInvites(tournamentId, matchId, userId);
+
+        for (const invite of inviteDispatch.invites) {
+          await emitTournamentInviteToUser(userId, invite.toUserId, {
+            tournamentId,
+            matchId,
+            token: invite.token,
+            expiresAt: invite.expiresAt,
+            player1_id: inviteDispatch.player1_id,
+            player2_id: inviteDispatch.player2_id,
+            player1_name: inviteDispatch.player1_name,
+            player2_name: inviteDispatch.player2_name,
+          });
+        }
+
+        const joinResult = await addUserToPendingTournamentMatch(socket.id, tournamentId, matchId);
+        if (!joinResult.started) {
+          socket.emit("tournamentMatchWaiting", {
+            matchId,
+            message: "Waiting for opponent to join...",
+          });
+        }
       } catch (error: any) {
         console.error("❌ Error setting up tournament match:", error);
         socket.emit("error", { message: error.message || "Failed to setup tournament match" });
+      }
+    });
+
+    socket.on("joinTournamentMatch", async (data: {
+      tournamentId: string;
+      matchId: string;
+    }) => {
+      try {
+        const tournamentId = String(data?.tournamentId || "");
+        const matchId = String(data?.matchId || "");
+        if (!tournamentId || !matchId) {
+          socket.emit("error", { message: "Missing tournament match context" });
+          return;
+        }
+
+        const joinResult = await addUserToPendingTournamentMatch(socket.id, tournamentId, matchId);
+        if (!joinResult.started) {
+          socket.emit("tournamentMatchWaiting", {
+            matchId,
+            message: "Waiting for opponent to join...",
+          });
+        }
+      } catch (error: any) {
+        console.error("❌ Error joining tournament match:", error);
+        socket.emit("error", { message: error.message || "Failed to join tournament match" });
       }
     });
 

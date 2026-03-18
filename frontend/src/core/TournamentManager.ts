@@ -28,10 +28,18 @@ export class TournamentManager {
     private currentTournament: Tournament | null = null;
 
     private constructor() {
-        const saved = localStorage.getItem('pong_tournament');
-        if (saved) {
-            const data = JSON.parse(saved);
-            this.currentTournament = data.tournament;
+        try {
+            const saved = localStorage.getItem('pong_tournament');
+            if (saved) {
+                const data = JSON.parse(saved);
+                this.currentTournament = data.tournament || null;
+                this.resolveAutoAiMatchesIfLocal();
+                this.updateTournamentCompletion();
+                this.saveState();
+            }
+        } catch (error) {
+            console.warn('Failed to load local tournament state:', error);
+            this.currentTournament = null;
         }
     }
 
@@ -94,6 +102,8 @@ export class TournamentManager {
             matches,
         };
 
+        this.resolveAutoAiMatchesIfLocal();
+        this.updateTournamentCompletion();
         this.saveState();
     }
 
@@ -135,9 +145,26 @@ export class TournamentManager {
         player2Score: number
     ) {
         if (!this.currentTournament) return;
+        if (!winnerId) return;
 
         const match = this.currentTournament.matches.find(m => m.id === matchId);
         if (!match) return;
+        if (match.status === "completed") return;
+        if (winnerId !== match.player1_id && winnerId !== match.player2_id) return;
+
+        this.completeMatch(match, winnerId, player1Score, player2Score);
+        this.resolveAutoAiMatchesIfLocal();
+        this.updateTournamentCompletion();
+        this.saveState();
+    }
+
+    private completeMatch(
+        match: TournamentMatch,
+        winnerId: string,
+        player1Score: number,
+        player2Score: number
+    ): void {
+        if (!this.currentTournament) return;
 
         match.winner_id = winnerId;
         match.player1_score = player1Score;
@@ -157,6 +184,38 @@ export class TournamentManager {
                 nextMatch.status = "pending";
             }
         }
+    }
+
+    private resolveAutoAiMatchesIfLocal(): void {
+        if (!this.currentTournament) return;
+        if (!this.currentTournament.id.startsWith('local-')) return;
+
+        let resolvedAny = true;
+        while (resolvedAny) {
+            resolvedAny = false;
+
+            for (const match of this.currentTournament.matches) {
+                if (match.status !== "pending") continue;
+                if (!match.player1_id || !match.player2_id) continue;
+
+                const p1 = this.currentTournament.participants.find(p => p.id === match.player1_id);
+                const p2 = this.currentTournament.participants.find(p => p.id === match.player2_id);
+
+                if (!p1?.isAI || !p2?.isAI) continue;
+
+                const winnerId = Math.random() < 0.5 ? match.player1_id : match.player2_id;
+                const player1Score = winnerId === match.player1_id ? 1 : 0;
+                const player2Score = winnerId === match.player2_id ? 1 : 0;
+
+                this.completeMatch(match, winnerId, player1Score, player2Score);
+                resolvedAny = true;
+                break;
+            }
+        }
+    }
+
+    private updateTournamentCompletion(): void {
+        if (!this.currentTournament) return;
 
         // Check if tournament is complete
         const allMatches = this.currentTournament.matches;
@@ -164,9 +223,10 @@ export class TournamentManager {
         if (finalMatch.status === "completed") {
             this.currentTournament.status = "completed";
             this.currentTournament.winner_id = finalMatch.winner_id;
+        } else {
+            this.currentTournament.status = "active";
+            this.currentTournament.winner_id = null;
         }
-
-        this.saveState();
     }
 
     /**

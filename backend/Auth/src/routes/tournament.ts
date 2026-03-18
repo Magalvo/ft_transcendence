@@ -8,6 +8,7 @@ import {
   getUserTournaments,
   submitTournamentMatchResult,
 } from "../services/tournamentService.js";
+import { acceptTournamentInvite } from "../services/tournamentInviteService.js";
 
 export default async function tournamentRoutes(app: FastifyInstance) {
   /**
@@ -128,6 +129,34 @@ export default async function tournamentRoutes(app: FastifyInstance) {
       } catch (error: any) {
         app.log.error(error);
         return sendError(reply, error.message || "Failed to record match result", 500);
+      }
+    }
+  );
+
+  /**
+   * POST /api/tournaments/invites/accept
+   * Accept a tournament invite token and resolve match context
+   */
+  app.post(
+    "/tournaments/invites/accept",
+    { preHandler: auth },
+    async (req, reply) => {
+      try {
+        const userId = (req as any).user?.id as string | undefined;
+        if (!userId) {
+          return sendError(reply, "Unauthorized", 401);
+        }
+
+        const { token } = req.body as any;
+        if (!token) {
+          return sendError(reply, "Missing required field: token", 400);
+        }
+
+        const result = await acceptTournamentInvite(String(token), userId);
+        return sendSuccess(reply, result);
+      } catch (error: any) {
+        app.log.error(error);
+        return sendError(reply, error.message || "Failed to accept invite", 400);
       }
     }
   );

@@ -78,13 +78,13 @@ export class PasswordResetPage extends AbstractComponent {
     }, 'secondary');
     backButton.getElement().toggleAttribute('disabled', this.isSubmitting);
 
-    card.addChildren(
+    card.getElement().appendChild(this.passwordInput.getElement());
+    card.getElement().appendChild(this.confirmPasswordInput.getElement());
+
+     card.addChildren(
       submitButton,
       backButton
     );
-    
-    card.getElement().appendChild(this.passwordInput.getElement());
-    card.getElement().appendChild(this.confirmPasswordInput.getElement());
 
     if (this.statusMessage) {
       const status = document.createElement('p');

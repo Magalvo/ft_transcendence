@@ -314,6 +314,14 @@ export class Game {
       console.warn(
         "⚠️ Not recording game: Missing human players on one or both teams",
       );
+      if ((this as any).isTournamentMatch) {
+        // Local tournament matches can be human vs AI. Emit a synthetic match
+        // result so the frontend can still progress the bracket.
+        this.emitToRoom("matchRecorded", {
+          gameId: `local-${Date.now()}`,
+          winner: eData.score.left > eData.score.right ? "A" : "B",
+        });
+      }
     }
   }
 

@@ -7,6 +7,7 @@ import { Router } from './core/Router';
 import { TokenManager } from './services/TokenManager';
 import AuthService from './services/AuthService';
 import { i18n } from './services/I18nService';
+import { initTournamentInviteNotifier } from './services/TournamentInviteNotifier';
 
 i18n.init();
 
@@ -60,6 +61,16 @@ if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pa
   // If we want to enforce login immediately:
   window.history.replaceState({}, '', '/login');
 }
+
+if (TokenManager.isAuthenticated()) {
+  initTournamentInviteNotifier();
+}
+
+window.addEventListener('popstate', () => {
+  if (TokenManager.isAuthenticated()) {
+    initTournamentInviteNotifier();
+  }
+});
 
 // 5. Start the App
 router.init();
