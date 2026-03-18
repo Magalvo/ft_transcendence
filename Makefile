@@ -1,4 +1,8 @@
 ENV_FILE = ./backend/Auth/.env
+SECRETS_DIR = .secrets
+JWT_SECRET_FILE = $(SECRETS_DIR)/jwt_secret.txt
+GOOGLE_SECRET_FILE = $(SECRETS_DIR)/google_client_secret.txt
+
 COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
 COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker compose
 DB_VOLUME = $(COMPOSE_PROJECT_NAME)_auth_database
@@ -6,16 +10,55 @@ DB_VOLUME = $(COMPOSE_PROJECT_NAME)_auth_database
 # Default target - runs 'up' command
 all: up
 
-# Start the application in detached mode with build
-# - Generates .env file if it doesn't exist
-# - Builds and starts Docker containers
-up:
+# Setup environment:
+# - create secrets directory
+# - generate .env file
+# - generate secrets if they don't exist
+setup:
+	@mkdir -p $(SECRETS_DIR)
+	@chmod 700 $(SECRETS_DIR)
+
 	@if [ ! -f $(ENV_FILE) ]; then \
 		echo "Generating .env file..."; \
-		echo "JWT_SECRET=$$(openssl rand -base64 48)" > $(ENV_FILE); \
+		echo "GOOGLE_CLIENT_ID=596804197978-d726nn0a3smhs1ve3ha3h0sh2n690rij.apps.googleusercontent.com" > $(ENV_FILE); \
+		echo "GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback" >> $(ENV_FILE); \
+		echo "FRONTEND_URL=https://localhost:8443" >> $(ENV_FILE); \
 		echo "PORT=3000" >> $(ENV_FILE); \
 		echo "DB_FILE=dev.sqlite" >> $(ENV_FILE); \
+		echo ".env file generated"; \
 	fi
+
+	@if [ ! -f $(JWT_SECRET_FILE) ]; then \
+		openssl rand -base64 48 > $(JWT_SECRET_FILE); \
+		chmod 600 $(JWT_SECRET_FILE); \
+		echo "JWT Secret generated"; \
+	fi
+
+	@if [ ! -f $(GOOGLE_SECRET_FILE) ]; then \
+		printf "Enter GOOGLE_CLIENT_SECRET: "; \
+		read -s GSEC; echo $$GSEC > $(GOOGLE_SECRET_FILE); \
+		chmod 600 $(GOOGLE_SECRET_FILE); \
+		echo "Google Client Secret saved"; \
+	fi
+
+	@JWT_SECRET_VALUE="$$(tr -d '\r\n' < $(JWT_SECRET_FILE))"; \
+	if grep -q '^JWT_SECRET=' $(ENV_FILE); then \
+		sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$$JWT_SECRET_VALUE|" $(ENV_FILE); \
+	else \
+		echo "JWT_SECRET=$$JWT_SECRET_VALUE" >> $(ENV_FILE); \
+	fi; \
+	rm -f $(ENV_FILE).bak
+
+	@GOOGLE_SECRET_VALUE="$$(tr -d '\r\n' < $(GOOGLE_SECRET_FILE))"; \
+	if grep -q '^GOOGLE_CLIENT_SECRET=' $(ENV_FILE); then \
+		sed -i.bak "s|^GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE|" $(ENV_FILE); \
+	else \
+		echo "GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE" >> $(ENV_FILE); \
+	fi; \
+	rm -f $(ENV_FILE).bak
+
+# Start the application in detached mode with build
+up: setup
 	$(COMPOSE) up -d --build
 
 # Stop and remove all running containers

@@ -33,6 +33,7 @@ dist-ssr
 *.sw?
 # Linker files
 *.ilk
+.secrets/*
 
 # Debugger Files
 *.pdb
