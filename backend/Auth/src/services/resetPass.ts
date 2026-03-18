@@ -9,45 +9,52 @@ import { plainToInstance } from "class-transformer";
 import  userResetPassDTO  from "../dto/userResetPass.dto.js"
 import { validate, ValidationError } from "class-validator";
 
+const resetPass = async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const body = req.body ?? {};
+    const user = plainToInstance(userResetPassDTO, body);
 
-const resetPass =  async (req: FastifyRequest, reply : FastifyReply) =>{
-    try {
-      const user : userResetPassDTO = plainToInstance(userResetPassDTO, req.body);
-      const erros : ValidationError[] = await validate(user);
+    const errors = await validate(user);
 
-      if (erros.length > 0) { 
-         const erroMsg = erros.map(erro => {
-                return erro.constraints ? Object.values(erro.constraints)[0] : 'Unknow Error'; 
-            });
-            const finalMsg = erroMsg.join('; ');
-            return sendError(reply, `: ${finalMsg}`, 400);
-      }
-
-      // Find user by reset token
-      const rawUser: any = await db.raw(
-        "SELECT id, resetToken, resetExpires FROM users WHERE resetToken = ? LIMIT 1",
-        [user.resetToken]
+    if (errors.length > 0) {
+      const messages = errors.map(e =>
+        e.constraints ? Object.values(e.constraints)[0] : "Unknown error"
       );
-      const userData: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
-
-      if (!userData) 
-        return sendError(reply, "Invalid or expired reset token", 400);
-
-      // Check if token has expired
-      if (!userData.resetExpires || new Date(userData.resetExpires) < new Date())
-        return sendError(reply, "Reset token has expired", 400);
-
-      // Hash new password and update user
-      const passwordHash = await bcrypt.hash(user.newPassword, 10);
-      await db.raw(
-        "UPDATE users SET passwordHash = ?, resetToken = NULL, resetExpires = NULL WHERE id = ?",
-        [passwordHash, userData.id]
-      );
-
-      sendSuccess(reply, { message: "Password has been reset successfully" });
-    } catch (err: any) {
-      sendError(reply, "Internal server error", 500);
+      return sendError(reply, messages.join("; "), 400);
     }
-}
+
+    const rawUser: any = await db.raw(
+      "SELECT id, resetToken, resetExpires FROM users WHERE resetToken = ? LIMIT 1",
+      [user.resetToken]
+    );
+
+    const userData = Array.isArray(rawUser[0])
+      ? rawUser[0][0]
+      : rawUser[0];
+
+    if (
+      !userData ||
+      !userData.resetExpires ||
+      new Date(userData.resetExpires) < new Date()
+    ) {
+      return sendError(reply, "Invalid or expired reset token", 400);
+    }
+
+    const passwordHash = await bcrypt.hash(user.newPassword, 10);
+
+    await db.raw(
+      "UPDATE users SET passwordHash = ?, resetToken = NULL, resetExpires = NULL WHERE id = ?",
+      [passwordHash, userData.id]
+    );
+
+    return sendSuccess(reply, {
+      message: "Password has been reset successfully",
+    });
+
+  } catch (err: any) {
+    console.error("ResetPass error:", err);
+    return sendError(reply, err.message || "Internal server error", 500);
+  }
+};
 
 export default resetPass;

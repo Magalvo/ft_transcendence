@@ -17,6 +17,7 @@ import { FindGamePage } from './pages/FindGame'
 import { SpacedOutPage } from './pages/SpacedOut';
 import { TermsPage } from './pages/Terms';
 import { PrivacyPage } from './pages/Privacy';
+import { PasswordResetPage } from './pages/PasswordResetPage';
 
 //? Initialize Router
 const router = new Router('#app');
@@ -34,9 +35,13 @@ router.addRoute('/tournament', TournamentPage);
 router.addRoute('/spacedout', SpacedOutPage);
 router.addRoute('/terms', TermsPage);
 router.addRoute('/privacy', PrivacyPage);
+router.addRoute('/reset-password', PasswordResetPage);
 
 const searchParams = new URLSearchParams(window.location.search);
-const hasOAuthToken = Boolean(searchParams.get('token'));
+const hasOAuthToken =
+  window.location.pathname === '/login' &&
+  searchParams.has('token') &&
+  searchParams.has('refreshToken');
 
 if (hasOAuthToken) {
   void AuthService.handleGoogleCallback()
@@ -53,10 +58,10 @@ if (hasOAuthToken) {
     });
 }
 
-const publicRoutes = ['/login', '/404', '/terms', '/privacy'];
+const publicRoutes = ['/login', '/404', '/terms', '/privacy', '/reset-password', '/forgot-password'];
 
-if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pathname)) {
-  // If we want to enforce login immediately:
+const currentPath = window.location.pathname.replace(/\/$/, '');
+if (!TokenManager.isAuthenticated() && !publicRoutes.includes(currentPath)) {
   window.history.replaceState({}, '', '/login');
 }
 

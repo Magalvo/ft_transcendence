@@ -97,7 +97,7 @@ export class PasswordResetPage extends AbstractComponent {
 
     try {
       await AuthService.resetPassword(this.resetToken!, password);
-      
+      console.log('Password reset successful');
       // Success - redirect para login
       const successMessage = document.createElement('div');
       successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg';

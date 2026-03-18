@@ -2,12 +2,8 @@ import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    force: true,
-  },
+  plugins: [tailwindcss()],
+  optimizeDeps: { force: true },
   server: {
     proxy: {
       '/avatars': {
@@ -15,5 +11,12 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    fs: {
+      strict: false,
+    },
   },
+  build: {
+    outDir: "dist",
+  },
+  base: "/",
 });
