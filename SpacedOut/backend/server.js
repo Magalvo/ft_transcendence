@@ -1,10 +1,11 @@
-const crypto = require("crypto");
 const uWS = require("uWebSockets.js");
 const combatEngine = require("bindings")("combat");
+const crypto = require("crypto");
 
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || 3030;
 let nextPilotId = 1;
 const players = {};
+const SESSION_SECRET = process.env.JWT_SECRET || "";
 
 // ==========================================
 // GAMEPLAY CONSTANTS (Previously Missing)
@@ -18,8 +19,14 @@ const SHIP_HIT_RADIUS = 15.0; // Hitbox
 const SHOT_DAMAGE = 25;
 const RESPAWN_DELAY_MS = 6000;
 const TEAM_SPAWNS = {
-  RED: { pos: { x: -8000, y: 5000, z: 70000 }, dir: { dx: 1, dy: 0.5, dz: -0.2 } },
-  BLUE: { pos: { x: 8000, y: 5000, z: 70000 }, dir: { dx: -1, dy: 0.5, dz: -0.2 } }
+  RED: {
+    pos: { x: -8000, y: 5000, z: 70000 },
+    dir: { dx: 1, dy: 0.5, dz: -0.2 },
+  },
+  BLUE: {
+    pos: { x: 8000, y: 5000, z: 70000 },
+    dir: { dx: -1, dy: 0.5, dz: -0.2 },
+  },
 };
 const PLAYER_RESPAWN_POS = { x: 0, y: 0, z: 70000 };
 const PLAYER_RESPAWN_DIR = { x: 0, y: 1, z: 0 };
@@ -33,6 +40,9 @@ const MISSILE_INITIAL_SPEED = 80;
 const FLARE_DURATION_MS = 3000;
 const TELEMETRY_FLOATS = 6;
 const TELEMETRY_BYTES = TELEMETRY_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const TERRAIN_GRID_HEADER_BYTES = 8;
+const MAX_TERRAIN_GRID_ROWS = 4096;
+const MAX_TERRAIN_GRID_COLS = 4096;
 const PING_INTERVAL_MS = 1000;
 const MAX_VALID_RTT_MS = 5000;
 const WORLD_RADIUS = 50000;
@@ -51,89 +61,16 @@ let TERRAIN_HEIGHT_AMPLITUDE = 2000;
 let TERRAIN_NOISE_OCTAVES = 4;
 let TERRAIN_PERSISTENCE = 0.2;
 let TERRAIN_LACUNARITY = 2.5;
+// Server-authoritative terrain collision map
+let serverTerrainGrid = null;
+let serverGridRows = 0;
+let serverGridCols = 0;
+let serverTerrainGridOwnerId = null;
+let matchSettings = { ...DEFAULT_MATCH_SETTINGS };
 
 // Math Helper
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
-}
-
-function normalizeGameMode(value) {
-  return String(value || "").toUpperCase() === "PVP" ? "PVP" : "ARCADE";
-}
-
-function sanitizeMatchSettings(raw) {
-  if (!raw || typeof raw !== "object") {
-    return { ...DEFAULT_MATCH_SETTINGS };
-  }
-
-  const gameMode = normalizeGameMode(raw.gameMode);
-  return {
-    gameMode,
-    botsEnabled: gameMode === "ARCADE" && raw.botsEnabled !== false,
-  };
-}
-
-function base64UrlDecode(value) {
-  const normalized = String(value || "")
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  const padding = normalized.length % 4;
-  const padded =
-    padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
-  return Buffer.from(padded, "base64").toString("utf8");
-}
-
-function verifySpacedOutSessionToken(token) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret || !token || typeof token !== "string") {
-    return null;
-  }
-
-  const parts = token.split(".");
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const [headerPart, payloadPart, signaturePart] = parts;
-
-  let header;
-  let payload;
-  try {
-    header = JSON.parse(base64UrlDecode(headerPart));
-    payload = JSON.parse(base64UrlDecode(payloadPart));
-  } catch {
-    return null;
-  }
-
-  if (header.alg !== "HS256" || header.typ !== "JWT") {
-    return null;
-  }
-
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(`${headerPart}.${payloadPart}`)
-    .digest("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-
-  if (
-    expected.length !== signaturePart.length ||
-    !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signaturePart))
-  ) {
-    return null;
-  }
-
-  if (payload.purpose !== "spacedout-session") {
-    return null;
-  }
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  if (Number.isFinite(payload.exp) && payload.exp <= nowSeconds) {
-    return null;
-  }
-
-  return payload;
 }
 
 // Prevent high-speed missiles from tunneling through targets between ticks.
@@ -175,7 +112,9 @@ function createPlayerState() {
     x: 0,
     y: 0,
     z: 0,
-    dx: 0, dy: 1, dz: 0,
+    dx: 0,
+    dy: 1,
+    dz: 0,
     hp: DEFAULT_HP,
     team: "SPECTATOR",
     rttMs: 0,
@@ -189,14 +128,82 @@ function createPlayerState() {
     deadUntil: 0,
     awaitingRespawn: false,
     respawnTimer: null,
-    authenticated: false,
-    userId: null,
+    appUserId: null,
     username: null,
     email: null,
-    isBot: false,
     telemetryOutBuffer,
     telemetryOutView: new DataView(telemetryOutBuffer),
     telemetryOutFloats: new Float32Array(telemetryOutBuffer, 4),
+  };
+}
+
+function decodeBase64Url(input) {
+  const normalized = String(input || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const padding =
+    normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+  return Buffer.from(normalized + padding, "base64");
+}
+
+function verifySpacedOutSessionToken(token) {
+  if (!SESSION_SECRET || !token || typeof token !== "string") {
+    return null;
+  }
+
+  const segments = token.split(".");
+  if (segments.length !== 3) {
+    return null;
+  }
+
+  const [headerB64, payloadB64, signatureB64] = segments;
+
+  let header;
+  let payload;
+  try {
+    header = JSON.parse(decodeBase64Url(headerB64).toString("utf8"));
+    payload = JSON.parse(decodeBase64Url(payloadB64).toString("utf8"));
+  } catch {
+    return null;
+  }
+
+  if (header.alg !== "HS256" || header.typ !== "JWT") {
+    return null;
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(`${headerB64}.${payloadB64}`)
+    .digest("base64url");
+
+  const providedSignature = String(signatureB64);
+  if (
+    providedSignature.length !== expectedSignature.length ||
+    !crypto.timingSafeEqual(
+      Buffer.from(providedSignature),
+      Buffer.from(expectedSignature),
+    )
+  ) {
+    return null;
+  }
+
+  if (payload.purpose !== "spacedout-session") {
+    return null;
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.exp && Number(payload.exp) <= nowSeconds) {
+    return null;
+  }
+
+  if (!payload.userId || !payload.username) {
+    return null;
+  }
+
+  return {
+    userId: String(payload.userId),
+    username: String(payload.username),
+    email: payload.email ? String(payload.email) : null,
   };
 }
 
@@ -207,10 +214,6 @@ let nextPingNonce = 1;
 let terrainHostId = null;
 let terrainLocked = false;
 let botsSpawned = false;
-let serverTerrainGrid = null;
-let serverGridRows = 0;
-let serverGridCols = 0;
-let matchSettings = { ...DEFAULT_MATCH_SETTINGS };
 
 function getTerrainConfig() {
   return {
@@ -226,71 +229,8 @@ function getTerrainConfig() {
 function getMatchSettings() {
   return {
     gameMode: matchSettings.gameMode,
-    botsEnabled: !!matchSettings.botsEnabled,
+    botsEnabled: matchSettings.botsEnabled,
   };
-}
-
-function buildPilotIdentityPayload(id, player) {
-  return {
-    type: "pilotIdentity",
-    id: String(id),
-    userId: player.userId || null,
-    username:
-      player.username ||
-      (player.isBot ? `BOT-${String(id)}` : `PILOT-${String(id)}`),
-    isBot: !!player.isBot,
-  };
-}
-
-function sendPilotIdentity(ws, id, player) {
-  try {
-    ws.send(JSON.stringify(buildPilotIdentityPayload(id, player)));
-  } catch {
-    // Best effort only.
-  }
-}
-
-function publishPilotIdentity(id, player) {
-  app.publish("radar", JSON.stringify(buildPilotIdentityPayload(id, player)));
-}
-
-function serializeSnapshotEntry(id, player) {
-  return {
-    id: String(id),
-    pos: {
-      x: player.x,
-      y: player.y,
-      z: player.z,
-      dx: player.dx,
-      dy: player.dy,
-      dz: player.dz,
-      hp: player.hp,
-      dead: !isAlive(player),
-      team: player.team,
-      username:
-        player.username ||
-        (player.isBot ? `BOT-${String(id)}` : undefined),
-    },
-  };
-}
-
-function sendWorldSnapshot(ws) {
-  const snapshotData = Object.entries(players)
-    .filter(([idStr]) => idStr !== String(ws.numericId))
-    .map(([idStr, player]) => serializeSnapshotEntry(idStr, player));
-
-  ws.send(
-    JSON.stringify({
-      type: "worldSnapshot",
-      data: snapshotData,
-    }),
-  );
-
-  for (const [idStr, player] of Object.entries(players)) {
-    if (idStr === String(ws.numericId)) continue;
-    if (!player.username && !player.isBot) continue;
-    sendPilotIdentity(ws, idStr, player);
-  }
 }
 
 function sanitizeTerrainConfig(raw) {
@@ -304,11 +244,20 @@ function sanitizeTerrainConfig(raw) {
   const lacunarity = Number(raw.lacunarity);
 
   if (!Number.isFinite(seed) || seed < 0 || seed > 999999999) return null;
-  if (!Number.isFinite(noiseScale) || noiseScale < 1 || noiseScale > 20) return null;
-  if (!Number.isFinite(heightAmplitude) || heightAmplitude < 500 || heightAmplitude > 10000) return null;
-  if (!Number.isFinite(noiseOctaves) || noiseOctaves < 1 || noiseOctaves > 10) return null;
-  if (!Number.isFinite(persistence) || persistence < 0.1 || persistence > 0.8) return null;
-  if (!Number.isFinite(lacunarity) || lacunarity < 1.0 || lacunarity > 5.0) return null;
+  if (!Number.isFinite(noiseScale) || noiseScale < 1 || noiseScale > 20)
+    return null;
+  if (
+    !Number.isFinite(heightAmplitude) ||
+    heightAmplitude < 500 ||
+    heightAmplitude > 10000
+  )
+    return null;
+  if (!Number.isFinite(noiseOctaves) || noiseOctaves < 1 || noiseOctaves > 10)
+    return null;
+  if (!Number.isFinite(persistence) || persistence < 0.1 || persistence > 0.8)
+    return null;
+  if (!Number.isFinite(lacunarity) || lacunarity < 1.0 || lacunarity > 5.0)
+    return null;
 
   return {
     seed,
@@ -329,15 +278,11 @@ function applyTerrainConfig(config) {
   TERRAIN_LACUNARITY = config.lacunarity;
 }
 
-function isAuthenticatedHuman(player) {
-  return !!player && !player.isBot && !!player.authenticated;
-}
-
 function getConnectedHumanIds() {
   const ids = [];
   for (const id of connectedSockets.keys()) {
     const p = players[id];
-    if (!isAuthenticatedHuman(p)) continue;
+    if (!p || p.isBot) continue;
     ids.push(id);
   }
   return ids;
@@ -362,6 +307,136 @@ function reassignTerrainHostIfNeeded(disconnectedId) {
     "radar",
     JSON.stringify({ type: "terrainHostAssigned", hostId: terrainHostId }),
   );
+}
+
+function sanitizeMatchSettings(raw) {
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_MATCH_SETTINGS };
+  }
+
+  const gameMode = String(raw.gameMode || "").toUpperCase() === "PVP"
+    ? "PVP"
+    : "ARCADE";
+  const botsEnabled = gameMode === "ARCADE" && !!raw.botsEnabled;
+
+  return { gameMode, botsEnabled };
+}
+
+function clearServerTerrainGrid() {
+  serverTerrainGrid = null;
+  serverGridRows = 0;
+  serverGridCols = 0;
+  serverTerrainGridOwnerId = null;
+}
+
+function hasActiveHumanMatchPlayers() {
+  for (const id of connectedSockets.keys()) {
+    const player = players[id];
+    if (!player || player.isBot) continue;
+    if (player.team !== "SPECTATOR") return true;
+  }
+  return false;
+}
+
+function removeActiveMissilesForPilot(pilotId) {
+  for (let i = activeMissiles.length - 1; i >= 0; i--) {
+    const missile = activeMissiles[i];
+    if (missile.ownerId === pilotId || missile.targetId === pilotId) {
+      activeMissiles.splice(i, 1);
+    }
+  }
+}
+
+function despawnBots() {
+  if (!botsSpawned) return;
+
+  for (const botConfig of BOTS) {
+    if (!players[botConfig.id]) continue;
+    clearRespawnTimer(players[botConfig.id]);
+    delete players[botConfig.id];
+    app.publish(
+      "radar",
+      JSON.stringify({ type: "pilotDropped", id: botConfig.id }),
+    );
+  }
+
+  botsSpawned = false;
+}
+
+function unlockTerrainIfLobbyOnly() {
+  if (!terrainLocked || hasActiveHumanMatchPlayers()) return;
+
+  terrainLocked = false;
+  activeMissiles.length = 0;
+  despawnBots();
+  clearServerTerrainGrid();
+  terrainHostId = null;
+  assignTerrainHostIfNeeded();
+
+  app.publish(
+    "radar",
+    JSON.stringify({
+      type: "terrainUnlocked",
+      config: getTerrainConfig(),
+      matchSettings: getMatchSettings(),
+      hostId: terrainHostId,
+    }),
+  );
+}
+
+function hasTerrainGridFromHost(hostId) {
+  return (
+    hostId !== null &&
+    serverTerrainGridOwnerId === hostId &&
+    !!serverTerrainGrid &&
+    serverGridRows > 0 &&
+    serverGridCols > 0
+  );
+}
+
+function tryStoreTerrainGridUpload(hostId, message) {
+  if (terrainLocked) {
+    return { ok: false, reason: "locked" };
+  }
+  if (message.byteLength < TERRAIN_GRID_HEADER_BYTES) {
+    return { ok: false, reason: "too-small" };
+  }
+  if ((message.byteLength - TERRAIN_GRID_HEADER_BYTES) % 4 !== 0) {
+    return { ok: false, reason: "unaligned" };
+  }
+
+  const header = new Uint32Array(message, 0, 2);
+  const rows = header[0];
+  const cols = header[1];
+
+  if (
+    rows <= 0 ||
+    cols <= 0 ||
+    rows > MAX_TERRAIN_GRID_ROWS ||
+    cols > MAX_TERRAIN_GRID_COLS
+  ) {
+    return { ok: false, reason: "dimensions" };
+  }
+
+  const expectedByteLength = TERRAIN_GRID_HEADER_BYTES + rows * cols * 4;
+  if (message.byteLength !== expectedByteLength) {
+    return { ok: false, reason: "size-mismatch" };
+  }
+
+  const uploadedGridView = new Float32Array(message, TERRAIN_GRID_HEADER_BYTES);
+  for (let i = 0; i < uploadedGridView.length; i++) {
+    if (!Number.isFinite(uploadedGridView[i])) {
+      return { ok: false, reason: "non-finite" };
+    }
+  }
+  const uploadedGrid = new Float32Array(uploadedGridView.length);
+  uploadedGrid.set(uploadedGridView);
+
+  serverGridRows = rows;
+  serverGridCols = cols;
+  serverTerrainGrid = uploadedGrid;
+  serverTerrainGridOwnerId = hostId;
+  return { ok: true, rows, cols };
 }
 
 function isAlive(player, now = Date.now()) {
@@ -415,6 +490,7 @@ function scheduleRespawn(id, delayMs = RESPAWN_DELAY_MS) {
           id,
           hp: p.hp,
           team: p.team,
+          userId: p.appUserId,
           username: p.username,
           pos: {
             x: p.x,
@@ -516,6 +592,9 @@ function pushHistorySample(player, t) {
 }
 
 // ==========================================
+// BINARY TELEMETRY ROUTER
+// ==========================================
+// ==========================================
 // BINARY TELEMETRY & MAP ROUTER
 // ==========================================
 function handleBinaryMessage(ws, message) {
@@ -525,17 +604,12 @@ function handleBinaryMessage(ws, message) {
   if (message.byteLength === TELEMETRY_BYTES) {
     const inFloats = new Float32Array(message);
     const player = players[ws.numericId];
-    if (!player) return;
-    if (!player.isBot && !player.authenticated) return;
-    if (!isAlive(player)) return;
+    if (!player || !isAlive(player)) return;
 
     for (let i = 0; i < TELEMETRY_FLOATS; i++) {
-      if (!Number.isFinite(inFloats[i])) {
-        return;
-      }
+      if (!Number.isFinite(inFloats[i])) return;
     }
 
-    // Update Authoritative Server State
     player.x = inFloats[0];
     player.y = inFloats[1];
     player.z = inFloats[2];
@@ -543,34 +617,28 @@ function handleBinaryMessage(ws, message) {
     player.dy = inFloats[4];
     player.dz = inFloats[5];
 
-    // Feed the C++ Interpolator History Buffer
     pushHistorySample(player, Date.now());
 
-    // Prepare the 28-byte broadcast buffer
     player.telemetryOutView.setUint32(0, ws.numericId, true);
     player.telemetryOutFloats.set(inFloats);
-
-    // Blast to all connected clients
     ws.publish("radar", player.telemetryOutBuffer, true);
     return;
   }
 
-  // 2. Heavy Terrain Collision Map Upload (from Host)
-  if (message.byteLength > 1000) {
-    const player = players[ws.numericId];
-    if (!player || !player.authenticated) return;
-    if (ws.numericId !== terrainHostId) return; // Security: Only Host can upload the map
+  // 2. Terrain collision map upload (host only, while unlocked)
+  if (ws.numericId !== terrainHostId) return;
 
-    const safeCopy = message.slice(0);
-
-    const header = new Uint32Array(safeCopy, 0, 2);
-    serverGridRows = header[0];
-    serverGridCols = header[1];
-    serverTerrainGrid = new Float32Array(safeCopy, 8);
-
-    console.log(`🗺️ [TERRAIN] Host uploaded collision map: ${serverGridRows}x${serverGridCols}`);
+  const uploadResult = tryStoreTerrainGridUpload(ws.numericId, message);
+  if (!uploadResult.ok) {
+    console.warn(
+      ` [TERRAIN] Rejected host grid upload from ${ws.numericId}: ${uploadResult.reason}`,
+    );
     return;
   }
+
+  console.log(
+    ` [TERRAIN] Host uploaded collision map: ${uploadResult.rows}x${uploadResult.cols}`,
+  );
 }
 
 // ==========================================
@@ -608,11 +676,40 @@ const app = uWS
           isTerrainHost: ws.numericId === terrainHostId,
           terrainHostId,
           terrainLocked,
+          terrainConfig: getTerrainConfig(),
           matchSettings: getMatchSettings(),
-          terrainConfig: terrainLocked ? getTerrainConfig() : null,
         }),
       );
-      sendWorldSnapshot(ws);
+
+      // --- SEND THE WORLD SNAPSHOT ---
+      // 2. Map all existing players into an array with their current HP
+      const snapshotData = Object.entries(players)
+        .filter(([idStr, p]) => idStr !== String(ws.numericId))
+        .map(([idStr, p]) => ({
+          id: idStr,
+          pos: {
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            dx: p.dx,
+            dy: p.dy,
+            dz: p.dz,
+            hp: p.hp,
+            dead: !isAlive(p),
+            team: p.team,
+            userId: p.appUserId,
+            username: p.username,
+          },
+        }));
+
+      // 3. Send the snapshot directly to the new pilot
+      ws.send(
+        JSON.stringify({
+          type: "worldSnapshot",
+          data: snapshotData,
+        }),
+      );
+      // ------------------------------------
     },
 
     message: (ws, message, isBinary) => {
@@ -632,52 +729,6 @@ const app = uWS
           return;
         }
 
-        if (payload.type === "authSession") {
-          const player = players[ws.numericId];
-          if (!player) return;
-
-          const claims = verifySpacedOutSessionToken(payload.token);
-          if (!claims || !claims.userId) {
-            ws.send(JSON.stringify({ type: "authRejected" }));
-            return;
-          }
-
-          player.authenticated = true;
-          player.userId = String(claims.userId);
-          player.username =
-            typeof claims.username === "string" && claims.username.trim()
-              ? claims.username.trim()
-              : `PILOT-${ws.numericId}`;
-          player.email =
-            typeof claims.email === "string" ? claims.email : null;
-
-          const previousHostId = terrainHostId;
-          assignTerrainHostIfNeeded();
-
-          ws.send(
-            JSON.stringify({
-              type: "authAccepted",
-              id: ws.numericId,
-              userId: player.userId,
-              username: player.username,
-            }),
-          );
-          sendPilotIdentity(ws, ws.numericId, player);
-          publishPilotIdentity(ws.numericId, player);
-
-          if (terrainHostId !== previousHostId && terrainHostId !== null) {
-            app.publish(
-              "radar",
-              JSON.stringify({
-                type: "terrainHostAssigned",
-                hostId: terrainHostId,
-              }),
-            );
-          }
-
-          return;
-        }
-
         if (payload.type === "svPong") {
           const player = players[ws.numericId];
           if (!player || player.isBot) return;
@@ -687,58 +738,69 @@ const app = uWS
           if (!player.lastPingSentAt) return;
 
           const rtt = Date.now() - player.lastPingSentAt;
-          if (!Number.isFinite(rtt) || rtt < 0 || rtt > MAX_VALID_RTT_MS) return;
+          if (!Number.isFinite(rtt) || rtt < 0 || rtt > MAX_VALID_RTT_MS)
+            return;
 
           // EWMA smooths jittery ping values for steadier rewind.
-          player.rttMs = player.rttMs > 0 ? player.rttMs * 0.8 + rtt * 0.2 : rtt;
+          player.rttMs =
+            player.rttMs > 0 ? player.rttMs * 0.8 + rtt * 0.2 : rtt;
+          return;
+        }
+
+        if (payload.type === "authSession") {
+          const player = players[ws.numericId];
+          if (!player) return;
+
+          const session = verifySpacedOutSessionToken(payload.token);
+          if (!session) {
+            ws.send(JSON.stringify({ type: "authRejected" }));
+            return;
+          }
+
+          player.appUserId = session.userId;
+          player.username = session.username;
+          player.email = session.email;
+
+          ws.send(
+            JSON.stringify({
+              type: "authAccepted",
+              user: {
+                id: session.userId,
+                username: session.username,
+                email: session.email,
+              },
+            }),
+          );
+
+          app.publish(
+            "radar",
+            JSON.stringify({
+              type: "pilotIdentity",
+              id: ws.numericId,
+              userId: session.userId,
+              username: session.username,
+            }),
+          );
           return;
         }
 
         // --- Client Ping Echo ---
         if (payload.type === "clientPing") {
-          ws.send(JSON.stringify({ type: "clientPong", timestamp: payload.timestamp }));
-          return;
-        }
-
-        const player = players[ws.numericId];
-        if (!player || !player.authenticated) {
-          ws.send(JSON.stringify({ type: "authRequired" }));
-          return;
-        }
-
-        if (payload.type === "terrainFinalize") {
-          if (terrainLocked) return;
-          if (ws.numericId !== terrainHostId) return;
-
-          if (!serverTerrainGrid || serverGridRows === 0 || serverGridCols === 0) {
-            ws.send(JSON.stringify({ type: "terrainMapMissing" }));
-            return;
-          }
-
-          const config = sanitizeTerrainConfig(payload.config);
-          if (!config) {
-            ws.send(JSON.stringify({ type: "terrainRejected" }));
-            return;
-          }
-
-          matchSettings = sanitizeMatchSettings(payload.matchSettings);
-          applyTerrainConfig(config);
-          terrainLocked = true;
-          spawnBotsIfNeeded();
-
-          app.publish(
-            "radar",
+          ws.send(
             JSON.stringify({
-              type: "terrainLocked",
-              config: getTerrainConfig(),
-              hostId: terrainHostId,
-              matchSettings: getMatchSettings(),
+              type: "clientPong",
+              timestamp: payload.timestamp,
             }),
           );
           return;
         }
 
         if (payload.type === "updateMatchSettings") {
+          const player = players[ws.numericId];
+          if (!player || !player.appUserId) {
+            ws.send(JSON.stringify({ type: "authRequired" }));
+            return;
+          }
           if (terrainLocked) return;
           if (ws.numericId !== terrainHostId) return;
 
@@ -748,6 +810,45 @@ const app = uWS
             JSON.stringify({
               type: "matchSettingsUpdated",
               settings: getMatchSettings(),
+              hostId: terrainHostId,
+            }),
+          );
+          return;
+        }
+
+        if (payload.type === "terrainFinalize") {
+          const hostPlayer = players[ws.numericId];
+          if (!hostPlayer || !hostPlayer.appUserId) {
+            ws.send(JSON.stringify({ type: "authRequired" }));
+            return;
+          }
+          if (terrainLocked) return;
+          if (ws.numericId !== terrainHostId) return;
+
+          const config = sanitizeTerrainConfig(payload.config);
+          if (!config) {
+            ws.send(JSON.stringify({ type: "terrainRejected" }));
+            return;
+          }
+          if (!hasTerrainGridFromHost(ws.numericId)) {
+            ws.send(JSON.stringify({ type: "terrainMapMissing" }));
+            return;
+          }
+
+          matchSettings = sanitizeMatchSettings(
+            payload.matchSettings ?? matchSettings,
+          );
+          applyTerrainConfig(config);
+          terrainLocked = true;
+          spawnBotsIfNeeded();
+
+          app.publish(
+            "radar",
+            JSON.stringify({
+              type: "terrainLocked",
+              config: getTerrainConfig(),
+              matchSettings: getMatchSettings(),
+              hostId: terrainHostId,
             }),
           );
           return;
@@ -841,6 +942,10 @@ const app = uWS
           const id = ws.numericId;
           const player = players[id];
           if (!player || player.isBot) return;
+          if (!player.appUserId) {
+            ws.send(JSON.stringify({ type: "authRequired" }));
+            return;
+          }
           if (!player.awaitingRespawn) return;
 
           const now = Date.now();
@@ -865,6 +970,7 @@ const app = uWS
               id,
               hp: player.hp,
               team: player.team,
+              userId: player.appUserId,
               username: player.username,
               pos: {
                 x: player.x,
@@ -876,6 +982,32 @@ const app = uWS
               },
             }),
           );
+        }
+        if (payload.type === "returnToLobby") {
+          const id = ws.numericId;
+          const player = players[id];
+          if (!player || player.isBot) return;
+
+          clearRespawnTimer(player);
+          removeActiveMissilesForPilot(id);
+          player.team = "SPECTATOR";
+          player.hp = DEFAULT_HP;
+          player.flareActiveUntil = 0;
+          player.deadUntil = Number.POSITIVE_INFINITY;
+          player.awaitingRespawn = true;
+
+          app.publish(
+            "radar",
+            JSON.stringify({
+              type: "returnedToLobby",
+              id,
+              userId: player.appUserId,
+              username: player.username,
+            }),
+          );
+
+          unlockTerrainIfLobbyOnly();
+          return;
         }
         // --- FLARE BROADCAST ---
         if (payload.type === "deployFlares") {
@@ -898,6 +1030,10 @@ const app = uWS
           const id = ws.numericId;
           const player = players[id];
           if (!player) return;
+          if (!player.appUserId) {
+            ws.send(JSON.stringify({ type: "authRequired" }));
+            return;
+          }
           if (!terrainLocked) {
             ws.send(JSON.stringify({ type: "terrainPending" }));
             return;
@@ -905,14 +1041,6 @@ const app = uWS
 
           const chosenTeam = payload.team === "BLUE" ? "BLUE" : "RED";
           const spawnData = TEAM_SPAWNS[chosenTeam];
-          const spawnPose = projectSpawnAboveTerrain({
-            x: spawnData.pos.x,
-            y: spawnData.pos.y,
-            z: spawnData.pos.z,
-            dx: spawnData.dir.dx,
-            dy: spawnData.dir.dy,
-            dz: spawnData.dir.dz,
-          });
 
           player.team = chosenTeam;
           clearRespawnTimer(player);
@@ -921,12 +1049,12 @@ const app = uWS
           player.hp = DEFAULT_HP;
           player.flareActiveUntil = 0;
 
-          player.x = spawnPose.x;
-          player.y = spawnPose.y;
-          player.z = spawnPose.z;
-          player.dx = spawnPose.dx;
-          player.dy = spawnPose.dy;
-          player.dz = spawnPose.dz;
+          player.x = spawnData.pos.x;
+          player.y = spawnData.pos.y;
+          player.z = spawnData.pos.z;
+          player.dx = spawnData.dir.dx;
+          player.dy = spawnData.dir.dy;
+          player.dz = spawnData.dir.dz;
 
           player.historyHead = 0;
           player.historyCount = 0;
@@ -940,44 +1068,18 @@ const app = uWS
               id,
               hp: player.hp,
               team: player.team,
+              userId: player.appUserId,
               username: player.username,
               pos: {
-                x: player.x, y: player.y, z: player.z,
-                dx: player.dx, dy: player.dy, dz: player.dz,
+                x: player.x,
+                y: player.y,
+                z: player.z,
+                dx: player.dx,
+                dy: player.dy,
+                dz: player.dz,
               },
             }),
           );
-          return;
-        }
-
-        if (payload.type === "returnToLobby") {
-          clearRespawnTimer(player);
-          player.team = "SPECTATOR";
-          player.hp = DEFAULT_HP;
-          player.flareActiveUntil = 0;
-          player.awaitingRespawn = true;
-          player.deadUntil = Number.POSITIVE_INFINITY;
-
-          app.publish(
-            "radar",
-            JSON.stringify({
-              type: "returnedToLobby",
-              id: ws.numericId,
-            }),
-          );
-
-          const activeHumans = getConnectedHumanIds();
-          const everyoneInLobby =
-            activeHumans.length > 0 &&
-            activeHumans.every((id) => {
-              const activePlayer = players[id];
-              return !!activePlayer && activePlayer.team === "SPECTATOR";
-            });
-
-          if (everyoneInLobby) {
-            resetRoundToLobby();
-          }
-          return;
         }
         // --- DEV MODE SUICIDE ---
         if (payload.type === "suicide") {
@@ -988,35 +1090,19 @@ const app = uWS
 
     close: (ws) => {
       console.log("🔴 PILOT DISCONNECTED. ID:", ws.numericId);
-      const disconnectedPlayer = players[ws.numericId];
       connectedSockets.delete(ws.numericId);
-      clearRespawnTimer(disconnectedPlayer);
+      clearRespawnTimer(players[ws.numericId]);
       delete players[ws.numericId];
-      reassignTerrainHostIfNeeded(ws.numericId);
-      for (let i = activeMissiles.length - 1; i >= 0; i--) {
-        const missile = activeMissiles[i];
-        if (
-          missile.ownerId === ws.numericId ||
-          missile.targetId === ws.numericId
-        ) {
-          activeMissiles.splice(i, 1);
-        }
+      if (!terrainLocked && serverTerrainGridOwnerId === ws.numericId) {
+        clearServerTerrainGrid();
       }
+      removeActiveMissilesForPilot(ws.numericId);
       app.publish(
         "radar",
         JSON.stringify({ type: "pilotDropped", id: ws.numericId }),
       );
-
-      if (getConnectedHumanIds().length === 0) {
-        terrainHostId = null;
-        terrainLocked = false;
-        serverTerrainGrid = null;
-        serverGridRows = 0;
-        serverGridCols = 0;
-        activeMissiles.length = 0;
-        clearBots();
-        matchSettings = { ...DEFAULT_MATCH_SETTINGS };
-      }
+      unlockTerrainIfLobbyOnly();
+      reassignTerrainHostIfNeeded(ws.numericId);
     },
   })
   .listen("0.0.0.0", port, (token) => {
@@ -1066,85 +1152,6 @@ function distance3D(p1, p2) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-function getGridCoords(nx, ny, nz) {
-  const phi = Math.acos(ny);
-  const theta = Math.atan2(nz, nx);
-
-  const rRow = Math.round((phi / Math.PI) * (serverGridRows - 1));
-  const rCol = Math.round(((Math.PI - theta) / (2 * Math.PI)) * (serverGridCols - 1));
-
-  return {
-    row: clamp(rRow, 0, serverGridRows - 1),
-    col: clamp(rCol, 0, serverGridCols - 1),
-  };
-}
-
-function getGridAltitudeFromCell(row, col) {
-  const idx = row * serverGridCols + col;
-  const rawGroundZ = serverTerrainGrid[idx];
-  return Math.max(0, rawGroundZ * TERRAIN_SCALE_Z) + TERRAIN_CLEARANCE_BIAS;
-}
-
-function getGridAltitude(nx, ny, nz) {
-  // If map hasn't arrived yet, default to safe clearance
-  if (!serverTerrainGrid || serverGridRows === 0 || serverGridCols === 0) {
-    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
-  }
-
-  const { row, col } = getGridCoords(nx, ny, nz);
-  return getGridAltitudeFromCell(row, col);
-}
-
-function getBufferedGridAltitude(nx, ny, nz, cellRadius = 2) {
-  if (!serverTerrainGrid || serverGridRows === 0 || serverGridCols === 0) {
-    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
-  }
-
-  const { row, col } = getGridCoords(nx, ny, nz);
-  let maxAltitude = getGridAltitudeFromCell(row, col);
-
-  for (let rowOffset = -cellRadius; rowOffset <= cellRadius; rowOffset += 1) {
-    for (let colOffset = -cellRadius; colOffset <= cellRadius; colOffset += 1) {
-      const sampleRow = clamp(row + rowOffset, 0, serverGridRows - 1);
-      const sampleCol = clamp(col + colOffset, 0, serverGridCols - 1);
-      const altitude = getGridAltitudeFromCell(sampleRow, sampleCol);
-      if (altitude > maxAltitude) {
-        maxAltitude = altitude;
-      }
-    }
-  }
-
-  return maxAltitude;
-}
-
-function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE + 500) {
-  const sx = Number(spawn?.x) || 0;
-  const sy = Number(spawn?.y) || 0;
-  const sz = Number(spawn?.z) || 0;
-  const distFromCenter = Math.sqrt(sx * sx + sy * sy + sz * sz);
-
-  const nx =
-    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sx / distFromCenter : 0;
-  const ny =
-    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sy / distFromCenter : 1;
-  const nz =
-    Number.isFinite(distFromCenter) && distFromCenter > 0 ? sz / distFromCenter : 0;
-
-  const safeRadius = WORLD_RADIUS + getBufferedGridAltitude(nx, ny, nz, 4) + clearance;
-  const dx = Number.isFinite(spawn?.dx) ? spawn.dx : 0;
-  const dy = Number.isFinite(spawn?.dy) ? spawn.dy : 1;
-  const dz = Number.isFinite(spawn?.dz) ? spawn.dz : 0;
-
-  return {
-    x: nx * safeRadius,
-    y: ny * safeRadius,
-    z: nz * safeRadius,
-    dx,
-    dy,
-    dz,
-  };
-}
-
 /* function sampleTerrainRawElevation(nx, ny, nz) {
   let elevation = 0;
   let currentAmplitude = TERRAIN_HEIGHT_AMPLITUDE;
@@ -1168,25 +1175,48 @@ function projectSpawnAboveTerrain(spawn, clearance = BOT_MIN_TERRAIN_CLEARANCE +
     elevation += 200;
   }
   return elevation;
-}
+} */
 
-function getTerrainAltitudeAtNormal(nx, ny, nz) {
+/* function getTerrainAltitudeAtNormal(nx, ny, nz) {
   const rawGroundZ = sampleTerrainRawElevation(nx, ny, nz);
   return Math.max(0, rawGroundZ * TERRAIN_SCALE_Z) + TERRAIN_CLEARANCE_BIAS;
 } */
 
+  function getGridAltitude(nx, ny, nz) {
+  // If map hasn't arrived yet, default to safe clearance
+  if (!serverTerrainGrid || serverGridRows === 0) {
+    return Math.max(0, 0) + TERRAIN_CLEARANCE_BIAS;
+  }
+
+  const phi = Math.acos(ny);
+  const theta = Math.atan2(nz, nx);
+
+  const rRow = Math.round((phi / Math.PI) * (serverGridRows - 1));
+  const rCol = Math.round(((Math.PI - theta) / (2 * Math.PI)) * (serverGridCols - 1));
+
+  const safeRow = clamp(rRow, 0, serverGridRows - 1);
+  const safeCol = clamp(rCol, 0, serverGridCols - 1);
+
+  const idx = safeRow * serverGridCols + safeCol;
+  const rawGroundZ = serverTerrainGrid[idx];
+
+  return Math.max(0, rawGroundZ * TERRAIN_SCALE_Z) + TERRAIN_CLEARANCE_BIAS;
+}
+
 function keepBotAboveTerrain(bot, stepScale) {
-  const distFromCenter = Math.sqrt(bot.x * bot.x + bot.y * bot.y + bot.z * bot.z);
+  const distFromCenter = Math.sqrt(
+    bot.x * bot.x + bot.y * bot.y + bot.z * bot.z,
+  );
   if (!Number.isFinite(distFromCenter) || distFromCenter <= 0) return;
 
   const nx = bot.x / distFromCenter;
   const ny = bot.y / distFromCenter;
   const nz = bot.z / distFromCenter;
 
-  const terrainAltitude = getBufferedGridAltitude(nx, ny, nz, 2);
+ // const terrainAltitude = getTerrainAltitudeAtNormal(nx, ny, nz);
+  const terrainAltitude = getGridAltitude(nx, ny, nz);
   const minSafeAltitude = terrainAltitude + BOT_MIN_TERRAIN_CLEARANCE;
   const currentAltitude = distFromCenter - WORLD_RADIUS;
-
   if (currentAltitude >= minSafeAltitude) return;
 
   const deficit = minSafeAltitude - currentAltitude;
@@ -1304,18 +1334,11 @@ function estimateVelocity(player) {
   };
 }
 
-function initializeBotState(bot, botConfig, now, spawnPose) {
+function initializeBotState(bot, botConfig, now) {
   bot.isBot = true;
-  bot.authenticated = true;
-  bot.username = `BOT-${botConfig.id}`;
   bot.botProfile = botConfig.profile;
   bot.speed = 10;
-  bot.spawn = {
-    ...spawnPose,
-    dx: Number.isFinite(spawnPose?.dx) ? spawnPose.dx : 0,
-    dy: Number.isFinite(spawnPose?.dy) ? spawnPose.dy : 1,
-    dz: Number.isFinite(spawnPose?.dz) ? spawnPose.dz : 0,
-  };
+  bot.spawn = { ...botConfig.spawn, dx: 0, dy: 1, dz: 0 };
   bot.aiMode = "PATROL";
   bot.aiTargetId = null;
   bot.aiTargetDistance = Infinity;
@@ -1396,7 +1419,9 @@ function updateBotIntent(bot, activeHumanIds, now) {
   bot.aiTargetId = hasTarget ? targetInfo.targetId : null;
   bot.aiTargetDistance = hasTarget ? targetInfo.distance : Infinity;
 
-  let desiredYaw = Math.atan2(bot.dx, -bot.dz) + Math.sin(now / 3000 + bot.aiPatrolPhase) * 0.02;
+  let desiredYaw =
+    Math.atan2(bot.dx, -bot.dz) +
+    Math.sin(now / 3000 + bot.aiPatrolPhase) * 0.02;
   let desiredPitch = 0;
 
   if (bot.aiTargetId !== null && bot.aiMode !== "PATROL") {
@@ -1422,7 +1447,8 @@ function updateBotIntent(bot, activeHumanIds, now) {
       desiredPitch = Math.atan2(dy, horizDist);
 
       const noiseScale = bot.aiMode === "ENGAGE" ? 0.6 : 1.0;
-      desiredYaw += randomRange(-profile.aimNoise, profile.aimNoise) * noiseScale;
+      desiredYaw +=
+        randomRange(-profile.aimNoise, profile.aimNoise) * noiseScale;
       desiredPitch +=
         randomRange(-profile.aimNoise, profile.aimNoise) * noiseScale;
     }
@@ -1435,7 +1461,7 @@ function updateBotIntent(bot, activeHumanIds, now) {
     Math.max(
       40,
       profile.reactionMs +
-      randomRange(-profile.reactionJitterMs, profile.reactionJitterMs),
+        randomRange(-profile.reactionJitterMs, profile.reactionJitterMs),
     );
 }
 
@@ -1447,39 +1473,57 @@ function simulateBotStep(botConfig, now, stepScale, activeHumanIds) {
   if (now >= bot.aiNextThinkAt) updateBotIntent(bot, activeHumanIds, now);
 
   bot.speed = clamp(
-    bot.speed + (bot.aiMode === "PATROL" ? -profile.patrolDecel : profile.chaseAccel) * stepScale,
-    profile.minSpeed, profile.maxSpeed
+    bot.speed +
+      (bot.aiMode === "PATROL" ? -profile.patrolDecel : profile.chaseAccel) *
+        stepScale,
+    profile.minSpeed,
+    profile.maxSpeed,
   );
 
   // Calculate desired flight vector
-  let targetDx = 0, targetDy = 1, targetDz = 0;
+  let targetDx = 0,
+    targetDy = 1,
+    targetDz = 0;
 
   if (bot.aiMode === "PATROL") {
     const angle = now / 3000 + bot.aiPatrolPhase;
-    targetDx = Math.sin(angle); targetDy = Math.cos(angle);
+    targetDx = Math.sin(angle);
+    targetDy = Math.cos(angle);
   } else if (bot.aiTargetId !== null) {
     const target = players[bot.aiTargetId];
     if (target && isAlive(target, now)) {
       const vel = estimateVelocity(target);
-      const lead = clamp(bot.aiTargetDistance / profile.leadSpeed, 0, profile.maxLeadSeconds);
-      targetDx = (target.x + vel.vx * lead) - bot.x;
-      targetDy = (target.y + vel.vy * lead) - bot.y;
-      targetDz = (target.z + vel.vz * lead) - bot.z;
+      const lead = clamp(
+        bot.aiTargetDistance / profile.leadSpeed,
+        0,
+        profile.maxLeadSeconds,
+      );
+      targetDx = target.x + vel.vx * lead - bot.x;
+      targetDy = target.y + vel.vy * lead - bot.y;
+      targetDz = target.z + vel.vz * lead - bot.z;
     }
   }
 
   // Normalize target vector
-  let tLen = Math.sqrt(targetDx * targetDx + targetDy * targetDy + targetDz * targetDz) || 1;
-  targetDx /= tLen; targetDy /= tLen; targetDz /= tLen;
+  let tLen =
+    Math.sqrt(
+      targetDx * targetDx + targetDy * targetDy + targetDz * targetDz,
+    ) || 1;
+  targetDx /= tLen;
+  targetDy /= tLen;
+  targetDz /= tLen;
 
   // Smoothly steer current vector towards target vector
-  const agility = profile.agility * (bot.aiMode === "ENGAGE" ? 1.15 : 1.0) * stepScale;
+  const agility =
+    profile.agility * (bot.aiMode === "ENGAGE" ? 1.15 : 1.0) * stepScale;
   bot.dx += (targetDx - bot.dx) * agility;
   bot.dy += (targetDy - bot.dy) * agility;
   bot.dz += (targetDz - bot.dz) * agility;
 
   // Hard Deck Collision Avoidance
-  const distFromCenter = Math.sqrt(bot.x * bot.x + bot.y * bot.y + bot.z * bot.z);
+  const distFromCenter = Math.sqrt(
+    bot.x * bot.x + bot.y * bot.y + bot.z * bot.z,
+  );
   if (distFromCenter < BOT_HARD_DECK_RADIUS && distFromCenter > 0) {
     const nx = bot.x / distFromCenter;
     const ny = bot.y / distFromCenter;
@@ -1493,8 +1537,11 @@ function simulateBotStep(botConfig, now, stepScale, activeHumanIds) {
   keepBotAboveTerrain(bot, stepScale);
 
   // Re-normalize final flight vector
-  let bLen = Math.sqrt(bot.dx * bot.dx + bot.dy * bot.dy + bot.dz * bot.dz) || 1;
-  bot.dx /= bLen; bot.dy /= bLen; bot.dz /= bLen;
+  let bLen =
+    Math.sqrt(bot.dx * bot.dx + bot.dy * bot.dy + bot.dz * bot.dz) || 1;
+  bot.dx /= bLen;
+  bot.dy /= bLen;
+  bot.dz /= bLen;
 
   // Move
   bot.x += bot.dx * bot.speed * stepScale;
@@ -1504,11 +1551,16 @@ function simulateBotStep(botConfig, now, stepScale, activeHumanIds) {
   keepBotAboveTerrain(bot, stepScale);
 
   // Firing logic using vector dot-product (1.0 is a perfect hit)
-  if (bot.aiMode === "ENGAGE" && bot.aiTargetDistance < profile.fireRange && now - bot.lastShotAt > profile.fireCooldownMs) {
+  if (
+    bot.aiMode === "ENGAGE" &&
+    bot.aiTargetDistance < profile.fireRange &&
+    now - bot.lastShotAt > profile.fireCooldownMs
+  ) {
     const target = players[bot.aiTargetId];
     if (target && isAlive(target, now)) {
       const dot = bot.dx * targetDx + bot.dy * targetDy + bot.dz * targetDz;
-      if (dot > 0.98) { // Target is squarely in the crosshairs
+      if (dot > 0.98) {
+        // Target is squarely in the crosshairs
         bot.lastShotAt = now;
         app.publish(
           "radar",
@@ -1529,8 +1581,12 @@ function simulateBotStep(botConfig, now, stepScale, activeHumanIds) {
   // Broadcast
   pushHistorySample(bot, now);
   bot.aiBroadcastDataView.setUint32(0, botConfig.id, true);
-  bot.aiBroadcastFloats[0] = bot.x; bot.aiBroadcastFloats[1] = bot.y; bot.aiBroadcastFloats[2] = bot.z;
-  bot.aiBroadcastFloats[3] = bot.dx; bot.aiBroadcastFloats[4] = bot.dy; bot.aiBroadcastFloats[5] = bot.dz;
+  bot.aiBroadcastFloats[0] = bot.x;
+  bot.aiBroadcastFloats[1] = bot.y;
+  bot.aiBroadcastFloats[2] = bot.z;
+  bot.aiBroadcastFloats[3] = bot.dx;
+  bot.aiBroadcastFloats[4] = bot.dy;
+  bot.aiBroadcastFloats[5] = bot.dz;
   app.publish("radar", bot.aiBroadcastBuffer, true);
 }
 
@@ -1579,8 +1635,8 @@ function simulateMissileStep(now, stepScale) {
     const dirLen =
       Math.sqrt(
         missile.dx * missile.dx +
-        missile.dy * missile.dy +
-        missile.dz * missile.dz,
+          missile.dy * missile.dy +
+          missile.dz * missile.dz,
       ) || 1;
     missile.dx /= dirLen;
     missile.dy /= dirLen;
@@ -1624,69 +1680,37 @@ function simulateMissileStep(now, stepScale) {
 
 // 1. Initialize bots with tiered behavior profiles
 const BOTS = [
-  { id: 9001, spawn: { x: 0, y: 15000, z: 58000 }, profile: BOT_PROFILES.rookie },
+  {
+    id: 9001,
+    spawn: { x: 0, y: 15000, z: 58000 },
+    profile: BOT_PROFILES.rookie,
+  },
   //{ id: 9002, spawn: { x: -3000, y: 18000, z: 57500 }, profile: BOT_PROFILES.rookie },
   //{ id: 9003, spawn: { x: 3000, y: 22000, z: 58500 }, profile: BOT_PROFILES.rookie },
 ];
 
-function clearBots() {
-  for (const botConfig of BOTS) {
-    if (!players[botConfig.id]) continue;
-    delete players[botConfig.id];
-    app.publish(
-      "radar",
-      JSON.stringify({ type: "pilotDropped", id: botConfig.id }),
-    );
-  }
-  botsSpawned = false;
-}
-
-function resetRoundToLobby() {
-  terrainLocked = false;
-  serverTerrainGrid = null;
-  serverGridRows = 0;
-  serverGridCols = 0;
-  activeMissiles.length = 0;
-  clearBots();
-
-  terrainHostId = null;
-  assignTerrainHostIfNeeded();
-
-  app.publish(
-    "radar",
-    JSON.stringify({
-      type: "terrainUnlocked",
-      config: getTerrainConfig(),
-      hostId: terrainHostId,
-      matchSettings: getMatchSettings(),
-    }),
+function shouldSpawnBots() {
+  return (
+    matchSettings.gameMode === "ARCADE" &&
+    matchSettings.botsEnabled &&
+    BOTS.length > 0
   );
 }
 
 function spawnBotsIfNeeded() {
-  if (
-    normalizeGameMode(matchSettings.gameMode) !== "ARCADE" ||
-    !matchSettings.botsEnabled
-  ) {
-    clearBots();
-    return;
-  }
-  if (botsSpawned) return;
+  if (botsSpawned || !shouldSpawnBots()) return;
 
   const botInitNow = Date.now();
   BOTS.forEach((botConfig) => {
-    const spawnPose = projectSpawnAboveTerrain(botConfig.spawn);
     const p = createPlayerState();
-    p.x = spawnPose.x;
-    p.y = spawnPose.y;
-    p.z = spawnPose.z;
-    p.dx = spawnPose.dx;
-    p.dy = spawnPose.dy;
-    p.dz = spawnPose.dz;
-    initializeBotState(p, botConfig, botInitNow, spawnPose);
-    pushHistorySample(p, botInitNow);
+    p.x = botConfig.spawn.x;
+    p.y = botConfig.spawn.y;
+    p.z = botConfig.spawn.z;
+    p.dx = 0;
+    p.dy = 1;
+    p.dz = 0;
+    initializeBotState(p, botConfig, botInitNow);
     players[botConfig.id] = p;
-    publishPilotIdentity(botConfig.id, p);
   });
   botsSpawned = true;
 }
@@ -1725,7 +1749,10 @@ setInterval(() => {
     stepCount++;
   }
 
-  if (stepCount === BOT_MAX_CATCH_UP_STEPS && botAccumulatorMs >= BOT_FIXED_STEP_MS) {
+  if (
+    stepCount === BOT_MAX_CATCH_UP_STEPS &&
+    botAccumulatorMs >= BOT_FIXED_STEP_MS
+  ) {
     // Avoid spiral-of-death if the process stalls briefly.
     botAccumulatorMs = 0;
   }
@@ -1741,8 +1768,10 @@ setInterval(() => {
   const rss = (mem.rss / 1024 / 1024).toFixed(2);
 
   const activePlayers = connectedSockets.size;
-  const activeBots = BOTS.length;
+  const activeBots = botsSpawned ? BOTS.length : 0;
   const missiles = activeMissiles.length;
 
-  console.log(`📊 [PERF] Players: ${activePlayers} (Bots: ${activeBots}) | Missiles: ${missiles} | RAM: ${heapUsed}MB Heap / ${rss}MB Total`);
+  console.log(
+    `📊 [PERF] Players: ${activePlayers} (Bots: ${activeBots}) | Missiles: ${missiles} | RAM: ${heapUsed}MB Heap / ${rss}MB Total`,
+  );
 }, 10000); // Logs every 10 seconds

@@ -286,29 +286,23 @@ export class AuthService {
    * Redirect to Google OAuth login
    */
   loginWithGoogle(): void {
-    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!GOOGLE_CLIENT_ID) {
-      console.error('Google Client ID not configured');
-      return;
-    }
-
     window.location.href = `${this.apiUrl}/api/auth/google/login`;
   }
 
   /**
    * Handle Google OAuth callback (called from URL params)
-   * Expected URL: /?token=xxx (refreshToken is in httpOnly cookie)
+   * Expected URL: /login?token=xxx&refreshToken=yyy
    */
   async handleGoogleCallback(): Promise<boolean> {
     try {
       const params = new URLSearchParams(window.location.search);
       const token = params.get('token');
+      const refreshToken = params.get('refreshToken');
 
-      if (!token) {
+      if (!token || !refreshToken) {
         throw new Error('Missing token from Google OAuth');
       }
 
-      const refreshToken = params.get('refreshToken') || 'oauth_' + Date.now();
       TokenManager.setTokens(token, refreshToken, 1);
 
       try {
@@ -319,7 +313,6 @@ export class AuthService {
       }
 
       window.history.replaceState({}, document.title, window.location.pathname);
-      window.location.href = '/';
       return true;
     } catch (error: any) {
       console.error('Google OAuth callback failed:', error);

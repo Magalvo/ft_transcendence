@@ -1,8 +1,6 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { SpacedOutSocketClient } from "./SpacedOutSocketClient";
 import type {
-  GameMode,
   MatchSettings,
   SpacedOutLogEntry,
   SpacedOutSessionResponse,
@@ -11,18 +9,35 @@ import type {
 } from "./types";
 import { AudioManager } from "./AudioManager";
 import { VisionController } from "./VisionController";
-import { CombatManager, type CombatState } from "./CombatManager";
+import {
+  CombatManager,
+  DEFAULT_AIM_ASSIST_TUNING,
+  type AimAssistTuning,
+  type CombatState,
+} from "./CombatManager";
+import {
+  DEFAULT_FLIGHT_SPEED,
+  DEFAULT_MATCH_SETTINGS,
+  DEFAULT_TERRAIN_CONFIG,
+  TELEMETRY_INTERVAL_MS,
+  WORLD_RADIUS,
+  normalizeGameMode,
+  normalizeTeamName,
+  quaternionFromPose,
+  type CameraMode,
+  type ControlMode,
+  type RemotePilotState,
+  type TeamName,
+} from "./SpacedOutGameShared";
+import { ShipFactory } from "./ShipFactory";
+import { RemotePilotSystem } from "./RemotePilotSystem";
+import { TerrainSystem } from "./TerrainSystem";
+import { HudRenderer } from "./HudRenderer";
+import { FlowController } from "./FlowController";
 
-const WORLD_RADIUS = 50000;
-const TELEMETRY_INTERVAL_MS = 80;
-const RADAR_MAX_RANGE = 30000;
-const CHUNK_SIZE = 64;
-const SCALE_Z = 4;
-const MAP_CHUNKS_X = 12;
-const MAP_CHUNKS_Y = 12;
-const DEFAULT_FLIGHT_SPEED = 220;
 const MIN_FLIGHT_SPEED = 100;
 const MAX_FLIGHT_SPEED = 350;
+const THROTTLE_ACCELERATION = 120;
 const AIRBRAKE_DECELERATION = 180;
 const LASER_REPEAT_INTERVAL_MS = 250;
 const MISSILE_FIRE_KEY = "q";
@@ -52,36 +67,7 @@ const GAMEPLAY_KEYS = new Set([
   "]",
 ]);
 
-const DEFAULT_TERRAIN_CONFIG: TerrainConfig = {
-  seed: 44897,
-  noiseScale: 4,
-  heightAmplitude: 2000,
-  noiseOctaves: 4,
-  persistence: 0.2,
-  lacunarity: 2.5,
-};
-
-const DEFAULT_MATCH_SETTINGS: MatchSettings = {
-  gameMode: "ARCADE",
-  botsEnabled: true,
-};
-
-type TeamName = "RED" | "BLUE" | "SPECTATOR";
-type CameraMode = "PLAYER" | "TERRAIN" | "DEATH" | "SPECTATOR";
-type ControlMode = "FACE" | "KEYBOARD";
-
-interface RemotePilotState {
-  id: string;
-  mesh: THREE.Group;
-  label: HTMLDivElement;
-  targetPosition: THREE.Vector3;
-  targetQuaternion: THREE.Quaternion;
-  velocity: THREE.Vector3;
-  lastSnapshotAt: number | null;
-  hp: number;
-  team: TeamName;
-  username: string;
-}
+const EMPTY_REMOTE_PILOTS = new Map<string, RemotePilotState>();
 
 interface SpacedOutGameOptions {
   mount: HTMLElement;
@@ -123,6 +109,21 @@ interface SpacedOutGameOptions {
   matchSettingsMode: HTMLElement;
   gameModeSelect: HTMLSelectElement;
   botsEnabledInput: HTMLInputElement;
+  aimAssistPanel: HTMLElement;
+  aimAssistOverlay: HTMLElement;
+  aimAssistMode: HTMLElement;
+  aimAssistCone: HTMLInputElement;
+  aimAssistConeValue: HTMLElement;
+  aimAssistGain: HTMLInputElement;
+  aimAssistGainValue: HTMLElement;
+  aimAssistMaxPull: HTMLInputElement;
+  aimAssistMaxPullValue: HTMLElement;
+  aimAssistEngage: HTMLInputElement;
+  aimAssistEngageValue: HTMLElement;
+  aimAssistRelease: HTMLInputElement;
+  aimAssistReleaseValue: HTMLElement;
+  webcamRequiredInput: HTMLInputElement;
+  webcamOptionalInput: HTMLInputElement;
   session: SpacedOutSessionResponse;
   onJoinSequenceRequest?: () => Promise<void> | void;
   onLobbyRestoreRequest?: () => void;
@@ -142,47 +143,6 @@ const DEFAULT_COMBAT_STATE: CombatState = {
   magnetismPitch: 0,
   lockedEnemyId: null,
 };
-
-function normalizeTeamName(value: unknown): TeamName {
-  const upper = String(value || "SPECTATOR").toUpperCase();
-  return upper === "BLUE" ? "BLUE" : upper === "RED" ? "RED" : "SPECTATOR";
-}
-
-function normalizeGameMode(value: unknown): GameMode {
-  return String(value || "").toUpperCase() === "PVP" ? "PVP" : "ARCADE";
-}
-
-function quaternionFromPose(
-  position: THREE.Vector3,
-  direction: THREE.Vector3,
-): THREE.Quaternion {
-  const up =
-    position.lengthSq() > 1e-8
-      ? position.clone().normalize()
-      : new THREE.Vector3(0, 1, 0);
-  const forward =
-    direction.lengthSq() > 1e-8
-      ? direction.clone().normalize()
-      : new THREE.Vector3(0, 1, 0);
-
-  let right = new THREE.Vector3().crossVectors(forward, up);
-  if (right.lengthSq() <= 1e-8) {
-    right = new THREE.Vector3().crossVectors(
-      Math.abs(up.y) < 0.99
-        ? new THREE.Vector3(0, 1, 0)
-        : new THREE.Vector3(1, 0, 0),
-      up,
-    );
-  }
-  right.normalize();
-
-  const correctedUp = new THREE.Vector3()
-    .crossVectors(right, forward)
-    .normalize();
-  const matrix = new THREE.Matrix4();
-  matrix.makeBasis(right, correctedUp, forward.clone().negate());
-  return new THREE.Quaternion().setFromRotationMatrix(matrix);
-}
 
 export class SpacedOutGame {
   private readonly mount: HTMLElement;
@@ -224,13 +184,27 @@ export class SpacedOutGame {
   private readonly matchSettingsMode: HTMLElement;
   private readonly gameModeSelect: HTMLSelectElement;
   private readonly botsEnabledInput: HTMLInputElement;
+  private readonly aimAssistPanel: HTMLElement;
+  private readonly aimAssistOverlay: HTMLElement;
+  private readonly aimAssistMode: HTMLElement;
+  private readonly aimAssistCone: HTMLInputElement;
+  private readonly aimAssistConeValue: HTMLElement;
+  private readonly aimAssistGain: HTMLInputElement;
+  private readonly aimAssistGainValue: HTMLElement;
+  private readonly aimAssistMaxPull: HTMLInputElement;
+  private readonly aimAssistMaxPullValue: HTMLElement;
+  private readonly aimAssistEngage: HTMLInputElement;
+  private readonly aimAssistEngageValue: HTMLElement;
+  private readonly aimAssistRelease: HTMLInputElement;
+  private readonly aimAssistReleaseValue: HTMLElement;
+  private readonly webcamRequiredInput: HTMLInputElement;
+  private readonly webcamOptionalInput: HTMLInputElement;
   private readonly session: SpacedOutSessionResponse;
   private readonly onJoinSequenceRequest?: () => Promise<void> | void;
   private readonly onLobbyRestoreRequest?: () => void;
   private readonly socketClient: SpacedOutSocketClient;
   private readonly logs: SpacedOutLogEntry[] = [];
   private readonly cleanupCallbacks: Array<() => void> = [];
-  private readonly remotePilots = new Map<string, RemotePilotState>();
   private readonly telemetryBuffer = new ArrayBuffer(24);
   private readonly telemetryView = new Float32Array(this.telemetryBuffer);
   private readonly terrainCameraPosition = new THREE.Vector3(
@@ -239,19 +213,21 @@ export class SpacedOutGame {
     WORLD_RADIUS + 2200,
   );
   private readonly tempA = new THREE.Vector3();
-  private readonly tempB = new THREE.Vector3();
   private readonly tempEuler = new THREE.Euler(0, 0, 0, "YXZ");
   private readonly spectateCamPos = new THREE.Vector3();
   private readonly spectateTargetPos = new THREE.Vector3();
   private readonly spectateForward = new THREE.Vector3();
   private readonly spectateUp = new THREE.Vector3();
   private readonly spectateQuat = new THREE.Quaternion();
+  private readonly hudRenderer: HudRenderer;
+  private readonly flowController: FlowController;
 
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
   private earthAnchor: THREE.Group | null = null;
-  private terrainGroup: THREE.Group | null = null;
+  private terrainSystem: TerrainSystem | null = null;
+  private remotePilotSystem: RemotePilotSystem | null = null;
   private playerRig: THREE.Group | null = null;
   private localShip: THREE.Group | null = null;
   private animationFrameId: number | null = null;
@@ -264,6 +240,8 @@ export class SpacedOutGame {
   private isTerrainHost = false;
   private waitingForTerrainFinalize = false;
   private matchSettings: MatchSettings = { ...DEFAULT_MATCH_SETTINGS };
+  private aimAssistTuning: AimAssistTuning = { ...DEFAULT_AIM_ASSIST_TUNING };
+  private webcamRequired = true;
   private isCalibrated = false;
   private visionReady = false;
   private visionFailed = false;
@@ -276,7 +254,6 @@ export class SpacedOutGame {
     new THREE.Vector3(0, 1, 0),
   );
   private pressedKeys = new Set<string>();
-  private worldGrid: number[][] | null = null;
   private speed = DEFAULT_FLIGHT_SPEED;
   private localYawInput = 0;
   private localPitchInput = 0;
@@ -301,6 +278,14 @@ export class SpacedOutGame {
   private vision: VisionController;
   private combatManager: CombatManager | null = null;
   private combatState: CombatState = { ...DEFAULT_COMBAT_STATE };
+
+  private get remotePilots(): Map<string, RemotePilotState> {
+    return this.remotePilotSystem?.pilots ?? EMPTY_REMOTE_PILOTS;
+  }
+
+  private get worldGrid(): number[][] | null {
+    return this.terrainSystem?.grid ?? null;
+  }
 
   constructor(options: SpacedOutGameOptions) {
     this.mount = options.mount;
@@ -342,7 +327,23 @@ export class SpacedOutGame {
     this.matchSettingsMode = options.matchSettingsMode;
     this.gameModeSelect = options.gameModeSelect;
     this.botsEnabledInput = options.botsEnabledInput;
+    this.aimAssistPanel = options.aimAssistPanel;
+    this.aimAssistOverlay = options.aimAssistOverlay;
+    this.aimAssistMode = options.aimAssistMode;
+    this.aimAssistCone = options.aimAssistCone;
+    this.aimAssistConeValue = options.aimAssistConeValue;
+    this.aimAssistGain = options.aimAssistGain;
+    this.aimAssistGainValue = options.aimAssistGainValue;
+    this.aimAssistMaxPull = options.aimAssistMaxPull;
+    this.aimAssistMaxPullValue = options.aimAssistMaxPullValue;
+    this.aimAssistEngage = options.aimAssistEngage;
+    this.aimAssistEngageValue = options.aimAssistEngageValue;
+    this.aimAssistRelease = options.aimAssistRelease;
+    this.aimAssistReleaseValue = options.aimAssistReleaseValue;
+    this.webcamRequiredInput = options.webcamRequiredInput;
+    this.webcamOptionalInput = options.webcamOptionalInput;
     this.session = options.session;
+    this.webcamRequired = this.webcamRequiredInput.checked;
     this.onJoinSequenceRequest = options.onJoinSequenceRequest;
     this.onLobbyRestoreRequest = options.onLobbyRestoreRequest;
     this.socketClient = new SpacedOutSocketClient(
@@ -350,6 +351,39 @@ export class SpacedOutGame {
       options.session.token,
     );
     this.vision = new VisionController(this.videoElement);
+    this.hudRenderer = new HudRenderer({ hudCanvas: this.hudCanvas });
+    this.flowController = new FlowController({
+      loadingOverlay: this.loadingOverlay,
+      loadingText: this.loadingText,
+      calibrationScreen: this.calibrationScreen,
+      calibrateButton: this.calibrateButton,
+      teamScreen: this.teamScreen,
+      actionButtons: this.actionButtons,
+      joinButton: this.joinButton,
+      spectateButton: this.spectateButton,
+      speedReadout: this.speedReadout,
+      modeReadout: this.modeReadout,
+      targetReadout: this.targetReadout,
+      terrainEditorPanel: this.terrainEditorPanel,
+      terrainEditorOverlay: this.terrainEditorOverlay,
+      terrainMode: this.terrainMode,
+      terrainControls: [
+        this.terrainSeed,
+        this.terrainNoiseScale,
+        this.terrainHeightAmplitude,
+        this.terrainNoiseOctaves,
+        this.terrainPersistence,
+        this.terrainLacunarity,
+        this.terrainRandomize,
+        this.terrainRegenerate,
+      ],
+      terrainFinalize: this.terrainFinalize,
+      matchSettingsPanel: this.matchSettingsPanel,
+      matchSettingsOverlay: this.matchSettingsOverlay,
+      matchSettingsMode: this.matchSettingsMode,
+      gameModeSelect: this.gameModeSelect,
+      botsEnabledInput: this.botsEnabledInput,
+    });
   }
 
   public start(): void {
@@ -360,6 +394,7 @@ export class SpacedOutGame {
     this.bindSocketEvents();
     this.syncTerrainInputs();
     this.syncMatchSettingsInputs();
+    this.syncAimAssistInputs();
     this.rebuildTerrain();
     this.syncFlowScreens();
     this.setTerrainSelectionCamera(true);
@@ -382,8 +417,7 @@ export class SpacedOutGame {
     this.socketClient.disconnect();
     this.vision.stop();
     this.audio.stop();
-    this.remotePilots.forEach((pilot) => pilot.label.remove());
-    this.remotePilots.clear();
+    this.remotePilotSystem?.clear();
     this.disposeScene();
 
     if (this.renderer) {
@@ -414,7 +448,11 @@ export class SpacedOutGame {
       }
       this.visionFailed = true;
       this.updateCalibrationControls();
-      this.setStatus("Webcam access is required for SpacedOut face tracking.");
+      if (this.webcamRequired) {
+        this.setStatus("Webcam access is required for SpacedOut face tracking.");
+      } else {
+        this.setStatus("Webcam unavailable. Keyboard testing mode is active.");
+      }
       this.log(
         "error",
         error instanceof Error
@@ -468,11 +506,13 @@ export class SpacedOutGame {
     const terrainGroup = new THREE.Group();
     const playerRig = new THREE.Group();
     playerRig.rotation.order = "YXZ";
-    const localShip = this.createPilotShip("RED");
+    const localShip = ShipFactory.createPilotShip("RED");
     localShip.position.set(0, -2, -8);
 
     this.earthAnchor = earthAnchor;
-    this.terrainGroup = terrainGroup;
+    this.terrainSystem = new TerrainSystem(terrainGroup);
+    this.terrainSystem.setConfig(this.terrainConfig);
+    this.remotePilotSystem = new RemotePilotSystem(earthAnchor, this.labelsMount);
     this.playerRig = playerRig;
     this.localShip = localShip;
     this.combatManager = new CombatManager(
@@ -480,6 +520,9 @@ export class SpacedOutGame {
       terrainGroup,
       this.socketClient,
       this.audio,
+    );
+    this.aimAssistTuning = this.combatManager.setAimAssistTuning(
+      this.aimAssistTuning,
     );
 
     this.scene.add(earthAnchor);
@@ -499,23 +542,6 @@ export class SpacedOutGame {
       this.pressedKeys.clear();
       this.isLaserTriggerHeld = false;
       this.laserShotQueued = false;
-    };
-    const wheelHandler = (event: WheelEvent) => {
-      if (!this.canControlShip() || this.isPaused) {
-        return;
-      }
-
-      const direction = Math.sign(event.deltaY);
-      if (direction === 0) {
-        return;
-      }
-
-      event.preventDefault();
-      this.speed = THREE.MathUtils.clamp(
-        this.speed - direction * 12,
-        MIN_FLIGHT_SPEED,
-        MAX_FLIGHT_SPEED,
-      );
     };
     const keydownHandler = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -558,22 +584,18 @@ export class SpacedOutGame {
 
       if (key === "m" && this.isCalibrated && !this.isDead) {
         event.preventDefault();
+        if (!this.webcamRequired && !this.visionReady) {
+          this.log(
+            "warning",
+            "Face mode is unavailable while webcam requirement is optional and tracker is offline.",
+          );
+          return;
+        }
         this.controlMode = this.controlMode === "FACE" ? "KEYBOARD" : "FACE";
         if (this.camera) {
           this.camera.position.set(0, 0, 0);
           this.camera.rotation.set(0, 0, 0);
         }
-        return;
-      }
-
-      if (
-        key === "shift" &&
-        !event.repeat &&
-        !this.isPaused &&
-        this.canFireWeapons()
-      ) {
-        event.preventDefault();
-        this.combatManager?.fireMissile(this.localShip!, this.speed);
         return;
       }
 
@@ -605,7 +627,6 @@ export class SpacedOutGame {
 
     window.addEventListener("resize", resizeHandler);
     window.addEventListener("blur", blurHandler);
-    window.addEventListener("wheel", wheelHandler, { passive: false });
     window.addEventListener("keydown", keydownHandler);
     window.addEventListener("keyup", keyupHandler);
 
@@ -614,9 +635,6 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("blur", blurHandler),
-    );
-    this.cleanupCallbacks.push(() =>
-      window.removeEventListener("wheel", wheelHandler),
     );
     this.cleanupCallbacks.push(() =>
       window.removeEventListener("keydown", keydownHandler),
@@ -672,7 +690,10 @@ export class SpacedOutGame {
       onTerrainInput();
       this.rebuildTerrain();
       if (!this.uploadTerrainCollisionMap()) {
-        this.log("error", "Unable to upload the current terrain collision map.");
+        this.log(
+          "error",
+          "Unable to upload the current terrain collision map.",
+        );
         return;
       }
       this.waitingForTerrainFinalize = true;
@@ -719,6 +740,23 @@ export class SpacedOutGame {
       }
       spectateFlow();
     };
+    const onAimAssistInput = () => {
+      this.applyAimAssistInputs();
+    };
+    const onWebcamRequirementChange = () => {
+      this.webcamRequired = this.webcamRequiredInput.checked;
+      if (this.webcamRequired) {
+        this.controlMode = "FACE";
+        this.isCalibrated = false;
+        this.log("info", "Webcam requirement enabled.");
+      } else {
+        this.controlMode = "KEYBOARD";
+        this.isCalibrated = true;
+        this.log("info", "Webcam requirement disabled for testing mode.");
+      }
+      this.updateCalibrationControls();
+      this.syncFlowScreens();
+    };
 
     const inputs = [
       this.terrainSeed,
@@ -739,6 +777,13 @@ export class SpacedOutGame {
     this.blueTeamButton.addEventListener("click", chooseBlue);
     this.joinButton.addEventListener("click", joinFlow);
     this.spectateButton.addEventListener("click", spectateButtonFlow);
+    this.aimAssistCone.addEventListener("input", onAimAssistInput);
+    this.aimAssistGain.addEventListener("input", onAimAssistInput);
+    this.aimAssistMaxPull.addEventListener("input", onAimAssistInput);
+    this.aimAssistEngage.addEventListener("input", onAimAssistInput);
+    this.aimAssistRelease.addEventListener("input", onAimAssistInput);
+    this.webcamRequiredInput.addEventListener("change", onWebcamRequirementChange);
+    this.webcamOptionalInput.addEventListener("change", onWebcamRequirementChange);
 
     inputs.forEach((input) =>
       this.cleanupCallbacks.push(() =>
@@ -774,6 +819,33 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       this.spectateButton.removeEventListener("click", spectateButtonFlow),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.aimAssistCone.removeEventListener("input", onAimAssistInput),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.aimAssistGain.removeEventListener("input", onAimAssistInput),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.aimAssistMaxPull.removeEventListener("input", onAimAssistInput),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.aimAssistEngage.removeEventListener("input", onAimAssistInput),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.aimAssistRelease.removeEventListener("input", onAimAssistInput),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.webcamRequiredInput.removeEventListener(
+        "change",
+        onWebcamRequirementChange,
+      ),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.webcamOptionalInput.removeEventListener(
+        "change",
+        onWebcamRequirementChange,
+      ),
     );
   }
 
@@ -932,8 +1004,7 @@ export class SpacedOutGame {
         break;
       case "terrainMapMissing":
         this.waitingForTerrainFinalize = false;
-        this.loadingText.textContent =
-          "UPLOAD THE TERRAIN MAP BEFORE LOCKING.";
+        this.loadingText.textContent = "UPLOAD THE TERRAIN MAP BEFORE LOCKING.";
         this.loadingOverlay.classList.remove("hidden");
         this.log(
           "warning",
@@ -1135,69 +1206,7 @@ export class SpacedOutGame {
     id: string,
     snapshot: Record<string, unknown>,
   ): void {
-    if (!id || id === this.myPilotId) {
-      return;
-    }
-
-    const position = new THREE.Vector3(
-      Number(snapshot.x) || 0,
-      Number(snapshot.y) || 0,
-      Number(snapshot.z) || 0,
-    );
-    const direction = new THREE.Vector3(
-      Number(snapshot.dx) || 0,
-      Number(snapshot.dy) || 1,
-      Number(snapshot.dz) || 0,
-    );
-    const team = normalizeTeamName(snapshot.team);
-    const username =
-      typeof snapshot.username === "string"
-        ? snapshot.username
-        : `PILOT-${id.slice(0, 4)}`;
-    const pilot = this.ensureRemotePilot(id, username, team);
-    const isFirstSnapshot = pilot.lastSnapshotAt === null;
-    const now = performance.now();
-    const elapsedSeconds =
-      isFirstSnapshot || pilot.lastSnapshotAt === null
-        ? null
-        : Math.max(
-            (now - pilot.lastSnapshotAt) / 1000,
-            TELEMETRY_INTERVAL_MS / 1000,
-          );
-
-    if (elapsedSeconds !== null) {
-      const measuredVelocity = position
-        .clone()
-        .sub(pilot.targetPosition)
-        .divideScalar(elapsedSeconds);
-      if (measuredVelocity.lengthSq() > 1e-6) {
-        pilot.velocity.lerp(measuredVelocity, 0.6);
-      }
-    } else {
-      pilot.velocity
-        .copy(
-          direction.lengthSq() > 1e-8
-            ? direction.clone().normalize()
-            : new THREE.Vector3(0, 1, 0),
-        )
-        .multiplyScalar(DEFAULT_FLIGHT_SPEED * 18);
-    }
-    pilot.lastSnapshotAt = now;
-
-    pilot.targetPosition.copy(position);
-    pilot.targetQuaternion.copy(quaternionFromPose(position, direction));
-    if (isFirstSnapshot) {
-      // Snap the first authoritative pose into place so remote ships do not
-      // lerp outward from the planet center on their spawn frame.
-      pilot.mesh.position.copy(position);
-      pilot.mesh.quaternion.copy(pilot.targetQuaternion);
-    }
-    pilot.hp = Number(snapshot.hp) || 100;
-    pilot.team = team;
-    pilot.username = username;
-    pilot.mesh.visible = !snapshot.dead;
-    pilot.label.textContent = username;
-    this.applyTeamColor(pilot.mesh, team);
+    this.remotePilotSystem?.applySnapshot(id, snapshot, this.myPilotId);
     this.updateSpectatorBroadcastMode();
   }
 
@@ -1205,63 +1214,11 @@ export class SpacedOutGame {
     id: string,
     payload: SpacedOutSocketPayload,
   ): void {
-    const pilot = this.remotePilots.get(id);
-    if (!pilot) {
-      return;
-    }
-    pilot.username =
-      typeof payload.username === "string" ? payload.username : pilot.username;
-    pilot.label.textContent = pilot.username;
-  }
-
-  private ensureRemotePilot(
-    id: string,
-    username: string,
-    team: TeamName,
-  ): RemotePilotState {
-    const existing = this.remotePilots.get(id);
-    if (existing) {
-      return existing;
-    }
-    if (!this.earthAnchor) {
-      throw new Error("Earth anchor is not ready for remote pilot creation.");
-    }
-
-    const mesh = this.createPilotShip(team);
-    mesh.scale.set(3, 3, 3);
-    mesh.visible = false;
-    this.earthAnchor.add(mesh);
-
-    const label = document.createElement("div");
-    label.className = "spacedout-contact-label";
-    label.textContent = username;
-    label.style.display = "none";
-    this.labelsMount.appendChild(label);
-
-    const state: RemotePilotState = {
-      id,
-      mesh,
-      label,
-      targetPosition: new THREE.Vector3(),
-      targetQuaternion: new THREE.Quaternion(),
-      velocity: new THREE.Vector3(0, DEFAULT_FLIGHT_SPEED * 18, 0),
-      lastSnapshotAt: null,
-      hp: 100,
-      team,
-      username,
-    };
-    this.remotePilots.set(id, state);
-    return state;
+    this.remotePilotSystem?.setIdentity(id, payload.username);
   }
 
   private removeRemotePilot(id: string): void {
-    const pilot = this.remotePilots.get(id);
-    if (!pilot || !this.earthAnchor) {
-      return;
-    }
-    pilot.label.remove();
-    this.earthAnchor.remove(pilot.mesh);
-    this.remotePilots.delete(id);
+    this.remotePilotSystem?.remove(id);
     if (this.spectatorTargetId === id) {
       this.spectatorTargetId = null;
     }
@@ -1309,7 +1266,7 @@ export class SpacedOutGame {
   private canControlShip(): boolean {
     return (
       this.terrainLockedByServer &&
-      this.isCalibrated &&
+      this.isCalibrationSatisfied() &&
       !this.isDead &&
       this.localTeam !== "SPECTATOR"
     );
@@ -1319,10 +1276,7 @@ export class SpacedOutGame {
     return this.canControlShip() && !!this.combatManager && !!this.localShip;
   }
 
-  private shouldCaptureGameplayKey(
-    event: KeyboardEvent,
-    key: string,
-  ): boolean {
+  private shouldCaptureGameplayKey(event: KeyboardEvent, key: string): boolean {
     if (!this.sessionAccepted || this.isDestroyed || !GAMEPLAY_KEYS.has(key)) {
       return false;
     }
@@ -1341,38 +1295,20 @@ export class SpacedOutGame {
   }
 
   private hasSpectatablePilots(): boolean {
-    return [...this.remotePilots.values()].some((pilot) => pilot.mesh.visible);
+    return this.remotePilotSystem?.hasSpectatablePilots() ?? false;
   }
 
   private updateActionButtons(): void {
-    const showButtons =
-      !this.isDead && (this.localTeam === "SPECTATOR" || this.isPaused);
-    const canJoin = this.terrainLockedByServer;
-    const canSpectate = this.hasSpectatablePilots();
-    const isSpectating =
-      this.localTeam === "SPECTATOR" && this.cameraMode === "SPECTATOR";
-    const isPauseMenu = this.isPaused;
-
-    this.actionButtons.classList.toggle("hidden", !showButtons);
-    this.joinButton.disabled = isPauseMenu
-      ? false
-      : !canJoin || this.joinSequencePending;
-    this.spectateButton.disabled = isPauseMenu
-      ? !canSpectate
-      : !canSpectate || this.joinSequencePending;
-    this.joinButton.classList.toggle(
-      "is-active",
-      isPauseMenu || this.wantsToPlay,
-    );
-    this.spectateButton.classList.toggle("is-active", isSpectating);
-    this.joinButton.textContent = isPauseMenu
-      ? "Return to Lobby"
-      : this.joinSequencePending
-        ? "Warping"
-        : canJoin
-          ? "Join"
-          : "Join Locked";
-    this.spectateButton.textContent = canSpectate ? "Spectate" : "No Pilots";
+    this.flowController.updateActionButtons({
+      isDead: this.isDead,
+      localTeam: this.localTeam,
+      isPaused: this.isPaused,
+      terrainLockedByServer: this.terrainLockedByServer,
+      canSpectate: this.hasSpectatablePilots(),
+      cameraMode: this.cameraMode,
+      joinSequencePending: this.joinSequencePending,
+      wantsToPlay: this.wantsToPlay,
+    });
   }
 
   private async requestJoinFlow(): Promise<void> {
@@ -1439,10 +1375,7 @@ export class SpacedOutGame {
   }
 
   private getSpectatorTargetIds(): string[] {
-    return [...this.remotePilots.entries()]
-      .filter(([, pilot]) => pilot.mesh.visible)
-      .map(([id]) => id)
-      .sort((left, right) => Number(left) - Number(right));
+    return this.remotePilotSystem?.getSpectatorTargetIds() ?? [];
   }
 
   private cycleSpectatorTarget(step: number): void {
@@ -1528,9 +1461,7 @@ export class SpacedOutGame {
         this.localShip.rotation.set(0, 0, 0);
       }
       this.controlsHint.classList.add("hidden");
-      this.speedReadout.classList.add("hidden");
-      this.modeReadout.classList.add("hidden");
-      this.targetReadout.classList.add("hidden");
+      this.flowController.hideHud();
       this.audio.updateEngineSound(this.speed, true);
       this.cameraMode = "TERRAIN";
       this.syncFlowScreens();
@@ -1566,75 +1497,28 @@ export class SpacedOutGame {
       this.localShip.rotation.set(0, 0, 0);
     }
     this.controlsHint.classList.remove("hidden");
-    this.speedReadout.classList.remove("hidden");
-    this.modeReadout.classList.remove("hidden");
-    this.targetReadout.classList.remove("hidden");
+    this.flowController.showHud();
     this.cameraMode = "PLAYER";
     this.syncFlowScreens();
   }
 
   private uploadTerrainCollisionMap(): boolean {
-    if (!this.worldGrid || this.worldGrid.length === 0) {
-      return false;
+    const uploaded = this.terrainSystem?.uploadCollisionMap(this.socketClient);
+    if (uploaded) {
+      this.log("info", "Authoritative collision map sent to the server.");
     }
-
-    const mapRows = this.worldGrid.length;
-    const mapCols = this.worldGrid[0].length;
-    if (mapCols === 0) {
-      return false;
-    }
-
-    for (const row of this.worldGrid) {
-      if (row.length !== mapCols) {
-        return false;
-      }
-    }
-
-    // Create a binary buffer to hold the dimensions (8 bytes) + all the floats
-    const buffer = new ArrayBuffer(8 + mapRows * mapCols * 4);
-    const header = new Uint32Array(buffer, 0, 2);
-    const flatGrid = new Float32Array(buffer, 8);
-
-    // Set the width and height header
-    header[0] = mapRows;
-    header[1] = mapCols;
-
-    // Flatten the 2D array into the binary payload
-    let i = 0;
-    for (let r = 0; r < mapRows; r++) {
-      for (let c = 0; c < mapCols; c++) {
-        flatGrid[i++] = this.worldGrid[r][c];
-      }
-    }
-
-    // Blast it to the server!
-    this.socketClient.sendBinary(buffer);
-    this.log("info", "Authoritative collision map sent to the server.");
-    return true;
+    return uploaded ?? false;
   }
 
   private updateModeReadout(): void {
-    if (this.isPaused) {
-      this.modeReadout.textContent = "MODE: PAUSED";
-      return;
-    }
-
-    if (!this.isDead) {
-      this.modeReadout.textContent = `MODE: ${this.controlMode}`;
-      return;
-    }
-
-    const targetTag = this.spectatorTargetId
-      ? `TGT ${this.spectatorTargetId}`
-      : "NO TARGET";
-    if (this.respawnAvailable) {
-      this.modeReadout.textContent = `MODE: SPECTATE [${targetTag}] | R RESPAWN | B LOBBY`;
-    } else if (this.cameraMode === "DEATH") {
-      this.modeReadout.textContent =
-        "MODE: DEATH CAM | B LOBBY | V OR [ ] SPECTATE";
-    } else {
-      this.modeReadout.textContent = `MODE: SPECTATE [${targetTag}] | B LOBBY | RESPAWN PENDING`;
-    }
+    this.flowController.updateModeReadout({
+      isPaused: this.isPaused,
+      isDead: this.isDead,
+      controlMode: this.controlMode,
+      spectatorTargetId: this.spectatorTargetId,
+      respawnAvailable: this.respawnAvailable,
+      cameraMode: this.cameraMode,
+    });
   }
 
   private updateDeathCamera(frameScale: number): void {
@@ -1734,8 +1618,7 @@ export class SpacedOutGame {
     this.isPaused = !this.isPaused;
     if (this.isPaused) {
       this.audio.pause();
-      this.loadingText.textContent = "SIMULATION PAUSED";
-      this.loadingOverlay.classList.remove("hidden");
+      this.flowController.showPausedOverlay();
       this.updateCalibrationControls();
       this.updateActionButtons();
       this.updateModeReadout();
@@ -1800,6 +1683,12 @@ export class SpacedOutGame {
       this.controlMode === "FACE" ? this.vision.pitchInput : manualPitch;
 
     if (this.canControlShip()) {
+      if (this.pressedKeys.has("shift")) {
+        this.speed = Math.min(
+          MAX_FLIGHT_SPEED,
+          this.speed + THROTTLE_ACCELERATION * delta,
+        );
+      }
       if (this.pressedKeys.has("control")) {
         this.speed = Math.max(
           MIN_FLIGHT_SPEED,
@@ -2024,16 +1913,7 @@ export class SpacedOutGame {
   }
 
   private updateRemotePilots(): void {
-    this.remotePilots.forEach((pilot) => {
-      pilot.mesh.position.lerp(pilot.targetPosition, 0.15);
-      pilot.mesh.quaternion.slerp(pilot.targetQuaternion, 0.15);
-      const propeller = pilot.mesh.userData.propeller as
-        | THREE.Object3D
-        | undefined;
-      if (propeller) {
-        propeller.rotation.z += 0.45;
-      }
-    });
+    this.remotePilotSystem?.update();
   }
 
   private updateCamera(delta: number): void {
@@ -2082,7 +1962,7 @@ export class SpacedOutGame {
     let targetYaw = -this.vision.yawInput * 1.0;
     let targetPitch = this.vision.pitchInput * 1.0;
 
-    // BIOLOGICAL NECK LIMITS FOR DOUBLE CHINNERS AND DOUBLE NECKERS KEKW 
+    // BIOLOGICAL NECK LIMITS FOR DOUBLE CHINNERS AND DOUBLE NECKERS KEKW
     // Limit the horizontal turn to ~100 degrees (1.8 radians) so you can look
     // over your shoulder, but not directly behind you.
     targetYaw = THREE.MathUtils.clamp(targetYaw, -1.8, 1.8);
@@ -2108,7 +1988,7 @@ export class SpacedOutGame {
     context.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
     if (
       !this.terrainLockedByServer ||
-      !this.isCalibrated ||
+      !this.isCalibrationSatisfied() ||
       this.localTeam === "SPECTATOR" ||
       this.isDead
     ) {
@@ -2127,27 +2007,37 @@ export class SpacedOutGame {
 
     this.targetReadout.textContent = targetLabel;
 
-    this.renderLegacyHud(
-      context,
-      this.speed / 100,
-      this.getRadarAltitude(this.localServerPosition),
-      Math.max(
+    this.hudRenderer.render({
+      speed: this.speed / 100,
+      radarAltitude: this.getRadarAltitude(this.localServerPosition),
+      altitude: Math.max(
         0,
         this.getEarthAnchorDistanceFromLocalPosition(this.localServerPosition) -
           WORLD_RADIUS,
       ),
-      this.tempEuler.x,
-      this.localShip.rotation.z,
-      this.combatState.aimX,
-      this.combatState.aimY,
-      this.combatState.aimZ,
-      this.combatState.isLockedOn,
-      this.combatState.lockProgress,
-      this.combatState.isBeingTracked,
-      this.combatState.flareCooldown,
-      this.combatState.targetScreenX,
-      this.combatState.targetScreenY,
-    );
+      rigPitch: this.tempEuler.x,
+      shipRoll: this.localShip.rotation.z,
+      aimX: this.combatState.aimX,
+      aimY: this.combatState.aimY,
+      aimZ: this.combatState.aimZ,
+      isLockedOn: this.combatState.isLockedOn,
+      lockProgress: this.combatState.lockProgress,
+      isBeingTracked: this.combatState.isBeingTracked,
+      flareCooldown: this.combatState.flareCooldown,
+      targetScreenX: this.combatState.targetScreenX,
+      targetScreenY: this.combatState.targetScreenY,
+      localServerPosition: this.localServerPosition,
+      localForward: this.localForward,
+      localTeam: this.localTeam,
+      remotePilots: this.remotePilots.values(),
+      getEarthAnchorUpFromLocalPosition: (position) =>
+        this.getEarthAnchorUpFromLocalPosition(position),
+      getEarthAnchorDistanceFromLocalPosition: (position) =>
+        this.getEarthAnchorDistanceFromLocalPosition(position),
+      getEarthAnchorDistanceFromWorldPosition: (position) =>
+        this.getEarthAnchorDistanceFromWorldPosition(position),
+      worldRadius: WORLD_RADIUS,
+    });
   }
 
   private updateLabels(): void {
@@ -2308,82 +2198,41 @@ export class SpacedOutGame {
   }
 
   private syncFlowScreens(): void {
+    this.updateActionButtons();
+    this.flowController.syncFlowScreens({
+      isDead: this.isDead,
+      localTeam: this.localTeam,
+      isPaused: this.isPaused,
+      terrainLockedByServer: this.terrainLockedByServer,
+      canSpectate: this.hasSpectatablePilots(),
+      cameraMode: this.cameraMode,
+      joinSequencePending: this.joinSequencePending,
+      wantsToPlay: this.wantsToPlay,
+      sessionAccepted: this.sessionAccepted,
+      terrainStateKnown: this.terrainStateKnown,
+      isTerrainHost: this.isTerrainHost,
+      waitingForTerrainFinalize: this.waitingForTerrainFinalize,
+      matchSettings: this.matchSettings,
+      visionReady: this.webcamRequired ? this.visionReady : true,
+      visionFailed: this.isVisionFailureBlocking(),
+      isCalibrated: this.isCalibrationSatisfied(),
+      canCalibrate: this.webcamRequired && this.canCalibrateVision(),
+      webcamRequired: this.webcamRequired,
+    });
+    this.syncMatchSettingsInputs();
+    this.updateAimAssistControlsAccess();
+
     const waitingForJoinFlow =
       this.terrainLockedByServer &&
       this.localTeam === "SPECTATOR" &&
       !this.wantsToPlay;
-    this.terrainMode.textContent = this.terrainLockedByServer
-      ? "Terrain Locked"
-      : this.isTerrainHost
-        ? "Host Editing"
-        : "Waiting for Host";
-
-    const canEditMatchSettings =
-      this.sessionAccepted && !this.terrainLockedByServer && this.isTerrainHost;
-    this.matchSettingsMode.textContent = this.terrainLockedByServer
-      ? "Rules Locked"
-      : this.isTerrainHost
-        ? "Host Rules"
-        : "Watching Host";
-
-    this.terrainEditorPanel.classList.toggle(
-      "spacedout-panel-locked",
-      this.terrainLockedByServer,
-    );
-    this.terrainEditorOverlay.classList.toggle(
-      "hidden",
-      !this.terrainLockedByServer,
-    );
-    if (this.terrainLockedByServer) {
-      this.terrainEditorOverlay.textContent = "The terrain was locked already.";
-    }
-    this.updateActionButtons();
-
-    const disableEditor = this.terrainLockedByServer || !this.isTerrainHost;
-    [
-      this.terrainSeed,
-      this.terrainNoiseScale,
-      this.terrainHeightAmplitude,
-      this.terrainNoiseOctaves,
-      this.terrainPersistence,
-      this.terrainLacunarity,
-      this.terrainRandomize,
-      this.terrainRegenerate,
-    ].forEach((control) => {
-      control.disabled = disableEditor;
-    });
-    this.terrainFinalize.disabled =
-      disableEditor || this.waitingForTerrainFinalize;
-    this.matchSettingsPanel.classList.toggle(
-      "spacedout-panel-locked",
-      !canEditMatchSettings,
-    );
-    this.matchSettingsOverlay.classList.toggle("hidden", canEditMatchSettings);
-    this.matchSettingsOverlay.textContent = this.terrainLockedByServer
-      ? "Match rules are locked for this round."
-      : this.isTerrainHost
-        ? "Waiting for authenticated host control."
-        : "Only the active host can edit match rules.";
-    this.gameModeSelect.disabled = !canEditMatchSettings;
-    this.botsEnabledInput.disabled =
-      !canEditMatchSettings || this.matchSettings.gameMode !== "ARCADE";
-    this.syncMatchSettingsInputs();
 
     if (!this.sessionAccepted || !this.terrainStateKnown) {
-      this.loadingText.textContent =
-        "WAITING FOR AUTHENTICATED TERRAIN STATE...";
-      this.loadingOverlay.classList.remove("hidden");
-      this.calibrationScreen.classList.add("hidden");
-      this.teamScreen.classList.add("hidden");
       this.cameraMode = "TERRAIN";
       return;
     }
 
     if (!this.terrainLockedByServer) {
-      this.loadingText.textContent = "WAITING FOR TERRAIN HOST...";
-      this.loadingOverlay.classList.toggle("hidden", this.isTerrainHost);
-      this.calibrationScreen.classList.add("hidden");
-      this.teamScreen.classList.add("hidden");
       if (this.cameraMode !== "SPECTATOR") {
         this.cameraMode = "TERRAIN";
       }
@@ -2391,54 +2240,38 @@ export class SpacedOutGame {
     }
 
     if (waitingForJoinFlow) {
-      this.loadingOverlay.classList.add("hidden");
-      this.calibrationScreen.classList.add("hidden");
-      this.teamScreen.classList.add("hidden");
       if (this.cameraMode !== "SPECTATOR") {
         this.cameraMode = "TERRAIN";
       }
       return;
     }
 
-    if (this.visionFailed && this.localTeam !== "SPECTATOR") {
-      this.loadingText.textContent =
-        "WEBCAM ACCESS REQUIRED FOR FACE TRACKING.";
-      this.loadingOverlay.classList.remove("hidden");
-      this.calibrationScreen.classList.add("hidden");
-      this.teamScreen.classList.add("hidden");
+    if (this.isVisionFailureBlocking() && this.localTeam !== "SPECTATOR") {
       this.cameraMode = "TERRAIN";
       return;
     }
 
-    this.loadingOverlay.classList.toggle("hidden", this.visionReady);
-    if (!this.isCalibrated) {
-      this.loadingText.textContent = this.visionReady
-        ? "VISUAL LINK READY. CALIBRATE TO DEPLOY."
-        : "INITIALIZING FACE TRACKER...";
-      this.loadingOverlay.classList.toggle("hidden", this.visionReady);
-      this.calibrationScreen.classList.toggle("hidden", !this.visionReady);
-      this.teamScreen.classList.add("hidden");
+    if (!this.isCalibrationSatisfied()) {
       if (this.localTeam === "SPECTATOR" && this.cameraMode !== "SPECTATOR") {
         this.cameraMode = "TERRAIN";
       }
       return;
     }
 
-    this.calibrationScreen.classList.add("hidden");
     if (this.isDead) {
-      this.teamScreen.classList.add("hidden");
       if (this.cameraMode !== "DEATH" && this.cameraMode !== "SPECTATOR") {
         this.enterSpectatorMode(true);
       }
       return;
     }
-    this.teamScreen.classList.toggle("hidden", this.localTeam !== "SPECTATOR");
+
     if (this.localTeam === "SPECTATOR") {
       if (this.cameraMode !== "SPECTATOR") {
         this.cameraMode = "TERRAIN";
       }
       return;
     }
+
     this.cameraMode = "PLAYER";
   }
 
@@ -2449,9 +2282,7 @@ export class SpacedOutGame {
     this.respawnRequested = false;
     this.teamScreen.classList.add("hidden");
     this.controlsHint.classList.remove("hidden");
-    this.speedReadout.classList.remove("hidden");
-    this.modeReadout.classList.remove("hidden");
-    this.targetReadout.classList.remove("hidden");
+    this.flowController.showHud();
     this.cameraMode = "PLAYER";
     this.applyTeamColor(this.localShip, this.localTeam);
     this.socketClient.sendJson({ type: "joinTeam", team });
@@ -2459,207 +2290,12 @@ export class SpacedOutGame {
   }
 
   private rebuildTerrain(): void {
-    if (!this.terrainGroup) {
+    if (!this.terrainSystem) {
       return;
     }
-
     this.loadingText.textContent = "GENERATING PLANET TERRAIN...";
-    while (this.terrainGroup.children.length > 0) {
-      const child = this.terrainGroup.children[0];
-      this.terrainGroup.remove(child);
-      this.disposeObject(child);
-    }
-
-    const grid = this.generateSeamlessWorld(MAP_CHUNKS_X, MAP_CHUNKS_Y);
-    this.worldGrid = grid;
-    let minZ = Infinity;
-    for (const row of grid) {
-      for (const value of row) {
-        minZ = Math.min(minZ, value);
-      }
-    }
-
-    this.terrainGroup.add(
-      new THREE.Mesh(
-        new THREE.SphereGeometry(WORLD_RADIUS + minZ * SCALE_Z - 500, 32, 32),
-        new THREE.MeshBasicMaterial({ color: 0x000b18 }),
-      ),
-    );
-
-    const ocean = new THREE.Mesh(
-      new THREE.SphereGeometry(WORLD_RADIUS, 32, 32),
-      new THREE.MeshBasicMaterial({
-        color: 0x071f67,
-        transparent: true,
-        opacity: 0.9,
-        depthWrite: false,
-      }),
-    );
-    ocean.renderOrder = 1;
-    this.terrainGroup.add(ocean);
-
-    const totalRows = grid.length;
-    const totalCols = grid[0].length;
-    const geometries: THREE.BufferGeometry[] = [];
-    const origin = new THREE.Vector3(0, 0, 0);
-
-    for (let row = 0; row < totalRows - 1; row += CHUNK_SIZE) {
-      for (let col = 0; col < totalCols - 1; col += CHUNK_SIZE) {
-        geometries.push(
-          this.createChunkGeometry(
-            grid,
-            row,
-            col,
-            4,
-            totalRows,
-            totalCols,
-            origin,
-          ),
-        );
-      }
-    }
-
-    const merged = mergeGeometries(geometries);
-    if (!merged) {
-      return;
-    }
-
-    this.terrainGroup.add(
-      new THREE.Mesh(
-        merged,
-        new THREE.MeshBasicMaterial({
-          vertexColors: true,
-          wireframe: true,
-          transparent: false,
-          opacity: 1,
-        }),
-      ),
-    );
-    geometries.forEach((geometry) => geometry.dispose());
-  }
-
-  private generateSeamlessWorld(chunksX: number, chunksY: number): number[][] {
-    const rows = chunksY * CHUNK_SIZE + 1;
-    const cols = chunksX * CHUNK_SIZE + 1;
-    const grid: number[][] = [];
-
-    for (let row = 0; row < rows; row += 1) {
-      const phi = Math.PI * (row / (rows - 1));
-      const terrainRow: number[] = [];
-
-      for (let col = 0; col < cols; col += 1) {
-        const theta = 2 * Math.PI * (col / (cols - 1));
-        const nx = Math.sin(phi) * Math.cos(theta);
-        const ny = Math.cos(phi);
-        const nz = Math.sin(phi) * Math.sin(theta);
-        let elevation = 0;
-        let amplitude = this.terrainConfig.heightAmplitude;
-        let scale = this.terrainConfig.noiseScale;
-
-        for (
-          let octave = 0;
-          octave < this.terrainConfig.noiseOctaves;
-          octave += 1
-        ) {
-          const offset = this.terrainConfig.seed + octave * 100;
-          elevation +=
-            Math.sin(nx * scale + offset) *
-            Math.cos(ny * scale - offset) *
-            Math.sin(nz * scale + offset) *
-            amplitude;
-          amplitude *= this.terrainConfig.persistence;
-          scale *= this.terrainConfig.lacunarity;
-        }
-
-        terrainRow.push(elevation < 0 ? elevation * 0.3 : elevation + 200);
-      }
-
-      grid.push(terrainRow);
-    }
-
-    return grid;
-  }
-
-  private createChunkGeometry(
-    grid: number[][],
-    startRow: number,
-    startCol: number,
-    step: number,
-    totalRows: number,
-    totalCols: number,
-    centerXYZ: THREE.Vector3,
-  ): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-    const vertices: number[] = [];
-    const indices: number[] = [];
-    const colors: number[] = [];
-    const color = new THREE.Color();
-    const endRow = Math.min(startRow + CHUNK_SIZE, totalRows - 1);
-    const endCol = Math.min(startCol + CHUNK_SIZE, totalCols - 1);
-    const chunkRows = Math.floor((endRow - startRow) / step) + 1;
-    const chunkCols = Math.floor((endCol - startCol) / step) + 1;
-
-    for (let row = startRow; row <= endRow; row += step) {
-      for (let col = startCol; col <= endCol; col += step) {
-        const rawZ = grid[row][col];
-        if (rawZ <= -500) color.setHex(0x0a1e3f);
-        else if (rawZ < 0) color.setHex(0x00469e);
-        else if (rawZ < 200) color.setHex(0x387c44);
-        else if (rawZ < 1000) color.setHex(0x8a9a5b);
-        else if (rawZ < 3000) color.setHex(0x8b7355);
-        else color.setHex(0xffffff);
-        colors.push(color.r, color.g, color.b);
-
-        const point = this.getSphericalXYZ(
-          row,
-          col,
-          totalRows,
-          totalCols,
-          rawZ,
-        );
-        vertices.push(
-          point.x - centerXYZ.x,
-          point.y - centerXYZ.y,
-          point.z - centerXYZ.z,
-        );
-      }
-    }
-
-    for (let row = 0; row < chunkRows - 1; row += 1) {
-      for (let col = 0; col < chunkCols - 1; col += 1) {
-        const a = row * chunkCols + col;
-        const b = row * chunkCols + col + 1;
-        const c = (row + 1) * chunkCols + col;
-        const d = (row + 1) * chunkCols + col + 1;
-        indices.push(a, c, b, b, c, d);
-      }
-    }
-
-    geometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(vertices, 3),
-    );
-    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private getSphericalXYZ(
-    row: number,
-    col: number,
-    totalRows: number,
-    totalCols: number,
-    rawZ: number,
-  ): THREE.Vector3 {
-    const phi = Math.PI * (row / (totalRows - 1));
-    const theta = Math.PI - 2 * Math.PI * (col / (totalCols - 1));
-    const radius = WORLD_RADIUS + rawZ * SCALE_Z;
-    return new THREE.Vector3(
-      radius * Math.sin(phi) * Math.cos(theta),
-      radius * Math.cos(phi),
-      radius * Math.sin(phi) * Math.sin(theta),
-    );
+    this.terrainSystem.setConfig(this.terrainConfig);
+    this.terrainSystem.rebuild();
   }
 
   private syncTerrainInputs(): void {
@@ -2688,6 +2324,62 @@ export class SpacedOutGame {
     this.botsEnabledInput.checked = this.matchSettings.botsEnabled;
     this.botsEnabledInput.disabled =
       this.gameModeSelect.disabled || this.matchSettings.gameMode !== "ARCADE";
+  }
+
+  private syncAimAssistInputs(): void {
+    this.aimAssistCone.value = this.aimAssistTuning.cone.toFixed(2);
+    this.aimAssistGain.value = this.aimAssistTuning.gain.toFixed(2);
+    this.aimAssistMaxPull.value = this.aimAssistTuning.maxPull.toFixed(3);
+    this.aimAssistEngage.value = String(Math.round(this.aimAssistTuning.engageLerp));
+    this.aimAssistRelease.value = String(Math.round(this.aimAssistTuning.releaseLerp));
+
+    this.aimAssistConeValue.textContent = this.aimAssistTuning.cone.toFixed(2);
+    this.aimAssistGainValue.textContent = this.aimAssistTuning.gain.toFixed(2);
+    this.aimAssistMaxPullValue.textContent = this.aimAssistTuning.maxPull.toFixed(3);
+    this.aimAssistEngageValue.textContent = this.aimAssistTuning.engageLerp.toFixed(0);
+    this.aimAssistReleaseValue.textContent = this.aimAssistTuning.releaseLerp.toFixed(0);
+  }
+
+  private applyAimAssistInputs(): void {
+    this.aimAssistTuning = this.combatManager?.setAimAssistTuning({
+      cone: Number(this.aimAssistCone.value),
+      gain: Number(this.aimAssistGain.value),
+      maxPull: Number(this.aimAssistMaxPull.value),
+      engageLerp: Number(this.aimAssistEngage.value),
+      releaseLerp: Number(this.aimAssistRelease.value),
+    }) ?? this.aimAssistTuning;
+
+    this.syncAimAssistInputs();
+  }
+
+  private updateAimAssistControlsAccess(): void {
+    const canTuneAimAssist = this.sessionAccepted && this.isTerrainHost;
+    this.aimAssistMode.textContent = !this.sessionAccepted
+      ? "Awaiting auth"
+      : canTuneAimAssist
+        ? "Host tuning"
+        : "Read only";
+
+    this.aimAssistPanel.classList.toggle(
+      "spacedout-panel-locked",
+      !canTuneAimAssist,
+    );
+    this.aimAssistOverlay.classList.toggle("hidden", canTuneAimAssist);
+    if (!canTuneAimAssist) {
+      this.aimAssistOverlay.textContent = this.sessionAccepted
+        ? "Only the active host can tune aim assist."
+        : "Authenticating host controls...";
+    }
+
+    [
+      this.aimAssistCone,
+      this.aimAssistGain,
+      this.aimAssistMaxPull,
+      this.aimAssistEngage,
+      this.aimAssistRelease,
+    ].forEach((input) => {
+      input.disabled = !canTuneAimAssist;
+    });
   }
 
   private resizeRenderer(): void {
@@ -2754,245 +2446,15 @@ export class SpacedOutGame {
     this.localShip.rotation.x += (pitch - this.localShip.rotation.x) * 0.15;
   }
 
-  private createPilotShip(team: TeamName): THREE.Group {
-    const fuselage = (): THREE.BufferGeometry => {
-      const positions: number[] = [];
-      const indices: number[] = [];
-      const radialSegments = 32;
-      const lengthSegments = 40;
-      const radiusAt = (t: number): number =>
-        t < 0.15
-          ? 0.1 + t * 2.5
-          : t < 0.35
-            ? 0.5 + Math.sin((t - 0.15) * 10) * 0.15
-            : t < 0.7
-              ? 0.65 - (t - 0.35) * 0.3
-              : 0.45 - (t - 0.7) * 1.2;
-
-      for (let y = 0; y <= lengthSegments; y += 1) {
-        const t = y / lengthSegments;
-        const z = t * 10;
-        const radius = Math.max(radiusAt(t), 0.05);
-        for (let i = 0; i <= radialSegments; i += 1) {
-          const theta = (i / radialSegments) * Math.PI * 2;
-          positions.push(Math.cos(theta) * radius, Math.sin(theta) * radius, z);
-        }
-      }
-
-      const ring = radialSegments + 1;
-      for (let y = 0; y < lengthSegments; y += 1) {
-        for (let i = 0; i < radialSegments; i += 1) {
-          indices.push(
-            y * ring + i,
-            y * ring + i + ring,
-            y * ring + i + 1,
-            y * ring + i + ring,
-            y * ring + i + ring + 1,
-            y * ring + i + 1,
-          );
-        }
-      }
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(positions, 3),
-      );
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
-      return geometry;
-    };
-
-    const wingSurface = (
-      span: number,
-      rootChord: number,
-      tipChord: number,
-      thicknessRoot: number,
-      thicknessTip: number,
-      dihedralScale: number,
-      chordSegments: number,
-      spanSegments: number,
-    ): THREE.BufferGeometry => {
-      const positions: number[] = [];
-      const indices: number[] = [];
-
-      for (let s = 0; s <= spanSegments; s += 1) {
-        const spanT = s / spanSegments;
-        const halfSpan = spanT * span;
-        const chord = rootChord - spanT * (rootChord - tipChord);
-        const thickness = thicknessRoot * (1 - spanT) + thicknessTip;
-        const dihedral = dihedralScale * spanT;
-
-        for (let c = 0; c <= chordSegments; c += 1) {
-          const chordT = c / chordSegments;
-          positions.push(
-            chordT * chord,
-            thickness * Math.sin(Math.PI * chordT) - thickness / 2 + dihedral,
-            halfSpan,
-          );
-        }
-      }
-
-      const ring = chordSegments + 1;
-      for (let s = 0; s < spanSegments; s += 1) {
-        for (let c = 0; c < chordSegments; c += 1) {
-          indices.push(
-            s * ring + c,
-            s * ring + c + ring,
-            s * ring + c + 1,
-            s * ring + c + ring,
-            s * ring + c + ring + 1,
-            s * ring + c + 1,
-          );
-        }
-      }
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(positions, 3),
-      );
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
-      return geometry;
-    };
-
-    const canopy = new THREE.SphereGeometry(0.5, 24, 24);
-    canopy.scale(1.2, 0.6, 1.0);
-    canopy.translate(0, 0.6, 3.0);
-
-    const wingRootBlend = new THREE.SphereGeometry(0.9, 24, 24);
-    wingRootBlend.scale(1.6, 0.5, 1.0);
-    wingRootBlend.translate(0, -0.15, 3.2);
-
-    const wing = wingSurface(6, 2.0, 1.2, 0.25, 0.08, 0.2, 16, 24);
-    wing.rotateY(Math.PI / 2);
-    wing.translate(0.5, -0.2, 5.4);
-    const wingMirror = wing.clone();
-    wingMirror.scale(-1, 1, 1);
-
-    const tail = wingSurface(3.2, 1.4, 0.8, 0.18, 0.05, 0.08, 12, 18);
-    tail.rotateY(Math.PI / 2);
-    tail.translate(-0.4, -0.05, 8.8);
-    const tailMirror = tail.clone();
-    tailMirror.scale(-1, 1, 1);
-
-    const vTailPositions: number[] = [];
-    const vTailIndices: number[] = [];
-    for (let y = 0; y <= 20; y += 1) {
-      const t = y / 20;
-      const finHeight = t * 2.6;
-      const thickness = 0.25 * (1 - t) + 0.05;
-      const chord = 1.6 - t * 0.8;
-      for (let i = 0; i <= 16; i += 1) {
-        const theta = (i / 16) * Math.PI;
-        vTailPositions.push(
-          Math.cos(theta) * thickness,
-          finHeight,
-          Math.sin(theta) * chord,
-        );
-      }
-    }
-    for (let y = 0; y < 20; y += 1) {
-      for (let i = 0; i < 16; i += 1) {
-        vTailIndices.push(
-          y * 17 + i,
-          y * 17 + i + 17,
-          y * 17 + i + 1,
-          y * 17 + i + 17,
-          y * 17 + i + 18,
-          y * 17 + i + 1,
-        );
-      }
-    }
-    const vTail = new THREE.BufferGeometry();
-    vTail.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(vTailPositions, 3),
-    );
-    vTail.setIndex(vTailIndices);
-    vTail.computeVertexNormals();
-    vTail.rotateY(Math.PI);
-    vTail.rotateZ(-0.08);
-    vTail.translate(0, 0.2, 8.6);
-
-    const wheel = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
-    wheel.rotateZ(Math.PI / 2);
-    wheel.translate(0, -0.5, 0);
-    const strut = new THREE.CylinderGeometry(0.05, 0.05, 1);
-    strut.translate(0, -0.2, 0);
-    const gearRight = mergeGeometries([wheel, strut]);
-    gearRight?.translate(0.8, -0.5, 2.5);
-    const gearLeft = mergeGeometries([wheel.clone(), strut.clone()]);
-    gearLeft?.translate(-0.8, -0.5, 2.5);
-
-    const blade = new THREE.BoxGeometry(0.15, 2, 0.3);
-    blade.translate(0, 0.5, 1.5);
-    const bladeTwo = blade.clone();
-    bladeTwo.rotateZ(Math.PI / 2);
-    const propellerGeo = mergeGeometries([blade, bladeTwo]);
-
-    const group = new THREE.Group();
-    const accents: THREE.MeshBasicMaterial[] = [];
-    const wire = (color: number) =>
-      new THREE.MeshBasicMaterial({
-        color,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.9,
-      });
-
-    const fuselageMesh = new THREE.Mesh(fuselage(), wire(0x616161));
-    fuselageMesh.userData.isFuselage = true;
-    group.add(fuselageMesh);
-    group.add(new THREE.Mesh(canopy, wire(0x1a1a1a)));
-    group.add(new THREE.Mesh(wingRootBlend, wire(0x8b8b8b)));
-
-    const wingMaterial = wire(0xff2222);
-    accents.push(wingMaterial);
-    group.add(new THREE.Mesh(wing, wingMaterial));
-    group.add(new THREE.Mesh(wingMirror, wingMaterial));
-
-    const tailMaterial = wire(0xff2222);
-    accents.push(tailMaterial);
-    group.add(new THREE.Mesh(tail, tailMaterial));
-    group.add(new THREE.Mesh(tailMirror, tailMaterial));
-    group.add(new THREE.Mesh(vTail, tailMaterial));
-
-    if (gearRight) group.add(new THREE.Mesh(gearRight, wire(0x8b8b8b)));
-    if (gearLeft) group.add(new THREE.Mesh(gearLeft, wire(0x8b8b8b)));
-
-    if (propellerGeo) {
-      const propeller = new THREE.Mesh(
-        propellerGeo,
-        new THREE.MeshBasicMaterial({ color: 0x8d8d8d, wireframe: true }),
-      );
-      propeller.position.set(0, 0, -1.4);
-      group.add(propeller);
-      group.userData.propeller = propeller;
-    }
-
-    group.userData.applyFactionColor = (teamName: TeamName) => {
-      const color =
-        normalizeTeamName(teamName) === "BLUE" ? 0x0088ff : 0xff2222;
-      accents.forEach((material) => material.color.setHex(color));
-    };
-
-    group.scale.set(0.5, 0.5, 0.5);
-    this.applyTeamColor(group, team);
-    return group;
-  }
-
   private applyTeamColor(ship: THREE.Group | null, team: TeamName): void {
-    const applyFactionColor = ship?.userData.applyFactionColor as
-      | ((teamName: TeamName) => void)
-      | undefined;
-    if (applyFactionColor) {
-      applyFactionColor(team);
-    }
+    ShipFactory.applyTeamColor(ship, team);
   }
 
   private canCalibrateVision(): boolean {
+    if (!this.webcamRequired) {
+      return false;
+    }
+
     return (
       this.visionReady &&
       !this.visionFailed &&
@@ -3003,40 +2465,26 @@ export class SpacedOutGame {
   }
 
   private updateCalibrationControls(): void {
-    if (this.visionFailed) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Camera Unavailable";
-      return;
-    }
-
-    if (!this.visionReady) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Initializing...";
-      return;
-    }
-
-    if (this.isPaused) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Paused";
-      return;
-    }
-
-    if (this.isDead) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Unavailable";
-      return;
-    }
-
-    const canCalibrate = this.canCalibrateVision();
-    this.calibrateButton.disabled = !canCalibrate;
-    this.calibrateButton.textContent = canCalibrate
-      ? this.isCalibrated
-        ? "Recalibrate"
-        : "Calibrate"
-      : "Center Face";
+    this.flowController.updateCalibrationControls({
+      visionReady: this.visionReady,
+      visionFailed: this.visionFailed,
+      isDead: this.isDead,
+      isPaused: this.isPaused,
+      isCalibrated: this.isCalibrationSatisfied(),
+      canCalibrate: this.canCalibrateVision(),
+      webcamRequired: this.webcamRequired,
+    });
   }
 
   private calibrateVision(): void {
+    if (!this.webcamRequired) {
+      this.log(
+        "info",
+        "Webcam requirement is disabled. Keyboard testing mode does not require calibration.",
+      );
+      return;
+    }
+
     if (!this.visionReady) {
       this.log("warning", "Face tracker is still initializing.");
       return;
@@ -3072,24 +2520,17 @@ export class SpacedOutGame {
     this.syncFlowScreens();
   }
 
+  private isCalibrationSatisfied(): boolean {
+    return !this.webcamRequired || this.isCalibrated;
+  }
+
+  private isVisionFailureBlocking(): boolean {
+    return this.webcamRequired && this.visionFailed;
+  }
+
   private getTerrainHeightAtPosition(position: THREE.Vector3): number {
-    if (!this.worldGrid) {
-      return 0;
-    }
-
     const normPos = this.getEarthAnchorUpFromLocalPosition(position);
-    const phi = Math.acos(normPos.y);
-    const theta = Math.atan2(normPos.z, normPos.x);
-    const mapRows = this.worldGrid.length;
-    const mapCols = this.worldGrid[0].length;
-    const rRow = Math.round((phi / Math.PI) * (mapRows - 1));
-    const rCol = Math.round(
-      ((Math.PI - theta) / (2 * Math.PI)) * (mapCols - 1),
-    );
-    const safeRow = Math.max(0, Math.min(rRow, mapRows - 1));
-    const safeCol = Math.max(0, Math.min(rCol, mapCols - 1));
-
-    return Math.max(0, this.worldGrid[safeRow][safeCol] * SCALE_Z);
+    return this.terrainSystem?.getTerrainHeightAtNormal(normPos) ?? 0;
   }
 
   private getRadarAltitude(position: THREE.Vector3): number {
@@ -3138,217 +2579,6 @@ export class SpacedOutGame {
       new THREE.Vector3(),
     );
     return position.distanceTo(anchorWorldPosition);
-  }
-
-  private renderLegacyHud(
-    context: CanvasRenderingContext2D,
-    speed: number,
-    radarAltitude: number,
-    altitude: number,
-    rigPitch: number,
-    shipRoll: number,
-    aimX: number,
-    aimY: number,
-    aimZ: number,
-    isLockedOn: boolean,
-    lockProgress: number,
-    isBeingTracked: boolean,
-    flareCooldown: number,
-    targetScreenX: number,
-    targetScreenY: number,
-  ): void {
-    const width = this.hudCanvas.width;
-    const height = this.hudCanvas.height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    context.strokeStyle = isLockedOn
-      ? "rgba(255, 0, 85, 0.8)"
-      : "rgba(0, 255, 204, 0.8)";
-    context.fillStyle = context.strokeStyle;
-    context.shadowColor = isLockedOn ? "#ff0055" : "#00ffcc";
-    context.shadowBlur = 8;
-    context.lineWidth = 2;
-    context.textBaseline = "middle";
-
-    if (aimZ < 1) {
-      context.beginPath();
-      context.arc(aimX, aimY, 35, 0, Math.PI * 2);
-      context.moveTo(aimX - 50, aimY);
-      context.lineTo(aimX - 20, aimY);
-      context.moveTo(aimX + 20, aimY);
-      context.lineTo(aimX + 50, aimY);
-      context.moveTo(aimX, aimY - 50);
-      context.lineTo(aimX, aimY - 20);
-      context.stroke();
-
-      context.shadowColor = "#ff0055";
-      context.fillStyle = "#ff0055";
-      context.beginPath();
-      context.arc(aimX, aimY, 3, 0, Math.PI * 2);
-      context.fill();
-      context.shadowColor = "#00ffcc";
-      context.fillStyle = "rgba(0, 255, 204, 0.8)";
-    }
-
-    if (isLockedOn) {
-      const size = 40 - lockProgress * 15;
-      const color = lockProgress >= 1 ? "#ff0055" : "#ffcc00";
-      context.strokeStyle = color;
-      context.shadowColor = color;
-      context.strokeRect(
-        targetScreenX - size / 2,
-        targetScreenY - size / 2,
-        size,
-        size,
-      );
-      if (lockProgress >= 1) {
-        context.font = 'bold 14px "Courier New"';
-        context.fillStyle = "#ff0055";
-        context.fillText("LOCK", targetScreenX, targetScreenY + 35);
-      }
-    }
-
-    if (isBeingTracked && Date.now() % 500 < 250) {
-      context.font = 'bold 36px "Courier New"';
-      context.fillStyle = "#ff0055";
-      context.textAlign = "center";
-      context.fillText("WARNING: MISSILE LOCK", centerX, centerY + 120);
-    }
-
-    context.font = 'bold 16px "Courier New"';
-    context.fillStyle = flareCooldown <= 0 ? "#00ffcc" : "#555555";
-    context.textAlign = "left";
-    context.fillText(
-      `FLARES: ${flareCooldown <= 0 ? "READY" : "RELOADING"}`,
-      20,
-      height - 60,
-    );
-
-    context.save();
-    context.translate(centerX, centerY);
-    context.rotate(-shipRoll);
-    context.translate(0, rigPitch * (height / Math.PI));
-    context.beginPath();
-    context.setLineDash([20, 15]);
-    context.moveTo(-200, 0);
-    context.lineTo(200, 0);
-    context.stroke();
-    context.setLineDash([]);
-    context.font = 'bold 16px "Courier New"';
-    context.textAlign = "center";
-    context.fillText("HORIZON", 0, -15);
-    context.restore();
-
-    context.textAlign = "right";
-    context.beginPath();
-    context.moveTo(100, centerY - 150);
-    context.lineTo(100, centerY + 150);
-    context.moveTo(100, centerY);
-    context.lineTo(120, centerY);
-    context.stroke();
-    context.font = 'bold 16px "Courier New"';
-    context.fillText("MACH", 90, centerY - 160);
-    context.font = 'bold 28px "Courier New"';
-    context.fillText(String(Math.round(speed * 100)), 85, centerY);
-
-    context.textAlign = "left";
-    context.beginPath();
-    context.moveTo(width - 100, centerY - 150);
-    context.lineTo(width - 100, centerY + 150);
-    context.moveTo(width - 100, centerY);
-    context.lineTo(width - 120, centerY);
-    context.stroke();
-    context.font = 'bold 16px "Courier New"';
-    context.fillText("RAD ALT", width - 90, centerY - 160);
-    context.font = 'bold 28px "Courier New"';
-    context.fillText(
-      String(Math.max(0, Math.round(radarAltitude))),
-      width - 85,
-      centerY,
-    );
-    context.font = 'bold 12px "Courier New"';
-    context.fillText(
-      `MSL ${Math.max(0, Math.round(altitude))}`,
-      width - 85,
-      centerY + 28,
-    );
-
-    const radarRadius = 110;
-    const radarCx = width - radarRadius - 30;
-    const radarCy = radarRadius + 30;
-    const radarScale = radarRadius / RADAR_MAX_RANGE;
-
-    context.save();
-    context.beginPath();
-    context.arc(radarCx, radarCy, radarRadius, 0, Math.PI * 2);
-    context.fillStyle = "rgba(0, 30, 20, 0.5)";
-    context.fill();
-    context.strokeStyle = "rgba(0, 255, 204, 0.6)";
-    context.stroke();
-
-    context.beginPath();
-    context.arc(radarCx, radarCy, radarRadius * 0.33, 0, Math.PI * 2);
-    context.arc(radarCx, radarCy, radarRadius * 0.66, 0, Math.PI * 2);
-    context.stroke();
-
-    context.beginPath();
-    context.moveTo(radarCx - radarRadius, radarCy);
-    context.lineTo(radarCx + radarRadius, radarCy);
-    context.moveTo(radarCx, radarCy - radarRadius);
-    context.lineTo(radarCx, radarCy + radarRadius);
-    context.stroke();
-
-    context.fillStyle = "#00ffcc";
-    context.beginPath();
-    context.moveTo(radarCx, radarCy - 8);
-    context.lineTo(radarCx - 5, radarCy + 5);
-    context.lineTo(radarCx + 5, radarCy + 5);
-    context.fill();
-
-    const playerUp = this.getEarthAnchorUpFromLocalPosition(
-      this.localServerPosition,
-    );
-    const radarRight = new THREE.Vector3()
-      .crossVectors(this.localForward, playerUp)
-      .normalize();
-    const radarForward = new THREE.Vector3()
-      .crossVectors(playerUp, radarRight)
-      .normalize();
-    const playerAltitude =
-      this.getEarthAnchorDistanceFromLocalPosition(this.localServerPosition) -
-      WORLD_RADIUS;
-
-    this.remotePilots.forEach((pilot) => {
-      if (!pilot.mesh.visible) {
-        return;
-      }
-      pilot.mesh.getWorldPosition(this.tempA);
-      this.tempB.subVectors(this.tempA, this.localServerPosition);
-      const dist = this.tempB.length();
-      if (dist > RADAR_MAX_RANGE) {
-        return;
-      }
-      const x = radarCx + this.tempB.dot(radarRight) * radarScale;
-      const y = radarCy - this.tempB.dot(radarForward) * radarScale;
-      const color = pilot.team === this.localTeam ? "#0088ff" : "#ff0055";
-      context.fillStyle = color;
-      context.beginPath();
-      context.arc(x, y, 4, 0, Math.PI * 2);
-      context.fill();
-      const diff =
-        this.getEarthAnchorDistanceFromWorldPosition(this.tempA) -
-        WORLD_RADIUS -
-        playerAltitude;
-      context.strokeStyle = color;
-      context.beginPath();
-      context.moveTo(x, y);
-      if (diff > 400) context.lineTo(x, y - 12);
-      else if (diff < -400) context.lineTo(x, y + 12);
-      context.stroke();
-    });
-
-    context.restore();
   }
 
   private setTerrainSelectionCamera(force = false): void {
@@ -3414,16 +2644,6 @@ export class SpacedOutGame {
     }
     this.scene.traverse((object: THREE.Object3D) => {
       const mesh = object as THREE.Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-      else if (material) material.dispose();
-    });
-  }
-
-  private disposeObject(object: THREE.Object3D): void {
-    object.traverse((child: THREE.Object3D) => {
-      const mesh = child as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
       const material = mesh.material;
       if (Array.isArray(material)) material.forEach((entry) => entry.dispose());

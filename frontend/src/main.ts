@@ -12,6 +12,7 @@ import { ProfilePage } from './pages/Profile';
 import { LobbyPage } from './pages/Lobby';
 import { ChatPage } from './pages/Chat';
 import { TokenManager } from './services/TokenManager';
+import AuthService from './services/AuthService';
 import { FindGamePage } from './pages/FindGame'
 import { SpacedOutPage } from './pages/SpacedOut';
 import { TermsPage } from './pages/Terms';
@@ -33,6 +34,24 @@ router.addRoute('/tournament', TournamentPage);
 router.addRoute('/spacedout', SpacedOutPage);
 router.addRoute('/terms', TermsPage);
 router.addRoute('/privacy', PrivacyPage);
+
+const searchParams = new URLSearchParams(window.location.search);
+const hasOAuthToken = Boolean(searchParams.get('token'));
+
+if (hasOAuthToken) {
+  void AuthService.handleGoogleCallback()
+    .then((ok) => {
+      if (ok) {
+        window.history.replaceState({}, '', '/');
+        router.navigate('/');
+      }
+    })
+    .catch((error) => {
+      console.error('Google OAuth bootstrap failed:', error);
+      window.history.replaceState({}, '', '/login');
+      router.navigate('/login');
+    });
+}
 
 const publicRoutes = ['/login', '/404', '/terms', '/privacy'];
 

@@ -21,11 +21,20 @@ import UserStatsDTO from "../dto/userStats.dto.js";
 const AVATARS_PATH = process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
 
 function getFrontendBaseUrl(headers: Record<string, unknown>): string {
+  const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
+  if (configuredFrontendUrl) {
+    return configuredFrontendUrl.replace(/\/+$/g, "");
+  }
+
   const forwardedProto = String(headers["x-forwarded-proto"] || "").trim();
   const forwardedHost = String(headers["x-forwarded-host"] || "").trim();
+  const forwardedPort = String(headers["x-forwarded-port"] || "").trim();
   const origin = String(headers.origin || "").trim();
 
   if (forwardedProto && forwardedHost) {
+    if (forwardedPort && !forwardedHost.includes(":")) {
+      return `${forwardedProto}://${forwardedHost}:${forwardedPort}`;
+    }
     return `${forwardedProto}://${forwardedHost}`;
   }
   if (origin) {
@@ -36,6 +45,49 @@ function getFrontendBaseUrl(headers: Record<string, unknown>): string {
     /\/+$/g,
     "",
   );
+}
+
+function normalizeGoogleUsername(profile: any): string {
+  const fromName = String(profile?.name || "").trim();
+  const fromEmail = String(profile?.email || "").split("@")[0] || "player";
+  const base = (fromName || fromEmail)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 20);
+
+  if (!base) return "player";
+  return base.length < 3 ? `${base}_user`.slice(0, 20) : base;
+}
+
+function normalizeGoogleAvatarUrl(profile: any): string | null {
+  const avatar = String(profile?.picture || "").trim();
+  if (!avatar) return null;
+  if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
+    return null;
+  }
+  return avatar;
+}
+
+async function reserveUniqueUsername(baseUsername: string): Promise<string> {
+  let candidate = baseUsername;
+  let attempt = 0;
+
+  while (attempt < 20) {
+    const raw: any = await db.raw(
+      "SELECT id FROM users WHERE username = ? LIMIT 1",
+      [candidate],
+    );
+    const exists = Array.isArray(raw[0]) ? raw[0][0] : raw[0];
+    if (!exists) return candidate;
+
+    attempt += 1;
+    const suffix = `_${Math.floor(1000 + Math.random() * 9000)}`;
+    const maxBaseLength = Math.max(3, 20 - suffix.length);
+    candidate = `${baseUsername.slice(0, maxBaseLength)}${suffix}`;
+  }
+
+  return `${baseUsername.slice(0, 8)}_${Date.now().toString().slice(-6)}`.slice(0, 20);
 }
 
 export default async function authRoutes(app: FastifyInstance) {
@@ -59,10 +111,10 @@ export default async function authRoutes(app: FastifyInstance) {
             tokenPath: "/token",
           },
         },
-        startRedirectPath: "/auth/google/login",
+        startRedirectPath: "/google/login",
         callbackUri: GOOGLE_REDIRECT_URI,
       }).after(() => {
-        app.get("/auth/google/callback", async (req, reply) => {
+        app.get("/google/callback", async (req, reply) => {
           try {
             const client = (app as any).googleOAuth2;
             const token = await client.getAccessTokenFromAuthorizationCodeFlow(req);
@@ -80,20 +132,64 @@ export default async function authRoutes(app: FastifyInstance) {
             const profile = await userInfoRes.json() as any;
             const rawUser: any = await db.raw("SELECT * FROM users WHERE email = ? LIMIT 1", [profile.email]);
             let user: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
+            const nowIso = new Date().toISOString();
+            const googleAvatarUrl = normalizeGoogleAvatarUrl(profile);
 
             if (!user) {
               const id = crypto.randomUUID();
-              await db.raw("INSERT INTO users (id, username, email, online) VALUES (?, ?, ?, ?)", [
-                id, profile.name ?? profile.email, profile.email, true,
+              const username = await reserveUniqueUsername(normalizeGoogleUsername(profile));
+              await db.raw("INSERT INTO users (id, username, email, avatarUrl, online, last_request, accepted_terms) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+                id, username, profile.email, googleAvatarUrl, true, nowIso, true,
               ]);
-              user = { id, username: profile.name ?? profile.email, email: profile.email, online: true };
+              user = { id, username, email: profile.email, online: true };
+            } else {
+              const existingAvatar = String((user as any).avatarUrl || "").trim();
+              const usesGoogleAvatar = existingAvatar.includes("googleusercontent.com");
+              const hasCustomLocalAvatar = existingAvatar.startsWith("/avatars/");
+
+              if (googleAvatarUrl && (!existingAvatar || usesGoogleAvatar) && !hasCustomLocalAvatar) {
+                await db.raw("UPDATE users SET avatarUrl = ? WHERE id = ?", [
+                  googleAvatarUrl,
+                  user.id,
+                ]);
+              }
             }
 
+            await db.raw("UPDATE users SET online = ?, last_request = ? WHERE id = ?", [
+              true,
+              nowIso,
+              user.id,
+            ]);
+
             const jwtToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+            const refreshToken = crypto.randomBytes(64).toString("hex");
+            const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+            const existingRefreshToken: any = await db.raw(
+              "SELECT id FROM refresh_tokens WHERE userId = ? LIMIT 1",
+              [user.id],
+            );
+
+            if (Array.isArray(existingRefreshToken[0]) && existingRefreshToken[0][0]) {
+              await db.raw(
+                "UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?",
+                [refreshToken, refreshExpiresAt, nowIso, user.id],
+              );
+            } else {
+              await db.raw(
+                "INSERT INTO refresh_tokens (username, userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)",
+                [user.username, user.id, refreshToken, refreshExpiresAt, nowIso],
+              );
+            }
+
             const frontendBaseUrl = getFrontendBaseUrl(
               req.headers as Record<string, unknown>,
             );
-            reply.redirect(`${frontendBaseUrl}/?token=${jwtToken}`);
+            const redirectUrl = new URL(`${frontendBaseUrl}/login`);
+            redirectUrl.searchParams.set("token", jwtToken);
+            redirectUrl.searchParams.set("refreshToken", refreshToken);
+            redirectUrl.searchParams.set("provider", "google");
+            reply.redirect(redirectUrl.toString());
           } catch (err: any) {
             app.log.error("Google OAuth error:", err);
             sendError(reply, "Google login failed", 500);

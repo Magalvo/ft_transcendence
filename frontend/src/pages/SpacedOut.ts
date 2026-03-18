@@ -52,6 +52,20 @@ export class SpacedOutPage extends AbstractComponent {
               </div>
             </div>
 
+            <div class="spacedout-webcam-toggle mb-4 rounded-2xl border border-cyan-400/15 bg-black/35 px-4 py-3">
+              <p class="text-xs uppercase tracking-[0.2em] text-cyan-300">Webcam Requirement</p>
+              <div class="spacedout-webcam-toggle-options mt-3">
+                <label class="spacedout-webcam-toggle-option" for="spacedout-webcam-required">
+                  <input id="spacedout-webcam-required" name="spacedout-webcam-requirement" type="radio" value="required" checked />
+                  <span>Required</span>
+                </label>
+                <label class="spacedout-webcam-toggle-option" for="spacedout-webcam-optional">
+                  <input id="spacedout-webcam-optional" name="spacedout-webcam-requirement" type="radio" value="optional" />
+                  <span>Optional (Testing)</span>
+                </label>
+              </div>
+            </div>
+
             <div id="spacedout-viewport" class="spacedout-viewport">
               <canvas id="spacedout-hud" class="spacedout-hud"></canvas>
               <div id="spacedout-labels" class="spacedout-labels"></div>
@@ -190,6 +204,55 @@ export class SpacedOutPage extends AbstractComponent {
               </div>
             </div>
           </section>
+
+          <section id="spacedout-aim-assist-panel" class="spacedout-panel spacedout-panel-shell rounded-[1.25rem] p-5">
+            <div id="spacedout-aim-assist-overlay" class="spacedout-panel-overlay hidden">Only the active host can tune aim assist.</div>
+            <div class="spacedout-panel-body">
+              <div class="flex items-center justify-between gap-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">Laser Aim Assist</h2>
+                <span id="spacedout-aim-assist-mode" class="rounded-full border border-sky-400/15 bg-slate-950/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-300">
+                  Awaiting server
+                </span>
+              </div>
+              <div class="spacedout-aim-assist-grid mt-4">
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Assist Cone</span>
+                    <strong id="aim-assist-cone-value">--</strong>
+                  </span>
+                  <input id="aim-assist-cone" type="range" min="0.08" max="0.35" step="0.01" />
+                </label>
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Assist Gain</span>
+                    <strong id="aim-assist-gain-value">--</strong>
+                  </span>
+                  <input id="aim-assist-gain" type="range" min="0.02" max="0.28" step="0.01" />
+                </label>
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Max Pull</span>
+                    <strong id="aim-assist-max-pull-value">--</strong>
+                  </span>
+                  <input id="aim-assist-max-pull" type="range" min="0.01" max="0.11" step="0.005" />
+                </label>
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Engage Smoothing</span>
+                    <strong id="aim-assist-engage-value">--</strong>
+                  </span>
+                  <input id="aim-assist-engage" type="range" min="2" max="24" step="1" />
+                </label>
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Release Smoothing</span>
+                    <strong id="aim-assist-release-value">--</strong>
+                  </span>
+                  <input id="aim-assist-release" type="range" min="2" max="24" step="1" />
+                </label>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="spacedout-roster-row">
@@ -315,6 +378,51 @@ export class SpacedOutPage extends AbstractComponent {
     const botsEnabledInput = content.querySelector<HTMLInputElement>(
       "#spacedout-bots-enabled",
     );
+    const aimAssistPanel = content.querySelector<HTMLElement>(
+      "#spacedout-aim-assist-panel",
+    );
+    const aimAssistOverlay = content.querySelector<HTMLElement>(
+      "#spacedout-aim-assist-overlay",
+    );
+    const aimAssistMode = content.querySelector<HTMLElement>(
+      "#spacedout-aim-assist-mode",
+    );
+    const aimAssistCone = content.querySelector<HTMLInputElement>(
+      "#aim-assist-cone",
+    );
+    const aimAssistConeValue = content.querySelector<HTMLElement>(
+      "#aim-assist-cone-value",
+    );
+    const aimAssistGain = content.querySelector<HTMLInputElement>(
+      "#aim-assist-gain",
+    );
+    const aimAssistGainValue = content.querySelector<HTMLElement>(
+      "#aim-assist-gain-value",
+    );
+    const aimAssistMaxPull = content.querySelector<HTMLInputElement>(
+      "#aim-assist-max-pull",
+    );
+    const aimAssistMaxPullValue = content.querySelector<HTMLElement>(
+      "#aim-assist-max-pull-value",
+    );
+    const aimAssistEngage = content.querySelector<HTMLInputElement>(
+      "#aim-assist-engage",
+    );
+    const aimAssistEngageValue = content.querySelector<HTMLElement>(
+      "#aim-assist-engage-value",
+    );
+    const aimAssistRelease = content.querySelector<HTMLInputElement>(
+      "#aim-assist-release",
+    );
+    const aimAssistReleaseValue = content.querySelector<HTMLElement>(
+      "#aim-assist-release-value",
+    );
+    const webcamRequiredInput = content.querySelector<HTMLInputElement>(
+      "#spacedout-webcam-required",
+    );
+    const webcamOptionalInput = content.querySelector<HTMLInputElement>(
+      "#spacedout-webcam-optional",
+    );
 
     if (
       !viewport ||
@@ -356,7 +464,22 @@ export class SpacedOutPage extends AbstractComponent {
       !matchSettingsOverlay ||
       !matchSettingsMode ||
       !gameModeSelect ||
-      !botsEnabledInput
+      !botsEnabledInput ||
+      !aimAssistPanel ||
+      !aimAssistOverlay ||
+      !aimAssistMode ||
+      !aimAssistCone ||
+      !aimAssistConeValue ||
+      !aimAssistGain ||
+      !aimAssistGainValue ||
+      !aimAssistMaxPull ||
+      !aimAssistMaxPullValue ||
+      !aimAssistEngage ||
+      !aimAssistEngageValue ||
+      !aimAssistRelease ||
+      !aimAssistReleaseValue ||
+      !webcamRequiredInput ||
+      !webcamOptionalInput
     ) {
       throw new Error("SpacedOut page failed to mount required elements.");
     }
@@ -408,6 +531,21 @@ export class SpacedOutPage extends AbstractComponent {
         matchSettingsMode,
         gameModeSelect,
         botsEnabledInput,
+        aimAssistPanel,
+        aimAssistOverlay,
+        aimAssistMode,
+        aimAssistCone,
+        aimAssistConeValue,
+        aimAssistGain,
+        aimAssistGainValue,
+        aimAssistMaxPull,
+        aimAssistMaxPullValue,
+        aimAssistEngage,
+        aimAssistEngageValue,
+        aimAssistRelease,
+        aimAssistReleaseValue,
+        webcamRequiredInput,
+        webcamOptionalInput,
         session,
         onJoinSequenceRequest: async () => this.runJoinSequence(),
         onLobbyRestoreRequest: () => this.restoreLobbyView(),

@@ -12,6 +12,24 @@ const LOCK_ON_DURATION_MS = 1500;
 const LOCK_DECAY_PER_SECOND = 2000;
 const FLARE_COOLDOWN_MS = 5000;
 
+export interface AimAssistTuning {
+  maxDistance: number;
+  cone: number;
+  gain: number;
+  maxPull: number;
+  engageLerp: number;
+  releaseLerp: number;
+}
+
+export const DEFAULT_AIM_ASSIST_TUNING: AimAssistTuning = {
+  maxDistance: 25000,
+  cone: 0.18,
+  gain: 0.11,
+  maxPull: 0.045,
+  engageLerp: 11,
+  releaseLerp: 7,
+};
+
 interface TargetablePilot {
   mesh: THREE.Group;
   team: string;
@@ -65,6 +83,9 @@ export class CombatManager {
   private lockTimerMs = 0;
   private lockedEnemyId: string | null = null;
   public flareCooldownMs = 0;
+  private aimAssistTuning: AimAssistTuning = { ...DEFAULT_AIM_ASSIST_TUNING };
+  private smoothedMagnetismYaw = 0;
+  private smoothedMagnetismPitch = 0;
   
   // Raycaster for line-of-sight
   private losRaycaster = new THREE.Raycaster();
@@ -79,6 +100,47 @@ export class CombatManager {
     this.terrainGroup = terrainGroup;
     this.socketClient = socketClient;
     this.audio = audio;
+  }
+
+  public setAimAssistTuning(partial: Partial<AimAssistTuning>): AimAssistTuning {
+    this.aimAssistTuning = {
+      maxDistance: THREE.MathUtils.clamp(
+        Number(partial.maxDistance ?? this.aimAssistTuning.maxDistance),
+        5000,
+        80000,
+      ),
+      cone: THREE.MathUtils.clamp(
+        Number(partial.cone ?? this.aimAssistTuning.cone),
+        0.05,
+        0.5,
+      ),
+      gain: THREE.MathUtils.clamp(
+        Number(partial.gain ?? this.aimAssistTuning.gain),
+        0,
+        0.5,
+      ),
+      maxPull: THREE.MathUtils.clamp(
+        Number(partial.maxPull ?? this.aimAssistTuning.maxPull),
+        0,
+        0.2,
+      ),
+      engageLerp: THREE.MathUtils.clamp(
+        Number(partial.engageLerp ?? this.aimAssistTuning.engageLerp),
+        0.1,
+        40,
+      ),
+      releaseLerp: THREE.MathUtils.clamp(
+        Number(partial.releaseLerp ?? this.aimAssistTuning.releaseLerp),
+        0.1,
+        40,
+      ),
+    };
+
+    return { ...this.aimAssistTuning };
+  }
+
+  public getAimAssistTuning(): AimAssistTuning {
+    return { ...this.aimAssistTuning };
   }
 
   // ==========================================
@@ -363,13 +425,14 @@ const forward = new THREE.Vector3(0, 0, -20);
   ): CombatState {
     const frameScale = delta * 60;
     const deltaMs = delta * 1000;
+    const aimAssist = this.aimAssistTuning;
     
     // 1. AIM ASSIST & MISSILE LOCK
     let isLockedOn = false;
     let targetScreenX = 0;
     let targetScreenY = 0;
-    let magnetismYaw = 0;
-    let magnetismPitch = 0;
+    let desiredMagnetismYaw = 0;
+    let desiredMagnetismPitch = 0;
     let currentTargetId: string | null = null;
     let isAimAssistActive = false;
     let bestCenterScore = 0.5; // MISSILE_LOCK_CONE
@@ -401,7 +464,7 @@ const forward = new THREE.Vector3(0, 0, -20);
       const totalOffCenter = Math.abs(yawOffCenter) + Math.abs(pitchOffCenter);
       const distance = aimEnemyLocal.length();
 
-      if (distance < 25000 && totalOffCenter < bestCenterScore) {
+      if (distance < aimAssist.maxDistance && totalOffCenter < bestCenterScore) {
         // Raycast check
         const aimToEnemy = new THREE.Vector3()
           .subVectors(aimEnemyWorld, aimMyWorldPos)
@@ -422,13 +485,50 @@ const forward = new THREE.Vector3(0, 0, -20);
         targetScreenX = (futurePos.x * 0.5 + 0.5) * viewportWidth;
         targetScreenY = -(futurePos.y * 0.5 - 0.5) * viewportHeight;
 
-        if (totalOffCenter < 0.15) { // AIM_ASSIST_CONE
+        if (totalOffCenter < aimAssist.cone) {
           isAimAssistActive = true;
-          magnetismYaw = -yawOffCenter * 0.05;
-          magnetismPitch = pitchOffCenter * 0.05;
+          const angleFactor = THREE.MathUtils.smoothstep(
+            aimAssist.cone,
+            0,
+            totalOffCenter,
+          );
+          const distanceFactor = THREE.MathUtils.smoothstep(
+            aimAssist.maxDistance,
+            2000,
+            distance,
+          );
+          const assistFactor = angleFactor * distanceFactor;
+
+          desiredMagnetismYaw = THREE.MathUtils.clamp(
+            -yawOffCenter * aimAssist.gain * assistFactor,
+            -aimAssist.maxPull,
+            aimAssist.maxPull,
+          );
+          desiredMagnetismPitch = THREE.MathUtils.clamp(
+            pitchOffCenter * aimAssist.gain * assistFactor,
+            -aimAssist.maxPull,
+            aimAssist.maxPull,
+          );
         }
       }
     });
+
+    const magnetismLerp = 1 - Math.exp(
+      -delta * (isAimAssistActive ? aimAssist.engageLerp : aimAssist.releaseLerp),
+    );
+    this.smoothedMagnetismYaw +=
+      (desiredMagnetismYaw - this.smoothedMagnetismYaw) * magnetismLerp;
+    this.smoothedMagnetismPitch +=
+      (desiredMagnetismPitch - this.smoothedMagnetismPitch) * magnetismLerp;
+
+    if (!isAimAssistActive) {
+      if (Math.abs(this.smoothedMagnetismYaw) < 1e-4) {
+        this.smoothedMagnetismYaw = 0;
+      }
+      if (Math.abs(this.smoothedMagnetismPitch) < 1e-4) {
+        this.smoothedMagnetismPitch = 0;
+      }
+    }
 
     if (currentTargetId) {
       isLockedOn = true;
@@ -728,8 +828,8 @@ const forward = new THREE.Vector3(0, 0, -20);
       flareCooldown: this.flareCooldownMs,
       targetScreenX,
       targetScreenY,
-      magnetismYaw: isAimAssistActive ? magnetismYaw : 0,
-      magnetismPitch: isAimAssistActive ? magnetismPitch : 0,
+      magnetismYaw: this.smoothedMagnetismYaw,
+      magnetismPitch: this.smoothedMagnetismPitch,
       lockedEnemyId: this.lockedEnemyId,
     };
   }

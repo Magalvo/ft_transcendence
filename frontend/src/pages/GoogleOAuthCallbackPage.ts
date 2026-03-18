@@ -22,10 +22,10 @@ export class GoogleOAuthCallbackPage extends AbstractComponent {
 
     try {
       // Handle the OAuth callback - extracts token from URL and stores it
-      await AuthService.handleGoogleCallback();
-      
-      // handleGoogleCallback redirects to home page on success
-      // This code won't be reached
+      const ok = await AuthService.handleGoogleCallback();
+      if (ok) {
+        window.location.href = '/';
+      }
     } catch (error: any) {
       // Show error message
       message.innerHTML = `

@@ -162,6 +162,37 @@
   display: none;
 }
 
+.spacedout-webcam-toggle {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.spacedout-webcam-toggle-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.spacedout-webcam-toggle-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.spacedout-webcam-toggle-option input {
+  width: 0.95rem;
+  height: 0.95rem;
+  accent-color: #38bdf8;
+}
+
 .spacedout-viewport {
   position: relative;
   min-height: 36rem;
@@ -420,6 +451,41 @@
   color: #94a3b8;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.spacedout-aim-assist-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.spacedout-aim-assist-control {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(0, 255, 204, 0.12);
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.spacedout-aim-assist-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.spacedout-aim-assist-control-head strong {
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.spacedout-aim-assist-control input[type="range"] {
+  width: 100%;
+  accent-color: #38bdf8;
 }
 
 .spacedout-player-list {
