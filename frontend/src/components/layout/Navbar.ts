@@ -4,9 +4,9 @@ import { UserStore } from '../../core/UserStore';
 import AuthService from '../../services/AuthService';
 import {
   availableLocales,
+  getLocaleLabel,
   i18n,
   t,
-  type Locale,
 } from '../../services/I18nService';
 
 export class Navbar extends AbstractComponent {
@@ -76,17 +76,17 @@ export class Navbar extends AbstractComponent {
     select.className =
       'rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white outline-none focus:border-blue-500';
     select.setAttribute('aria-label', t('nav.languageLabel'));
-    select.value = i18n.getLocale();
 
     availableLocales.forEach((locale) => {
       const option = document.createElement('option');
       option.value = locale;
-      option.textContent = this.getLocaleLabel(locale);
+      option.textContent = getLocaleLabel(locale);
       select.appendChild(option);
     });
+    select.value = i18n.getLocale();
 
     select.addEventListener('change', () => {
-      i18n.setLocale(select.value as Locale);
+      i18n.setLocale(select.value as typeof availableLocales[number]);
     });
 
     wrapper.append(text, select);
@@ -199,9 +199,5 @@ export class Navbar extends AbstractComponent {
 
   private navigate(path: string): void {
     navigateTo(path);
-  }
-
-  private getLocaleLabel(locale: Locale): string {
-    return locale === 'pt' ? t('nav.languageName.pt') : t('nav.languageName.en');
   }
 }

@@ -27,6 +27,14 @@ app.register(proxy, {
   http2: false,
 })
 
+app.register(proxy, {
+  upstream,
+  // Compatibility alias for OAuth redirects/callbacks that use /api/google/*
+  prefix: '/api/google',
+  rewritePrefix: '/api/google',
+  http2: false,
+})
+
 
 app.register(proxy, {
   upstream,

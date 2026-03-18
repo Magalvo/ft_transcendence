@@ -12,6 +12,7 @@ export const pt = {
   'nav.logout': 'Terminar Sessao',
   'nav.languageLabel': 'Idioma',
   'nav.languageName.en': 'English',
+  'nav.languageName.fr': 'Frances',
   'nav.languageName.pt': 'Portugues',
   'nav.profileAlt': 'Perfil',
 

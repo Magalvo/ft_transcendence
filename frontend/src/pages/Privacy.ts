@@ -100,14 +100,18 @@ export class PrivacyPage extends AbstractComponent {
   }
 
   public render(): void {
-    const content = privacyContent[i18n.getLocale()];
+    const content =
+      privacyContent[i18n.getLocale() as keyof typeof privacyContent] ??
+      privacyContent.en;
     const definitionItems = content.definitions
       .map(
         (item) =>
           `<li><strong class="text-neutral-200">${item.label}:</strong> ${item.text}</li>`
       )
       .join("");
-    const useItems = content.usePersonalData.map((item) => `<li>${item}</li>`).join("");
+    const useItems = content.usePersonalData
+      .map((item) => `<li>${item}</li>`)
+      .join("");
 
     this.element.innerHTML = `
       <div class="w-full max-w-4xl bg-[#111] border border-neutral-800 rounded-2xl shadow-[0_0_40px_rgba(0,255,255,0.05)] overflow-hidden flex flex-col mt-8">

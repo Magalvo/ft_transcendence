@@ -8,6 +8,7 @@ import fastifyStatic from "@fastify/static";
 import healthRoutes from "./routes/health.js";
 import authRoutes from "./routes/auth.js";
 import { sendSuccess } from "./utils/respond.js";
+import { readConfigValue } from "./utils/env.js";
 import "reflect-metadata";
 import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
@@ -17,7 +18,7 @@ import multipart from "@fastify/multipart";
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = readConfigValue("JWT_SECRET");
 if (!JWT_SECRET) {
     console.error("FATAL: JWT_SECRET is not defined. Authentication will not work.");
     process.exit(1);

@@ -15,6 +15,7 @@ async function main() {
                 table.dateTime("last_request").nullable();
                 table.string("resetToken").nullable();
                 table.dateTime("resetExpires").nullable();
+                table.boolean("accepted_terms").defaultTo(false);
             });
             console.log("Table 'users' created!");
         }
@@ -26,6 +27,13 @@ async function main() {
                     table.string("avatarUrl").nullable();
                 });
                 console.log("Added avatarUrl column to users table");
+            }
+            // Add accepted_terms column if it doesn't exist
+            if (!(await db.schema.hasColumn("users", "accepted_terms"))) {
+                await db.schema.alterTable("users", (table) => {
+                    table.boolean("accepted_terms").defaultTo(false);
+                });
+                console.log("Added accepted_terms column to users table");
             }
         }
         const refreshExists = await db.schema.hasTable("refresh_tokens");
@@ -129,6 +137,37 @@ async function main() {
                 table.foreign("blocker_id").references("id").inTable("users").onDelete("CASCADE");
                 table.foreign("blocked_id").references("id").inTable("users").onDelete("CASCADE");
             });
+        }
+        const friendshipsExists = await db.schema.hasTable("friendships");
+        if (!friendshipsExists) {
+            await db.schema.createTable("friendships", (table) => {
+                table.uuid("user_a").notNullable();
+                table.uuid("user_b").notNullable();
+                table.bigInteger("created_at").notNullable().defaultTo(db.raw("(strftime('%s','now') * 1000)"));
+                table.primary(["user_a", "user_b"]);
+                table.foreign("user_a").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("user_b").references("id").inTable("users").onDelete("CASCADE");
+            });
+            console.log("Table 'friendships' created!");
+        }
+        else {
+            console.log("Table 'friendships' already exists");
+        }
+        const friendRequestsExists = await db.schema.hasTable("friend_requests");
+        if (!friendRequestsExists) {
+            await db.schema.createTable("friend_requests", (table) => {
+                table.increments("id").primary();
+                table.uuid("requester_id").notNullable();
+                table.uuid("target_id").notNullable();
+                table.bigInteger("created_at").notNullable().defaultTo(db.raw("(strftime('%s','now') * 1000)"));
+                table.unique(["requester_id", "target_id"]);
+                table.foreign("requester_id").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("target_id").references("id").inTable("users").onDelete("CASCADE");
+            });
+            console.log("Table 'friend_requests' created!");
+        }
+        else {
+            console.log("Table 'friend_requests' already exists");
         }
         const chatGroupMembersExists = await db.schema.hasTable("chat_group_members");
         if (!chatGroupMembersExists) {

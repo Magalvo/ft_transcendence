@@ -12,6 +12,7 @@ export const en = {
   'nav.logout': 'Logout',
   'nav.languageLabel': 'Language',
   'nav.languageName.en': 'English',
+  'nav.languageName.fr': 'French',
   'nav.languageName.pt': 'Portuguese',
   'nav.profileAlt': 'Profile',
 

@@ -23,6 +23,7 @@ import {
 } from "../services/matchService.js";
 import UserProfileResponseDTO from "../dto/userProfile.response.dto.js";
 import UserStatsDTO from "../dto/userStats.dto.js";
+import { readConfigValue } from "../utils/env.js";
 
 const AVATARS_PATH =
   process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
@@ -101,10 +102,10 @@ async function reserveUniqueUsername(baseUsername: string): Promise<string> {
 }
 
 export default async function authRoutes(app: FastifyInstance) {
-  const JWT_SECRET = process.env.JWT_SECRET!;
-  const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-  const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
-  const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
+  const JWT_SECRET = readConfigValue("JWT_SECRET");
+  const GOOGLE_CLIENT_ID = readConfigValue("GOOGLE_CLIENT_ID");
+  const GOOGLE_CLIENT_SECRET = readConfigValue("GOOGLE_CLIENT_SECRET");
+  const GOOGLE_REDIRECT_URI = readConfigValue("GOOGLE_REDIRECT_URI");
 
   // --- Google OAuth2 ---
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI) {
@@ -256,6 +257,16 @@ export default async function authRoutes(app: FastifyInstance) {
     } catch (err: any) {
       app.log.error("Failed to register google OAuth plugin:", err);
     }
+  } else {
+    const missing = [
+      !GOOGLE_CLIENT_ID ? "GOOGLE_CLIENT_ID" : null,
+      !GOOGLE_CLIENT_SECRET ? "GOOGLE_CLIENT_SECRET" : null,
+      !GOOGLE_REDIRECT_URI ? "GOOGLE_REDIRECT_URI" : null,
+    ].filter(Boolean);
+
+    app.log.warn(
+      `Google OAuth disabled. Missing configuration: ${missing.join(", ")}`
+    );
   }
 
   // --- REGISTER ---

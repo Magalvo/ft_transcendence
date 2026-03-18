@@ -1,8 +1,10 @@
 import { en } from '../shared/i18n.en';
+import { fr } from '../shared/i18n.fr';
 import { pt } from '../shared/i18n.pt';
 
 const dictionaries = {
   en,
+  fr,
   pt,
 } as const;
 
@@ -17,11 +19,12 @@ const DEFAULT_LOCALE: Locale = 'en';
 const STORAGE_KEY = 'app_locale';
 
 function isLocale(value: string | null): value is Locale {
-  return value === 'en' || value === 'pt';
+  return value === 'en' || value === 'fr' || value === 'pt';
 }
 
 function resolveBrowserLocale(): Locale {
   const browserLocale = navigator.language.toLowerCase();
+  if (browserLocale.startsWith('fr')) return 'fr';
   return browserLocale.startsWith('pt') ? 'pt' : DEFAULT_LOCALE;
 }
 
@@ -53,7 +56,14 @@ class I18nService {
   }
 
   public getIntlLocale(): string {
-    return this.currentLocale === 'pt' ? 'pt-PT' : 'en-US';
+    switch (this.currentLocale) {
+      case 'fr':
+        return 'fr-FR';
+      case 'pt':
+        return 'pt-PT';
+      default:
+        return 'en-US';
+    }
   }
 
   public setLocale(locale: Locale): void {
@@ -140,7 +150,15 @@ class I18nService {
 }
 
 export const i18n = new I18nService();
-export const availableLocales: Locale[] = ['en', 'pt'];
+export const availableLocales: Locale[] = ['en', 'pt', 'fr'];
+const localeNativeLabels: Record<Locale, string> = {
+  en: 'English',
+  fr: 'Francais',
+  pt: 'Portugues',
+};
+
+export const getLocaleLabel = (locale: Locale): string =>
+  localeNativeLabels[locale];
 export const t = (key: TranslationKey, params?: TranslationParams): string =>
   i18n.t(key, params);
 export const formatDate = (
