@@ -12,6 +12,7 @@ export interface ChatGroup {
   admin_id?: number;
   visibility?: GroupVisibility;
   owner_id?: string;
+  is_member?: boolean;
 }
 
 export type GroupVisibility = "public" | "private" | "protected";
@@ -70,7 +71,10 @@ export class ChatService {
 
   static async getGroups(): Promise<ChatGroup[]> {
     const response = await ApiClient.get<ChatGroup[]>('/api/auth/groups');
-    return response.data ?? [];
+    return (response.data ?? []).map((group) => ({
+      ...group,
+      is_member: Boolean((group as any).is_member),
+    }));
   }
 
   static async getUsers(): Promise<ChatListUser[]> {

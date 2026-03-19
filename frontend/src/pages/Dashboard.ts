@@ -3,6 +3,7 @@ import { Navbar } from '../components/layout/Navbar';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { UserService } from '../services/UserService';
+import { UserStore } from '../core/UserStore';
 import type { UserProfile } from '../core/UserStore';
 import { HyperspeedWrapper } from '../components/ui/HyperspeedWrapper';
 import { hyperspeedPresets } from '../components/react/HyperspeedPresets';
@@ -13,6 +14,9 @@ import { getUserAvatarUrl } from '../shared/avatar';
 export class DashboardPage extends AbstractComponent {
   private navbar: Navbar | null = null;
   private background: HyperspeedWrapper | null = null;
+  private friendsListEl: HTMLUListElement | null = null;
+  private friendsRefreshTimer: number | null = null;
+  private currentUserId: string | null = null;
 
   constructor() {
     super('div', 'min-h-screen relative text-white');
@@ -37,6 +41,7 @@ export class DashboardPage extends AbstractComponent {
     gridDiv.className = 'grid grid-cols-1 md:grid-cols-3 gap-6';
 
     const user = await UserService.getProfile(true);
+    this.currentUserId = user.id;
 
     const profileCard = this.buildProfileCard(user);
     const statsCard = this.buildStatsCard(user);
@@ -57,6 +62,8 @@ export class DashboardPage extends AbstractComponent {
     gridDiv.appendChild(rightColumn);
     container.appendChild(gridDiv);
     this.element.appendChild(container);
+
+    this.startFriendsRefresh();
   }
 
   private buildProfileCard(user: UserProfile): Card {
@@ -211,8 +218,25 @@ export class DashboardPage extends AbstractComponent {
 
     const list = document.createElement('ul');
     list.className = 'space-y-2';
+    this.friendsListEl = list;
+    this.renderFriendsList(user.friends);
+    card.getElement().appendChild(list);
+    return card;
+  }
 
-    user.friends.forEach((friend) => {
+  private renderFriendsList(friends: UserProfile['friends']): void {
+    if (!this.friendsListEl) return;
+    this.friendsListEl.innerHTML = '';
+
+    if (!friends.length) {
+      const empty = document.createElement('li');
+      empty.className = 'text-sm text-gray-500';
+      empty.textContent = t('profile.friends.empty');
+      this.friendsListEl.appendChild(empty);
+      return;
+    }
+
+    friends.forEach((friend) => {
       const li = document.createElement('li');
       li.className = 'flex justify-between items-center text-sm';
       const isOnline = friend.status === 'online';
@@ -222,11 +246,26 @@ export class DashboardPage extends AbstractComponent {
         <span class="w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}"
               title="${this.getStatusLabel(friend.status)}"></span>
       `;
-      list.appendChild(li);
+      this.friendsListEl?.appendChild(li);
     });
+  }
 
-    card.getElement().appendChild(list);
-    return card;
+  private startFriendsRefresh(): void {
+    if (this.friendsRefreshTimer !== null) window.clearInterval(this.friendsRefreshTimer);
+    this.friendsRefreshTimer = window.setInterval(() => {
+      void this.refreshFriendsStatuses();
+    }, 10000);
+  }
+
+  private async refreshFriendsStatuses(): Promise<void> {
+    if (!this.currentUserId) return;
+    try {
+      const friends = await UserService.fetchUserFriends(this.currentUserId);
+      UserStore.updateFriends(friends);
+      this.renderFriendsList(friends);
+    } catch {
+      // Keep existing status indicators on transient errors.
+    }
   }
 
   private getStatusLabel(status: UserProfile['status']): string {
@@ -240,6 +279,12 @@ export class DashboardPage extends AbstractComponent {
   }
 
   private destroyOwnedUi(): void {
+    if (this.friendsRefreshTimer !== null) {
+      window.clearInterval(this.friendsRefreshTimer);
+      this.friendsRefreshTimer = null;
+    }
+    this.friendsListEl = null;
+    this.currentUserId = null;
     this.navbar?.onDestroy();
     this.navbar = null;
     this.background?.onDestroy();

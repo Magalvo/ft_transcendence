@@ -302,6 +302,10 @@ export default async function authRoutes(app: FastifyInstance) {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
       const userId = decoded?.userId;
 
+      if (userId) {
+        await db("users").where({ id: userId }).update({ online: false });
+      }
+
       // Broadcast a best-effort logout hint to the Socket.IO layer so that
       // any active sockets for this user can leave lobbies / games.
       if (userId && app.io) {
@@ -599,6 +603,33 @@ export default async function authRoutes(app: FastifyInstance) {
         .first();
 
       if (existing) {
+        if (
+          String(existing.requester_id) === String(targetUser.id) &&
+          String(existing.target_id) === String(requesterId)
+        ) {
+          await db("friendships")
+            .insert({
+              user_a: userA,
+              user_b: userB,
+              created_at: Date.now(),
+            })
+            .onConflict(["user_a", "user_b"])
+            .ignore();
+
+          await db("friend_requests")
+            .where({ id: existing.id })
+            .delete();
+
+          return {
+            success: true,
+            autoAccepted: true,
+            friend: {
+              id: targetUser.id,
+              username: targetUser.username,
+            },
+          };
+        }
+
         return sendError(reply, "Friend request already exists", 409);
       }
 
@@ -747,13 +778,13 @@ export default async function authRoutes(app: FastifyInstance) {
             );
           });
         })
-        .select("u.id", "u.username", "u.last_request")
+        .select("u.id", "u.username", "u.last_request", "u.online")
         .orderBy("u.username", "asc");
 
       return friends.map((f: any) => ({
         id: f.id,
         username: f.username,
-        status: isOnlineByLastRequest(f.last_request) ? "online" : "offline",
+        status:  Boolean(f.online) || isOnlineByLastRequest(f.last_request) ? "online" : "offline",
       }));
     } catch (err: any) {
       app.log.error(err);

@@ -31,7 +31,7 @@ function normalizePair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-async function isGroupMember(groupId: number, userId: string): Promise<boolean> {
+export async function isGroupMember(groupId: number, userId: string): Promise<boolean> {
   const row = await db("chat_group_members").where({ id_group: groupId, user_id: userId }).first();
   return !!row;
 }
@@ -76,7 +76,17 @@ export async function getGroupsForUser(userId: string) {
     .leftJoin("chat_group_members as m", function () {
       this.on("m.id_group", "=", "g.id_group").andOnVal("m.user_id", "=", userId);
     })
-    .select("g.id_group", "g.name", "g.visibility", "g.owner_id")
+    .leftJoin("chat_group_bans as b", function () {
+      this.on("b.id_group", "=", "g.id_group").andOnVal("b.user_id", "=", userId);
+    })
+    .select(
+      "g.id_group",
+      "g.name",
+      "g.visibility",
+      "g.owner_id",
+      db.raw("CASE WHEN m.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member")
+    )
+    .whereNull("b.user_id")
     .where((qb) =>
       qb
         .whereIn("g.visibility", ["public", "protected"])
@@ -163,6 +173,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     .select(
       "u.id",
       "u.username",
+      "u.online",
       "u.last_request",
       "g.owner_id",
       db.raw("CASE WHEN a.user_id IS NOT NULL THEN 1 ELSE 0 END as is_admin"),
@@ -178,6 +189,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     .select(
       "u.id",
       "u.username",
+      "u.online",
       "u.last_request",
       "g.owner_id",
       db.raw("0 as is_admin"),
@@ -198,7 +210,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     username: row.username,
     role: row.owner_id === row.id ? "owner" : row.is_admin ? "admin" : "member",
     is_banned: Number(row.is_banned) === 1,
-    online: isUserOnlineByLastRequest(row.last_request),
+    online: Boolean(row.online) || isUserOnlineByLastRequest(row.last_request),
     muted_until: row.muted_until || null,
   })).sort((a, b) => a.username.localeCompare(b.username));
 }
@@ -481,13 +493,13 @@ export async function getChatProfileByUserId(userId: string) {
     avatarUrl:
       user.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
-    online: isUserOnlineByLastRequest(user.last_request),
+    online: Boolean(user.online) || isUserOnlineByLastRequest(user.last_request),
   };
 }
 
 export async function getChatUsersList(currentUserId: string) {
   const users = await db("users")
-    .select("id", "username", "avatarUrl", "last_request")
+    .select("id", "username", "avatarUrl", "online", "last_request")
     .whereNot({ id: currentUserId })
     .orderBy("username", "asc");
 
@@ -498,7 +510,7 @@ export async function getChatUsersList(currentUserId: string) {
       avatarUrl:
         row.avatarUrl ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(row.username)}&background=0D8ABC&color=fff`,
-      online: isUserOnlineByLastRequest(row.last_request),
+      online: Boolean(row.online) || isUserOnlineByLastRequest(row.last_request),
     }))
     .sort((a, b) => {
       if (a.online === b.online) return a.username.localeCompare(b.username);

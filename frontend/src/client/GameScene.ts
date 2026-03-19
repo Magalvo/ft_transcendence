@@ -131,7 +131,7 @@ export class GameScene {
     }
 
     try {
-      
+
       if (this.socket && this.socket.connected) {
         try {
           this.socket.emit('leaveGame', {
@@ -141,7 +141,7 @@ export class GameScene {
         } catch (e) {
           console.warn('Could not emit leaveGame:', e);
         }
-        
+
         try {
           this.socket.off('init');
           this.socket.off('gamePaused');

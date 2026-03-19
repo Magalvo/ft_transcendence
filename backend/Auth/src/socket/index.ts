@@ -45,6 +45,21 @@ const inviteSessionToLobbyId = new Map<string, string>();
 const inviteLobbyIdToSession = new Map<string, string>();
 const activeLobbyBySocket = new Map<string, string>();
 
+async function setUserOnlineStatus(userId: string, online: boolean): Promise<void> {
+  try {
+    if (!userId) return;
+    if (online) {
+      await db("users")
+        .where({ id: userId })
+        .update({ online: true, last_request: new Date().toISOString() });
+      return;
+    }
+    await db("users").where({ id: userId }).update({ online: false });
+  } catch (error) {
+    console.warn("Failed to update user online status:", error);
+  }
+}
+
 function normalizeLobbyCode(raw?: string): string {
   return (raw || "").trim().toUpperCase();
 }
@@ -612,6 +627,7 @@ export function setupSocketIO(httpServer: any) {
       socket.data.userId = authUserId;
       if (!userToSocketsMap.has(authUserId)) userToSocketsMap.set(authUserId, new Set());
       userToSocketsMap.get(authUserId)!.add(socket.id);
+      void setUserOnlineStatus(authUserId, true);
       console.log(`Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`);
     }
 
@@ -630,6 +646,7 @@ export function setupSocketIO(httpServer: any) {
             socket.data.userId = decoded.userId;
             if (!userToSocketsMap.has(decoded.userId)) userToSocketsMap.set(decoded.userId, new Set());
             userToSocketsMap.get(decoded.userId)!.add(socket.id);
+            void setUserOnlineStatus(decoded.userId, true);
             console.log(`Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`);
           }
         }
@@ -648,6 +665,7 @@ export function setupSocketIO(httpServer: any) {
         socket.data.userId = data.userId;
       if (!userToSocketsMap.has(data.userId)) userToSocketsMap.set(data.userId, new Set());
       userToSocketsMap.get(data.userId)!.add(socket.id);
+        void setUserOnlineStatus(data.userId, true);
         getActiveLobby(socket.id).broadcastStatePublic();
       }
     });
@@ -671,6 +689,7 @@ export function setupSocketIO(httpServer: any) {
         sockets?.delete(socket.id);
         if (sockets && sockets.size === 0) {
           userToSocketsMap.delete(userId);
+          void setUserOnlineStatus(userId, false);
         }
         socket.leave(`user:${userId}`);
       }
@@ -1293,7 +1312,10 @@ export function setupSocketIO(httpServer: any) {
       if (userId) {
         const set = userToSocketsMap.get(userId);
         set?.delete(socket.id);
-        if (set && set.size === 0) userToSocketsMap.delete(userId);
+        if (set && set.size === 0) {
+          userToSocketsMap.delete(userId);
+          void setUserOnlineStatus(userId, false);
+        }
         
         // Clean up pending tournament matches for this user
         for (const [matchId, match] of pendingTournamentMatches.entries()) {
