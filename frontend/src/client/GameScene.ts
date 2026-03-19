@@ -193,4 +193,18 @@ export class GameScene {
     this.scene = null;
     this.data = {} as GameData;
   }
+
+  public getTournamentWinnerSide(): "A" | "B" | null {
+    if (!this.data?.mods?.score) return null;
+    if (this.data.mySide !== "left" && this.data.mySide !== "right") return null;
+
+    const myScore = this.data.mods.score.me;
+    const rivalScore = this.data.mods.score.rival;
+
+    const leftScore = this.data.mySide === "left" ? myScore : rivalScore;
+    const rightScore = this.data.mySide === "left" ? rivalScore : myScore;
+
+    if (leftScore === rightScore) return null;
+    return leftScore > rightScore ? "A" : "B";
+  }
 }

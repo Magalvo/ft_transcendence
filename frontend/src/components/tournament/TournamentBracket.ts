@@ -2,6 +2,7 @@ import { AbstractComponent } from "../../core/Component";
 import { navigateTo } from "../../core/AppRouter";
 import { TournamentMatch } from "../../core/TournamentManager";
 import { TournamentManager } from "../../core/TournamentManager";
+import { UserStore } from "../../core/UserStore";
 
 export class TournamentBracket extends AbstractComponent {
   private matches: TournamentMatch[];
@@ -15,6 +16,7 @@ export class TournamentBracket extends AbstractComponent {
 
   public render(): void {
     this.element.innerHTML = "";
+    const currentUserId = UserStore.getUser()?.id || null;
 
     const title = document.createElement("h3");
     title.className = "text-2xl font-bold mb-4 text-gray-200";
@@ -79,7 +81,12 @@ export class TournamentBracket extends AbstractComponent {
           `;
 
 
-      if (!match.winner_id && match.player1_id && match.player2_id) {
+      const isPendingMatch = !match.winner_id && Boolean(match.player1_id) && Boolean(match.player2_id);
+      const isCurrentUserInMatch =
+        Boolean(currentUserId) &&
+        (match.player1_id === currentUserId || match.player2_id === currentUserId);
+
+      if (isPendingMatch && isCurrentUserInMatch) {
         const playBtn = document.createElement("button");
         playBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition";
         playBtn.textContent = "JOGAR PARTIDA";

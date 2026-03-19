@@ -9,6 +9,7 @@ import {
   type GroupMember,
   type GroupVisibility,
 } from "../services/ChatService";
+import { navigateTo } from "../core/AppRouter";
 import { io, type Socket } from "socket.io-client";
 import { formatTime, t } from "../services/I18nService";
 import { TokenManager } from "../services/TokenManager";
@@ -510,7 +511,7 @@ export class ChatPage extends AbstractComponent {
         openBtn.className = "mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium hover:bg-blue-600";
         openBtn.textContent = t("chat.invite.openLobby");
         openBtn.addEventListener("click", () => {
-          window.location.href = this.buildInviteUrl(inviteData.url, inviteData.sessionId);
+          this.navigateToInvite(this.buildInviteUrl(inviteData.url, inviteData.sessionId));
         });
         bubble.appendChild(openBtn);
       }
@@ -520,10 +521,10 @@ export class ChatPage extends AbstractComponent {
         acceptBtn.className = "mt-2 rounded bg-emerald-700 px-3 py-1 text-xs font-medium hover:bg-emerald-600";
         acceptBtn.textContent = t("chat.invite.accept");
         acceptBtn.addEventListener("click", () => {
-          window.location.href = this.buildInviteUrl(
+          this.navigateToInvite(this.buildInviteUrl(
             inviteData?.url || msg.invite_url,
             inviteData?.sessionId || msg.invite_session
-          );
+          ));
         });
         bubble.appendChild(acceptBtn);
       }
@@ -560,8 +561,17 @@ export class ChatPage extends AbstractComponent {
 
   private openInviteLobby(inviteUrl: string): void {
     window.setTimeout(() => {
-      window.location.href = inviteUrl;
+      this.navigateToInvite(inviteUrl);
     }, 80);
+  }
+
+  private navigateToInvite(rawUrl: string): void {
+    try {
+      const url = new URL(rawUrl, window.location.origin);
+      navigateTo(`${url.pathname}${url.search}`);
+    } catch {
+      navigateTo('/game');
+    }
   }
 
   private parsePongInvite(raw: string): { url: string; sessionId: string | null } | null {

@@ -3,7 +3,7 @@ import { GameScene } from '../client/GameScene';
 import { socketService } from '../client/SocketService';
 import { navigateTo } from '../core/AppRouter';
 import { UserStore } from '../core/UserStore';
-import { TournamentManager } from '../core/TournamentManager';
+import { TournamentManager, type Tournament } from '../core/TournamentManager';
 import { TournamentService } from '../services/TournamentService';
 import type { Socket } from 'socket.io-client';
 
@@ -19,6 +19,7 @@ export class GamePage extends AbstractComponent {
   private tournamentInviteToken: string | null;
   private isTokenBasedTournamentJoin = false;
   private hasSubmittedTournamentResult = false;
+  private lastReportedWinnerSide: "A" | "B" | null = null;
   private tournamentStatusEl: HTMLDivElement | null = null;
 
   constructor() {
@@ -64,6 +65,7 @@ export class GamePage extends AbstractComponent {
     if (!inviteResolved) {
       return;
     }
+    this.hydrateLocalTournamentStateFromUrl();
 
     this.gameScene = new GameScene();
     const currentUser = UserStore.getUser();
@@ -134,33 +136,46 @@ export class GamePage extends AbstractComponent {
         window.addEventListener('match-recording-error', recordErrorHandler);
 
         this.returnToMenuHandler = (_event: Event) => {
-            console.log('Game page received return to menu event');
-            
-            window.removeEventListener('match-stats-updated', statsUpdateHandler);
-            window.removeEventListener('match-recording-error', recordErrorHandler);
-            
-            
-            if (this.gameScene) {
-              if (this.tournamentWaitingHandler) {
-                this.gameScene.socket?.off('tournamentMatchWaiting', this.tournamentWaitingHandler);
-                this.tournamentWaitingHandler = null;
+            void (async () => {
+              console.log('Game page received return to menu event');
+              if (this.returnToMenuHandler) {
+                window.removeEventListener('game-return-to-menu', this.returnToMenuHandler);
+                this.returnToMenuHandler = null;
               }
-              if (this.tournamentErrorHandler) {
-                this.gameScene.socket?.off('error', this.tournamentErrorHandler);
-                this.tournamentErrorHandler = null;
+
+              // Give async match-recording events a short window to arrive before teardown.
+              if (this.tournamentId && this.matchId && !this.hasSubmittedTournamentResult) {
+                await this.wait(500);
+                if (!this.hasSubmittedTournamentResult) {
+                  await this.submitTournamentResultFromFallback();
+                }
               }
-              this.gameScene.dispose();
-              this.gameScene = null;
-            }
 
-            console.log('🚀 Navigating to tournament/dashboard from game');
+              window.removeEventListener('match-stats-updated', statsUpdateHandler);
+              window.removeEventListener('match-recording-error', recordErrorHandler);
 
-            // Return to tournament if it exists, otherwise dashboard
-            if (this.tournamentId) {
-              navigateTo('/tournament');
-            } else {
-              navigateTo('/dashboard');
-            }
+              if (this.gameScene) {
+                if (this.tournamentWaitingHandler) {
+                  this.gameScene.socket?.off('tournamentMatchWaiting', this.tournamentWaitingHandler);
+                  this.tournamentWaitingHandler = null;
+                }
+                if (this.tournamentErrorHandler) {
+                  this.gameScene.socket?.off('error', this.tournamentErrorHandler);
+                  this.tournamentErrorHandler = null;
+                }
+                this.gameScene.dispose();
+                this.gameScene = null;
+              }
+
+              console.log('🚀 Navigating to tournament/dashboard from game');
+
+              // Return to tournament if it exists, otherwise dashboard
+              if (this.tournamentId) {
+                navigateTo('/tournament');
+              } else {
+                navigateTo('/dashboard');
+              }
+            })();
         };
 
         window.addEventListener('game-return-to-menu', this.returnToMenuHandler);
@@ -177,7 +192,13 @@ export class GamePage extends AbstractComponent {
             console.warn('⚠️ Missing match result data');
             return;
         }
+        this.lastReportedWinnerSide = winner;
+        await this.submitTournamentResultByWinner(winner);
+    }
 
+    private async submitTournamentResultByWinner(winner: "A" | "B"): Promise<void> {
+        if (!this.tournamentId || !this.matchId) return;
+        if (this.hasSubmittedTournamentResult) return;
         try {
             const tournamentManager = TournamentManager.getInstance();
             const match = tournamentManager.getMatch(this.matchId);
@@ -203,6 +224,7 @@ export class GamePage extends AbstractComponent {
                 player1Score,
                 player2Score
             );
+            this.emitLocalTournamentStateUpdate(tournamentManager);
             this.hasSubmittedTournamentResult = true;
 
             console.log('✅ Tournament match result submitted');
@@ -211,19 +233,100 @@ export class GamePage extends AbstractComponent {
         }
     }
 
+    private async submitTournamentResultFromFallback(): Promise<void> {
+        const winner = this.lastReportedWinnerSide ?? this.gameScene?.getTournamentWinnerSide() ?? null;
+        if (!winner) {
+            console.warn('⚠️ Could not infer tournament winner on return-to-menu fallback');
+            return;
+        }
+        await this.submitTournamentResultByWinner(winner);
+    }
+
+    private wait(ms: number): Promise<void> {
+      return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    private emitLocalTournamentStateUpdate(tournamentManager: TournamentManager): void {
+      if (!this.tournamentId || !this.tournamentId.startsWith('local-')) return;
+      const snapshot = tournamentManager.getCurrentTournament();
+      if (!snapshot || snapshot.id !== this.tournamentId) return;
+      this.gameScene?.socket?.emit('localTournamentStateUpdate', {
+        tournamentId: this.tournamentId,
+        tournament_snapshot: snapshot,
+      });
+    }
+
+    private hydrateLocalTournamentStateFromUrl(): void {
+      if (!this.tournamentId || !this.tournamentId.startsWith('local-')) return;
+
+      const manager = TournamentManager.getInstance();
+      const current = manager.getCurrentTournament();
+      const hasMatchingTournament = current?.id === this.tournamentId;
+      const hasMatch =
+        Boolean(this.matchId) &&
+        Boolean(this.matchId && manager.getMatch(this.matchId));
+      if (hasMatchingTournament && hasMatch) {
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const encodedState = params.get('tState');
+      if (!encodedState) return;
+
+      const snapshot = this.decodeTournamentSnapshot(encodedState);
+      if (!snapshot) return;
+      if (snapshot.id !== this.tournamentId) return;
+
+      manager.setCurrentTournament(snapshot);
+    }
+
+    private decodeTournamentSnapshot(encodedState: string): Tournament | null {
+      try {
+        const normalized = encodedState.replace(/-/g, '+').replace(/_/g, '/');
+        const padLength = (4 - (normalized.length % 4)) % 4;
+        const padded = normalized + '='.repeat(padLength);
+        const binary = window.atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        const decoded = new TextDecoder().decode(bytes);
+        const parsed = JSON.parse(decoded) as Tournament;
+        if (!this.isValidTournamentSnapshot(parsed)) return null;
+        return parsed;
+      } catch (error) {
+        console.warn('Failed to decode tournament snapshot from URL:', error);
+        return null;
+      }
+    }
+
+    private isValidTournamentSnapshot(snapshot: unknown): snapshot is Tournament {
+      if (!snapshot || typeof snapshot !== 'object') return false;
+      const value = snapshot as Tournament;
+      if (!value.id || !Array.isArray(value.participants) || !Array.isArray(value.matches)) {
+        return false;
+      }
+      return true;
+    }
+
   private setupTournamentSocketFlow(socket: Socket): void {
     if (!this.tournamentId || !this.matchId || !this.p1Id || !this.p2Id) return;
     if (this.tournamentId.startsWith('local-')) {
       const manager = TournamentManager.getInstance();
       const p1Name = manager.getParticipantName(this.p1Id);
       const p2Name = manager.getParticipantName(this.p2Id);
+      const currentTournament = manager.getCurrentTournament();
 
+      this.tournamentWaitingHandler = (payload: { matchId: string; message: string }) => {
+        if (payload.matchId !== this.matchId) return;
+        if (this.tournamentStatusEl) {
+          this.tournamentStatusEl.textContent = payload.message || 'Waiting for opponent to join...';
+        }
+      };
       this.tournamentErrorHandler = (payload: { message?: string }) => {
         if (this.tournamentStatusEl) {
           this.tournamentStatusEl.textContent = payload?.message || 'Failed to start local tournament match.';
         }
       };
 
+      socket.on('tournamentMatchWaiting', this.tournamentWaitingHandler);
       socket.on('error', this.tournamentErrorHandler);
       if (this.tournamentStatusEl) {
         this.tournamentStatusEl.textContent = 'Starting local tournament match...';
@@ -236,6 +339,10 @@ export class GamePage extends AbstractComponent {
         player2_id: this.p2Id,
         player1_name: p1Name,
         player2_name: p2Name,
+        tournament_snapshot:
+          currentTournament?.id === this.tournamentId
+            ? currentTournament
+            : undefined,
       });
       return;
     }

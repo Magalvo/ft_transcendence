@@ -1,5 +1,6 @@
 import { socketService } from "../client/SocketService";
-import { navigateTo } from "../core/AppRouter";
+import { navigateTo, refreshCurrentRoute } from "../core/AppRouter";
+import { TournamentManager, type Tournament } from "../core/TournamentManager";
 import { TokenManager } from "./TokenManager";
 
 interface TournamentInvitePayload {
@@ -10,6 +11,11 @@ interface TournamentInvitePayload {
   expiresAt: number;
   player1_name?: string;
   player2_name?: string;
+}
+
+interface LocalTournamentStatePayload {
+  tournamentId: string;
+  tournament_snapshot: Tournament;
 }
 
 const TOAST_CONTAINER_ID = "global-toast-container";
@@ -25,6 +31,8 @@ class TournamentInviteNotifier {
 
     socket.off("tournamentInvite", this.handleInvite);
     socket.on("tournamentInvite", this.handleInvite);
+    socket.off("localTournamentStateUpdated", this.handleLocalTournamentStateUpdated);
+    socket.on("localTournamentStateUpdated", this.handleLocalTournamentStateUpdated);
   }
 
   private static handleInvite = (payload: TournamentInvitePayload): void => {
@@ -33,6 +41,23 @@ class TournamentInviteNotifier {
 
     this.seenInviteTokens.add(payload.inviteToken);
     this.showInviteToast(payload);
+  };
+
+  private static handleLocalTournamentStateUpdated = (
+    payload: LocalTournamentStatePayload
+  ): void => {
+    const snapshot = payload?.tournament_snapshot;
+    const tournamentId = payload?.tournamentId;
+    if (!snapshot || !tournamentId) return;
+    if (snapshot.id !== tournamentId) return;
+    if (!tournamentId.startsWith("local-")) return;
+
+    const manager = TournamentManager.getInstance();
+    manager.setCurrentTournament(snapshot);
+
+    if (window.location.pathname === "/tournament") {
+      refreshCurrentRoute();
+    }
   };
 
   private static ensureContainer(): HTMLElement {
