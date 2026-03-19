@@ -8,6 +8,7 @@ import { HyperspeedWrapper } from '../components/ui/HyperspeedWrapper';
 import { hyperspeedPresets } from '../components/react/HyperspeedPresets';
 import { navigateTo } from '../core/AppRouter';
 import { formatDateTime, t } from '../services/I18nService';
+import { getUserAvatarUrl } from '../shared/avatar';
 
 export class DashboardPage extends AbstractComponent {
   private navbar: Navbar | null = null;
@@ -62,7 +63,7 @@ export class DashboardPage extends AbstractComponent {
     const card = new Card('flex flex-col items-center text-center space-y-4');
 
     const img = document.createElement('img');
-    img.src = user.avatarUrl || 'https://via.placeholder.com/128';
+    img.src = getUserAvatarUrl(user);
     img.className = 'w-32 h-32 rounded-full border-4 border-blue-500 object-cover';
 
     const name = document.createElement('h2');

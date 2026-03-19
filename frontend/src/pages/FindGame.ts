@@ -6,6 +6,7 @@ import { navigateTo } from '../core/AppRouter';
 import type { Socket } from 'socket.io-client';
 import type { UserProfile } from '../core/UserStore';
 import { formatTime, t } from '../services/I18nService';
+import { getUserAvatarUrl } from '../shared/avatar';
 
 interface GameLobby {
   id: string;
@@ -496,7 +497,7 @@ export class FindGamePage extends AbstractComponent {
       isPrivate,
       code: isPrivate ? code : undefined,
       leaderName: user?.username || t('findGame.user.unknown'),
-      leaderAvatar: user?.avatarUrl || null,
+      leaderAvatar: user ? getUserAvatarUrl(user) : null,
     });
   }
 
@@ -517,7 +518,7 @@ export class FindGamePage extends AbstractComponent {
       lobbyId: lobby.id,
       code: privateCode,
       username: user?.username || t('findGame.user.unknown'),
-      avatarUrl: user?.avatarUrl || null,
+      avatarUrl: user ? getUserAvatarUrl(user) : null,
     });
   }
 

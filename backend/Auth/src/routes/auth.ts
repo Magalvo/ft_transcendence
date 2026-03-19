@@ -3,8 +3,8 @@ import jwt from "jsonwebtoken";
 import db from "../db.js";
 import crypto from "crypto";
 import fastifyOauth2 from "@fastify/oauth2";
-import { access, mkdir, writeFile } from "fs/promises";
-import { extname, join } from "path";
+import { access, mkdir, unlink, writeFile } from "fs/promises";
+import { basename, extname, join } from "path";
 import { sendError, sendSuccess } from "../utils/respond.js";
 import registerUser from "../services/register.js";
 import Login from "../services/login.js";
@@ -27,6 +27,12 @@ import { readConfigValue } from "../utils/env.js";
 
 const AVATARS_PATH =
   process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
+const ALLOWED_AVATAR_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 function getFrontendBaseUrl(headers: Record<string, unknown>): string {
   const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
@@ -181,16 +187,13 @@ export default async function authRoutes(app: FastifyInstance) {
                 const existingAvatar = String(
                   (user as any).avatarUrl || "",
                 ).trim();
-                const usesGoogleAvatar = existingAvatar.includes(
-                  "googleusercontent.com",
-                );
                 const hasCustomLocalAvatar =
                   existingAvatar.startsWith("/avatars/");
 
                 if (
                   googleAvatarUrl &&
-                  (!existingAvatar || usesGoogleAvatar) &&
-                  !hasCustomLocalAvatar
+                  !hasCustomLocalAvatar &&
+                  existingAvatar !== googleAvatarUrl
                 ) {
                   await db.raw("UPDATE users SET avatarUrl = ? WHERE id = ?", [
                     googleAvatarUrl,
@@ -435,6 +438,10 @@ export default async function authRoutes(app: FastifyInstance) {
         return sendError(reply, "No file uploaded", 400);
       }
 
+      if (!ALLOWED_AVATAR_MIME_TYPES.has(String(data.mimetype || "").toLowerCase())) {
+        return sendError(reply, "Only JPEG, PNG, WEBP, and GIF avatars are allowed", 400);
+      }
+
       const buffer = await data.toBuffer();
       const ext = extname(data.filename).replace(".", "") || "jpg";
       const filename = `${decoded.userId}_${Date.now()}.${ext}`;
@@ -451,10 +458,26 @@ export default async function authRoutes(app: FastifyInstance) {
       // Save file
       await writeFile(uploadPath, buffer);
 
+      const existingUser = await db("users")
+        .select("avatarUrl")
+        .where({ id: decoded.userId })
+        .first();
+
       // Update user avatar URL in database
       await db("users")
         .where({ id: decoded.userId })
         .update({ avatarUrl: publicUrl });
+
+      const previousAvatar = String(existingUser?.avatarUrl || "").trim();
+      if (previousAvatar.startsWith("/avatars/") && previousAvatar !== publicUrl) {
+        const previousFilename = basename(previousAvatar);
+        const previousPath = join(AVATARS_PATH, previousFilename);
+        try {
+          await unlink(previousPath);
+        } catch {
+          // Ignore cleanup failures for old avatar files.
+        }
+      }
 
       return { success: true, url: publicUrl };
     } catch (err: any) {

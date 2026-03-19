@@ -5,6 +5,7 @@ import { UserService } from '../services/UserService';
 import AuthService from '../services/AuthService';
 import type { UserProfile, Match, Friend } from '../core/UserStore';
 import { formatDate, t } from '../services/I18nService';
+import { getUserAvatarUrl } from '../shared/avatar';
 
 export class ProfilePage extends AbstractComponent {
   private navbar: Navbar | null = null;
@@ -57,7 +58,7 @@ export class ProfilePage extends AbstractComponent {
     avatarWrapper.className = 'relative group w-32 h-32 mb-4 cursor-pointer';
 
     const img = document.createElement('img');
-    img.src = user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}`;
+    img.src = getUserAvatarUrl(user);
     img.className = 'w-full h-full rounded-full object-cover border-4 border-blue-500 shadow-lg';
 
     const overlay = document.createElement('div');

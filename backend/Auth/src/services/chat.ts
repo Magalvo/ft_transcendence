@@ -470,7 +470,7 @@ export async function getBlockedUsers(blockerId: string) {
 
 export async function getChatProfileByUserId(userId: string) {
   const user = await db("users")
-    .select("id", "username", "email", "online", "last_request")
+    .select("id", "username", "email", "avatarUrl", "online", "last_request")
     .where({ id: userId })
     .first();
   if (!user) throw new Error("User not found");
@@ -478,13 +478,16 @@ export async function getChatProfileByUserId(userId: string) {
     id: user.id,
     username: user.username,
     email: user.email,
+    avatarUrl:
+      user.avatarUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
     online: isUserOnlineByLastRequest(user.last_request),
   };
 }
 
 export async function getChatUsersList(currentUserId: string) {
   const users = await db("users")
-    .select("id", "username", "last_request")
+    .select("id", "username", "avatarUrl", "last_request")
     .whereNot({ id: currentUserId })
     .orderBy("username", "asc");
 
@@ -492,6 +495,9 @@ export async function getChatUsersList(currentUserId: string) {
     .map((row) => ({
       id: row.id,
       username: row.username,
+      avatarUrl:
+        row.avatarUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(row.username)}&background=0D8ABC&color=fff`,
       online: isUserOnlineByLastRequest(row.last_request),
     }))
     .sort((a, b) => {

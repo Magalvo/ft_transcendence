@@ -8,6 +8,7 @@ import {
   i18n,
   t,
 } from '../../services/I18nService';
+import { getUserAvatarUrl } from '../../shared/avatar';
 
 export class Navbar extends AbstractComponent {
   private cleanupProfileImageSubscription: (() => void) | null = null;
@@ -102,17 +103,13 @@ export class Navbar extends AbstractComponent {
     profileImage.className = 'w-8 h-8 rounded-full cursor-pointer border border-gray-700';
 
     const user = UserStore.getUser();
-    profileImage.src =
-      user?.avatarUrl ||
-      'https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff';
+    profileImage.src = getUserAvatarUrl(user);
 
     this.cleanupProfileImageSubscription?.();
     this.cleanupProfileImageSubscription = UserStore.subscribe((updatedUser) => {
       if (!updatedUser) return;
 
-      profileImage.src =
-        updatedUser.avatarUrl ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(updatedUser.username)}&background=0D8ABC&color=fff`;
+      profileImage.src = getUserAvatarUrl(updatedUser);
     });
 
     profileImage.addEventListener('click', (event) => {

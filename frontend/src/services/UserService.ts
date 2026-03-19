@@ -2,6 +2,12 @@ import { ApiClient } from './ApiClient';
 import { TokenManager } from './TokenManager';
 import { UserStore, UserProfile, Friend } from '../core/UserStore';
 import type { User, MatchHistory } from '../types/User';
+import {
+  getGeneratedAvatarUrl,
+  getUserAvatarUrl,
+  isGeneratedAvatarUrl,
+  normalizeStoredAvatarUrl,
+} from '../shared/avatar';
 
 /**
  * UserService - Fetches and manages user data from the API
@@ -46,7 +52,10 @@ export class UserService {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        avatarUrl: userData.avatarUrl || storedAvatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.username)}&background=0D8ABC&color=fff`,
+        avatarUrl:
+          normalizeStoredAvatarUrl(userData.avatarUrl) ??
+          normalizeStoredAvatarUrl(storedAvatarUrl) ??
+          getGeneratedAvatarUrl(userData.username),
         status: userData.online ? 'online' : 'offline',
         wins: 0,
         losses: 0,
@@ -245,7 +254,10 @@ export class UserService {
 
         const profile = UserStore.getUser();
         if (profile) {
-          profile.avatarUrl = response.data.url;
+          profile.avatarUrl = getUserAvatarUrl({
+            username: profile.username,
+            avatarUrl: response.data.url,
+          });
           UserStore.setUser(profile);
 
           TokenManager.setUser(profile);
@@ -284,6 +296,9 @@ export class UserService {
       const profile = UserStore.getUser();
       if (profile) {
         profile.username = newUsername;
+        if (!profile.avatarUrl || isGeneratedAvatarUrl(profile.avatarUrl)) {
+          profile.avatarUrl = getGeneratedAvatarUrl(newUsername);
+        }
         UserStore.setUser(profile);
         TokenManager.setUser(profile);
       }

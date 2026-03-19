@@ -46,6 +46,7 @@ export interface ChatListUser {
   id: string;
   username: string;
   online: boolean;
+  avatarUrl?: string;
 }
 
 export class ChatService {
@@ -176,7 +177,13 @@ export class ChatService {
     return response.data ?? [];
   }
 
-  static async getUserProfile(userId: string) {
+  static async getUserProfile(userId: string): Promise<{
+    id: string;
+    username: string;
+    email?: string | null;
+    online: boolean;
+    avatarUrl?: string;
+  }> {
     const response = await ApiClient.get(`/api/auth/users/${userId}/profile`);
     return response.data;
   }
