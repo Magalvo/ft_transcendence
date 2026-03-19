@@ -41,6 +41,7 @@ interface LobbyState {
 }
 
 export class LobbyPage extends AbstractComponent {
+  private navbar: Navbar | null = null;
   private socket: Socket | null = null;
   private isLeader = false;
   private myId = '';
@@ -112,11 +113,12 @@ export class LobbyPage extends AbstractComponent {
   }
 
   public render(): void {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const container = document.createElement('div');
     container.className = 'flex-1 w-full h-full p-5 bg-neutral-900 text-white';
@@ -534,6 +536,8 @@ export class LobbyPage extends AbstractComponent {
   }
 
   public onDestroy(): void {
+    this.destroyOwnedUi();
+
     if (!this.socket) return;
 
     if (!this.isTransitioningToGame) {
@@ -546,5 +550,10 @@ export class LobbyPage extends AbstractComponent {
     this.socket.off('kicked', this.onKicked);
     this.socket.off('joinLobbyError', this.onJoinLobbyError);
     this.socket.off('lobby_start_error', this.onLobbyStartError);
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 }

@@ -7,16 +7,6 @@ interface CreateTournamentInput {
   player_ids: string[];
 }
 
-interface TournamentMatch {
-  id: string;
-  round: number;
-  match_number: number;
-  player1_id: string;
-  player2_id: string;
-  winner_id: string | null;
-  status: string;
-}
-
 /**
  * Create a new tournament with initial bracket
  */
@@ -171,11 +161,6 @@ export async function submitTournamentMatchResult(
         status: "completed",
         completed_at: now,
       });
-
-    // Mark loser as eliminated if in last round of tournament
-    const tournament = await db("tournaments")
-      .where({ id: match.tournament_id })
-      .first();
 
     // Check if next round matches can be progressed
     const nextRoundMatches = await db("tournament_matches")

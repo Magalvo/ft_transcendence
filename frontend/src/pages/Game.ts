@@ -9,7 +9,10 @@ import type { Socket } from 'socket.io-client';
 
 export class GamePage extends AbstractComponent {
   private gameScene: GameScene | null = null;
+  private gameStartHandler: (() => void) | null = null;
   private returnToMenuHandler: ((event: Event) => void) | null = null;
+  private statsUpdateHandler: ((event: Event) => void) | null = null;
+  private recordErrorHandler: ((event: Event) => void) | null = null;
   private tournamentWaitingHandler: ((payload: { matchId: string; message: string }) => void) | null = null;
   private tournamentErrorHandler: ((payload: { message?: string }) => void) | null = null;
   private tournamentId: string | null;
@@ -49,10 +52,15 @@ export class GamePage extends AbstractComponent {
       this.tournamentStatusEl.textContent = 'Setting up tournament match...';
       container.classList.add('relative');
       container.appendChild(this.tournamentStatusEl);
-      window.addEventListener('game-start', () => {
+      this.gameStartHandler = () => {
         this.tournamentStatusEl?.remove();
         this.tournamentStatusEl = null;
-      }, { once: true });
+        if (this.gameStartHandler) {
+          window.removeEventListener('game-start', this.gameStartHandler);
+          this.gameStartHandler = null;
+        }
+      };
+      window.addEventListener('game-start', this.gameStartHandler);
     }
 
     this.element.appendChild(container);
@@ -115,7 +123,9 @@ export class GamePage extends AbstractComponent {
      */
     private setupReturnToMenuListener(): void {
         
-        const statsUpdateHandler = async (event: Event) => {
+        this.removeMatchResultListeners();
+
+        this.statsUpdateHandler = async (event: Event) => {
             console.log('📊 Match stats updated, invalidating cache');
             UserStore.invalidateCache();
 
@@ -126,14 +136,14 @@ export class GamePage extends AbstractComponent {
         };
         
         
-        const recordErrorHandler = (event: Event) => {
+        this.recordErrorHandler = (event: Event) => {
             const customEvent = event as CustomEvent;
             console.warn('⚠️ Encountered error recording match:', customEvent.detail?.message);
             
         };
         
-        window.addEventListener('match-stats-updated', statsUpdateHandler);
-        window.addEventListener('match-recording-error', recordErrorHandler);
+        window.addEventListener('match-stats-updated', this.statsUpdateHandler);
+        window.addEventListener('match-recording-error', this.recordErrorHandler);
 
         this.returnToMenuHandler = (_event: Event) => {
             void (async () => {
@@ -151,8 +161,7 @@ export class GamePage extends AbstractComponent {
                 }
               }
 
-              window.removeEventListener('match-stats-updated', statsUpdateHandler);
-              window.removeEventListener('match-recording-error', recordErrorHandler);
+              this.removeMatchResultListeners();
 
               if (this.gameScene) {
                 if (this.tournamentWaitingHandler) {
@@ -384,6 +393,13 @@ export class GamePage extends AbstractComponent {
   }
 
   public onDestroy(): void {
+    if (this.gameStartHandler) {
+      window.removeEventListener('game-start', this.gameStartHandler);
+      this.gameStartHandler = null;
+    }
+
+    this.removeMatchResultListeners();
+
     if (this.returnToMenuHandler) {
       window.removeEventListener('game-return-to-menu', this.returnToMenuHandler);
       this.returnToMenuHandler = null;
@@ -400,6 +416,17 @@ export class GamePage extends AbstractComponent {
       }
       this.gameScene.dispose();
       this.gameScene = null;
+    }
+  }
+
+  private removeMatchResultListeners(): void {
+    if (this.statsUpdateHandler) {
+      window.removeEventListener('match-stats-updated', this.statsUpdateHandler);
+      this.statsUpdateHandler = null;
+    }
+    if (this.recordErrorHandler) {
+      window.removeEventListener('match-recording-error', this.recordErrorHandler);
+      this.recordErrorHandler = null;
     }
   }
 }

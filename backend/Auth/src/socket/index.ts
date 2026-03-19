@@ -81,6 +81,7 @@ async function startTournamentGame(
     {
       tournamentId: string;
       matchId: string;
+      expiresAt: number;
       slots: Array<{
         side: "left" | "right";
         userId: string;
@@ -100,7 +101,12 @@ async function startTournamentGame(
     const gameConfig = new GameConfiguration("normal", "one_for_one");
     
     // Create players from the slots, sorted by side (left first, then right)
-    const sortedSlots = pendingMatch.slots.sort((a, b) => a.side === 'left' ? -1 : 1);
+    const sortedSlots = pendingMatch.slots.sort(
+      (
+        a: { side: "left" | "right" },
+        b: { side: "left" | "right" },
+      ) => (a.side === b.side ? 0 : a.side === "left" ? -1 : 1),
+    );
     const players: GamePlayer[] = sortedSlots.map((slot: any) => 
       new GamePlayer('human', slot.socketId, slot.side, slot.username, slot.userId)
     );
@@ -127,7 +133,7 @@ async function startTournamentGame(
     for (const slot of pendingMatch.slots) {
       const socket = io.sockets.sockets.get(slot.socketId);
       if (socket) {
-        const playerIndex = players.findIndex(p => p.userId === slot.userId);
+        const playerIndex = players.findIndex((p) => p.user_id === slot.userId);
         socket.emit('init', {
           side: slot.side,
           index: playerIndex,
@@ -169,6 +175,7 @@ export function setupSocketIO(httpServer: any) {
     {
       tournamentId: string;
       matchId: string;
+      expiresAt: number;
       slots: Array<{
         side: "left" | "right";
         userId: string;
@@ -183,6 +190,7 @@ export function setupSocketIO(httpServer: any) {
     {
       tournamentId: string;
       matchId: string;
+      expiresAt: number;
       player1_id: string;
       player2_id: string;
       player1_name: string;
@@ -196,6 +204,55 @@ export function setupSocketIO(httpServer: any) {
       }>;
     }
   >();
+  const PENDING_MATCH_TTL_MS = 15 * 60 * 1000;
+  const PENDING_MATCH_CLEANUP_MS = 60 * 1000;
+
+  const getRuntimeMetrics = () => {
+    const pendingTournamentSlots = Array.from(pendingTournamentMatches.values()).reduce(
+      (acc, match) => acc + match.slots.length,
+      0,
+    );
+    const pendingLocalTournamentSlots = Array.from(pendingLocalTournamentMatches.values()).reduce(
+      (acc, match) => acc + match.slots.length,
+      0,
+    );
+    const userSocketBindings = Array.from(userToSocketsMap.values()).reduce(
+      (acc, sockets) => acc + sockets.size,
+      0,
+    );
+
+    return {
+      timestamp: Date.now(),
+      connectedSockets: io.sockets.sockets.size,
+      socketToUserEntries: socketToUserMap.size,
+      authenticatedUsers: userToSocketsMap.size,
+      userSocketBindings,
+      activeLobbyBindings: activeLobbyBySocket.size,
+      publicLobbies: lobbiesRegistry.size,
+      privateInviteLobbies: inviteLobbies.size,
+      pendingTournamentMatches: pendingTournamentMatches.size,
+      pendingTournamentSlots,
+      pendingLocalTournamentMatches: pendingLocalTournamentMatches.size,
+      pendingLocalTournamentSlots,
+      activeLocalTournamentGames: localTournamentGames.size,
+    };
+  };
+
+  setInterval(() => {
+    const now = Date.now();
+
+    for (const [matchKey, match] of pendingTournamentMatches.entries()) {
+      if (match.expiresAt <= now) {
+        pendingTournamentMatches.delete(matchKey);
+      }
+    }
+
+    for (const [matchKey, match] of pendingLocalTournamentMatches.entries()) {
+      if (match.expiresAt <= now) {
+        pendingLocalTournamentMatches.delete(matchKey);
+      }
+    }
+  }, PENDING_MATCH_CLEANUP_MS);
 
   const emitLocalTournamentInvite = async (
     requesterId: string,
@@ -297,6 +354,7 @@ export function setupSocketIO(httpServer: any) {
     if (!userId) throw new Error("User not authenticated");
 
     const matchKey = `${tournamentId}:${matchId}`;
+  const now = Date.now();
     const context = await resolveTournamentMatchContext(tournamentId, matchId);
     const isPlayer1 = userId === context.player1_id;
     const isPlayer2 = userId === context.player2_id;
@@ -305,9 +363,18 @@ export function setupSocketIO(httpServer: any) {
       throw new Error("User is not a participant in this match");
     }
 
-    const existingMatch = pendingTournamentMatches.get(matchKey) || {
+    const existingPendingMatch = pendingTournamentMatches.get(matchKey);
+    if (existingPendingMatch && existingPendingMatch.expiresAt <= now) {
+      pendingTournamentMatches.delete(matchKey);
+    }
+
+    const existingMatch =
+      existingPendingMatch && existingPendingMatch.expiresAt > now
+        ? existingPendingMatch
+        : {
       tournamentId,
       matchId,
+      expiresAt: now + PENDING_MATCH_TTL_MS,
       slots: [] as Array<{
         side: "left" | "right";
         userId: string;
@@ -327,6 +394,8 @@ export function setupSocketIO(httpServer: any) {
     } else {
       existingSlot.socketId = socketId;
     }
+
+    existingMatch.expiresAt = Date.now() + PENDING_MATCH_TTL_MS;
 
     pendingTournamentMatches.set(matchKey, existingMatch);
 
@@ -597,6 +666,14 @@ export function setupSocketIO(httpServer: any) {
       );
 
       leaveActiveLobby(socket.id);
+      if (userId) {
+        const sockets = userToSocketsMap.get(userId);
+        sockets?.delete(socket.id);
+        if (sockets && sockets.size === 0) {
+          userToSocketsMap.delete(userId);
+        }
+        socket.leave(`user:${userId}`);
+      }
       socketToUserMap.delete(socket.id);
       socket.data.userId = undefined;
     });
@@ -885,6 +962,13 @@ export function setupSocketIO(httpServer: any) {
       player2_name?: string;
       tournament_snapshot?: LocalTournamentSnapshot;
     }) => {
+      const cleanupPendingLocalMatch = () => {
+        const tournamentId = String(data?.tournamentId || "");
+        const matchId = String(data?.matchId || "");
+        if (!tournamentId || !matchId) return;
+        pendingLocalTournamentMatches.delete(`${tournamentId}:${matchId}`);
+      };
+
       try {
         const userId = socketToUserMap.get(socket.id);
         if (!userId) {
@@ -916,6 +1000,7 @@ export function setupSocketIO(httpServer: any) {
           : undefined;
         const roomId = `local-tournament:${tournamentId}:${matchId}`;
         const matchKey = `${tournamentId}:${matchId}`;
+        const now = Date.now();
 
         if (localTournamentGames.has(roomId)) {
           socket.emit("error", { message: "This local tournament match is already in progress" });
@@ -970,9 +1055,18 @@ export function setupSocketIO(httpServer: any) {
         }
 
         // Human vs Human local match: queue players and start when both are connected.
-        const pending = pendingLocalTournamentMatches.get(matchKey) || {
+        const existingPendingMatch = pendingLocalTournamentMatches.get(matchKey);
+        if (existingPendingMatch && existingPendingMatch.expiresAt <= now) {
+          pendingLocalTournamentMatches.delete(matchKey);
+        }
+
+        const pending =
+          existingPendingMatch && existingPendingMatch.expiresAt > now
+            ? existingPendingMatch
+            : {
           tournamentId,
           matchId,
+          expiresAt: now + PENDING_MATCH_TTL_MS,
           player1_id: player1Id,
           player2_id: player2Id,
           player1_name: player1Name,
@@ -985,6 +1079,8 @@ export function setupSocketIO(httpServer: any) {
             username: string;
           }>,
         };
+
+        pending.expiresAt = Date.now() + PENDING_MATCH_TTL_MS;
 
         if (!pending.tournament_snapshot && providedSnapshot) {
           pending.tournament_snapshot = providedSnapshot;
@@ -1024,6 +1120,7 @@ export function setupSocketIO(httpServer: any) {
         const leftSlot = pending.slots.find((s) => s.side === "left");
         const rightSlot = pending.slots.find((s) => s.side === "right");
         if (!leftSlot || !rightSlot) {
+          cleanupPendingLocalMatch();
           socket.emit("error", { message: "Both players must join before starting the match" });
           return;
         }
@@ -1033,6 +1130,7 @@ export function setupSocketIO(httpServer: any) {
           roomId
         );
         if (!registryResult.ok) {
+          cleanupPendingLocalMatch();
           for (const slot of pending.slots) {
             const target = io.sockets.sockets.get(slot.socketId);
             target?.emit("error", {
@@ -1078,6 +1176,7 @@ export function setupSocketIO(httpServer: any) {
           });
         }
       } catch (error: any) {
+        cleanupPendingLocalMatch();
         console.error("❌ Error starting local tournament match:", error);
         socket.emit("error", { message: error.message || "Failed to start local tournament match" });
       }
@@ -1227,5 +1326,5 @@ export function setupSocketIO(httpServer: any) {
     });
   });
 
-  return { io, socketToUserMap };
+  return { io, socketToUserMap, getRuntimeMetrics };
 }

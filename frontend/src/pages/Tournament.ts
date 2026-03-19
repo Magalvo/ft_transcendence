@@ -5,16 +5,19 @@ import { TournamentBracket } from '../components/tournament/TournamentBracket';
 import { TournamentManager } from '../core/TournamentManager';
 
 export class TournamentPage extends AbstractComponent {
+  private navbar: Navbar | null = null;
+
   constructor() {
     super('div', 'min-h-screen bg-gray-900 text-white');
   }
 
   public render(): void {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const container = document.createElement('div');
     container.className = 'container mx-auto p-6 mt-10 flex flex-col items-center';
@@ -50,5 +53,14 @@ export class TournamentPage extends AbstractComponent {
     }
 
     this.element.appendChild(container);
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 }

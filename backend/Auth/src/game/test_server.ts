@@ -11,7 +11,8 @@ const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-const lobby = new Lobby(io);
+const socketToUserMap = new Map<string, string>();
+const lobby = new Lobby(io, socketToUserMap);
 
 console.log("--- LOBBY SERVER STARTED ---");
 

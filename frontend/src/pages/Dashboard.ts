@@ -10,20 +10,24 @@ import { navigateTo } from '../core/AppRouter';
 import { formatDateTime, t } from '../services/I18nService';
 
 export class DashboardPage extends AbstractComponent {
+  private navbar: Navbar | null = null;
+  private background: HyperspeedWrapper | null = null;
+
   constructor() {
     super('div', 'min-h-screen relative text-white');
   }
 
   public async render(): Promise<void> {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const bg = new HyperspeedWrapper(hyperspeedPresets.two);
-    bg.render();
-    this.element.appendChild(bg.getElement());
+    this.background = new HyperspeedWrapper(hyperspeedPresets.two);
+    this.background.render();
+    this.element.appendChild(this.background.getElement());
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const container = document.createElement('div');
     container.className = 'container mx-auto p-6 mt-16 relative z-10';
@@ -228,5 +232,16 @@ export class DashboardPage extends AbstractComponent {
     if (status === 'online') return t('dashboard.status.online');
     if (status === 'ingame') return t('dashboard.status.ingame');
     return t('dashboard.status.offline');
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
+    this.background?.onDestroy();
+    this.background = null;
   }
 }

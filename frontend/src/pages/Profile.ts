@@ -7,16 +7,19 @@ import type { UserProfile, Match, Friend } from '../core/UserStore';
 import { formatDate, t } from '../services/I18nService';
 
 export class ProfilePage extends AbstractComponent {
+  private navbar: Navbar | null = null;
+
   constructor() {
     super('div', 'min-h-screen bg-gray-900 text-white');
   }
 
   public async render(): Promise<void> {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const user = await UserService.getProfile(true);
     const incomingRequests = await UserService.getIncomingFriendRequests();
@@ -590,5 +593,14 @@ export class ProfilePage extends AbstractComponent {
     if (status === 'online') return t('profile.status.online');
     if (status === 'ingame') return t('profile.status.ingame');
     return t('profile.status.offline');
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 }

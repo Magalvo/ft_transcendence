@@ -937,6 +937,7 @@ class App {
   speedUpTarget: number;
   speedUp: number;
   timeOffset: number;
+  onWindowResizeHandler: () => void;
 
   constructor(container: HTMLElement, options: HyperspeedOptions) {
     this.options = options;
@@ -1010,8 +1011,9 @@ class App {
     this.onTouchStart = this.onTouchStart.bind(this);
     this.onTouchEnd = this.onTouchEnd.bind(this);
     this.onContextMenu = this.onContextMenu.bind(this);
+    this.onWindowResizeHandler = this.onWindowResize.bind(this);
 
-    window.addEventListener('resize', this.onWindowResize.bind(this));
+    window.addEventListener('resize', this.onWindowResizeHandler);
   }
 
   onWindowResize() {
@@ -1182,7 +1184,7 @@ class App {
       this.scene.clear();
     }
 
-    window.removeEventListener('resize', this.onWindowResize.bind(this));
+    window.removeEventListener('resize', this.onWindowResizeHandler);
     
     window.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('mouseup', this.onMouseUp);

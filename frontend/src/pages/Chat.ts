@@ -17,6 +17,7 @@ import { WS_URL } from "../services/RuntimeConfig";
 
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
+  private navbar: Navbar | null = null;
   private currentUser: ChatUser | null = null;
   private groups: ChatGroup[] = [];
   private users: ChatListUser[] = [];
@@ -53,17 +54,21 @@ export class ChatPage extends AbstractComponent {
   private chatSocket: Socket | null = null;
   private realtimeReady = false;
   private refreshTimer: number | null = null;
+  private destroyed = false;
+  private bootstrapToken = 0;
 
   constructor() {
     super("div", "h-screen overflow-hidden bg-neutral-950 text-white");
   }
 
   public render(): void {
+    this.destroyed = false;
+    this.destroyOwnedUi();
     this.element.innerHTML = "";
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const shell = document.createElement("div");
     shell.className = "mx-auto flex h-[calc(100vh-5rem)] w-full max-w-[1500px] gap-4 px-4 py-4";
@@ -204,30 +209,40 @@ export class ChatPage extends AbstractComponent {
     this.inviteMemberBtnEl?.addEventListener("click", () => void this.handleInviteMember());
     this.settingsBtnEl?.addEventListener("click", () => void this.handleChannelSettings());
 
-    void this.bootstrap();
+    const token = ++this.bootstrapToken;
+    void this.bootstrap(token);
   }
 
-  private async bootstrap(): Promise<void> {
+  private async bootstrap(token: number): Promise<void> {
     try {
       this.currentUser = await ChatService.getCurrentUser();
     } catch {
+      if (this.destroyed || token !== this.bootstrapToken) return;
       window.location.href = "/login";
       return;
     }
+
+    if (this.destroyed || token !== this.bootstrapToken) return;
     await this.refreshBlockedUsers();
+    if (this.destroyed || token !== this.bootstrapToken) return;
     this.initRealtime();
     this.users = await ChatService.getUsers();
+    if (this.destroyed || token !== this.bootstrapToken) return;
     this.groups = await ChatService.getGroups();
+    if (this.destroyed || token !== this.bootstrapToken) return;
     this.currentGroupId = this.groups[0]?.id_group ?? null;
     this.renderUsers();
     this.renderGroups();
 
     if (this.currentGroupId !== null) {
       await this.selectGroup(this.currentGroupId);
+      if (this.destroyed || token !== this.bootstrapToken) return;
     } else {
       this.renderMessages();
       this.renderMembers();
     }
+
+    if (this.destroyed || token !== this.bootstrapToken) return;
     this.startAutoRefresh();
   }
 
@@ -392,7 +407,7 @@ export class ChatPage extends AbstractComponent {
   }
 
   private initRealtime(): void {
-    if (!this.currentUser) return;
+    if (!this.currentUser || this.destroyed) return;
     this.chatSocket = io(WS_URL, {
       auth: { token: TokenManager.getAccessToken() || undefined },
       withCredentials: true,
@@ -939,11 +954,20 @@ export class ChatPage extends AbstractComponent {
   }
 
   public onDestroy(): void {
+    this.destroyed = true;
+    this.bootstrapToken += 1;
+    this.destroyOwnedUi();
+
     if (this.refreshTimer !== null) {
       window.clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
     this.chatSocket?.disconnect();
     this.chatSocket = null;
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 }

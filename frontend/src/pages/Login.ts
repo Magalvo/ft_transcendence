@@ -13,6 +13,7 @@ import {
 } from '../services/I18nService';
 
 export class LoginPage extends AbstractComponent {
+  private background: GridScanWrapper | null = null;
   private isRegisterMode = false;
   private usernameInput: Input;
   private passwordInput: Input;
@@ -48,14 +49,15 @@ export class LoginPage extends AbstractComponent {
   }
 
   public render(): void {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const background = new GridScanWrapper({
+    this.background = new GridScanWrapper({
       enableWebcam: true,
       bloomIntensity: 1.5,
     });
-    background.render();
-    this.element.appendChild(background.getElement());
+    this.background.render();
+    this.element.appendChild(this.background.getElement());
     this.element.appendChild(this.buildLanguageSwitcher());
 
     const card = new Card('w-full max-w-md bg-white/10 backdrop-blur-sm relative z-10');
@@ -518,5 +520,14 @@ export class LoginPage extends AbstractComponent {
     link.className = className;
     link.textContent = label;
     return link;
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+  }
+
+  private destroyOwnedUi(): void {
+    this.background?.onDestroy();
+    this.background = null;
   }
 }

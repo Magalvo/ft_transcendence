@@ -1,8 +1,26 @@
-import type { OAuth2Plugin } from '@fastify/oauth2';
+import type { Server as SocketIOServer } from "socket.io";
 
-declare module 'fastify' {
-  // Add the Google OAuth plugin to FastifyInstance
+type RealtimeMetrics = {
+  timestamp: number;
+  connectedSockets: number;
+  socketToUserEntries: number;
+  authenticatedUsers: number;
+  userSocketBindings: number;
+  activeLobbyBindings: number;
+  publicLobbies: number;
+  privateInviteLobbies: number;
+  pendingTournamentMatches: number;
+  pendingTournamentSlots: number;
+  pendingLocalTournamentMatches: number;
+  pendingLocalTournamentSlots: number;
+  activeLocalTournamentGames: number;
+};
+
+declare module "fastify" {
   interface FastifyInstance {
-    googleOAuth2: OAuth2Plugin;
+    googleOAuth2: unknown;
+    hasMultipart: boolean;
+    io?: SocketIOServer;
+    getRealtimeMetrics?: () => RealtimeMetrics;
   }
 }

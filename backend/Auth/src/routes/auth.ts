@@ -409,6 +409,14 @@ export default async function authRoutes(app: FastifyInstance) {
   // --- UPLOAD AVATAR ---
   app.post("/users/avatar", async (req, reply) => {
     try {
+      if (!app.hasMultipart) {
+        return sendError(
+          reply,
+          "Avatar uploads are unavailable because the multipart plugin is not installed in this workspace",
+          503,
+        );
+      }
+
       const authHeader = req.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith("Bearer ")) {

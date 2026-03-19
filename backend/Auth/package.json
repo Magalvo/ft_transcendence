@@ -6,6 +6,7 @@
     "dev": "tsx src/initDb.ts && tsx src/server.ts",
     "app": "tsx src/server.ts",
     "build": "tsc -p tsconfig.json",
+    "test": "node --test --experimental-strip-types --experimental-test-isolation=none test/**/*.test.ts",
     "init-db": "tsx src/initDb.ts",
     "start": "node dist/server.js"
   },

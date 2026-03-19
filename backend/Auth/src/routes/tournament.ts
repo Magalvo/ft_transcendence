@@ -103,7 +103,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
     { preHandler: auth },
     async (req, reply) => {
       try {
-        const { tournamentId, matchId } = req.params as any;
+        const { matchId } = req.params as any;
         const { gameId, winnerId, player1Score, player2Score } = req.body as any;
 
         if (!gameId || !winnerId || player1Score === undefined || player2Score === undefined) {

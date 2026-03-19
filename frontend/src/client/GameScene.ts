@@ -150,6 +150,7 @@ export class GameScene {
           this.socket.off('countdown');
           this.socket.off('endGame');
           this.socket.off('matchRecorded');
+          this.socket.off('matchRecordError');
           this.socket.off('gameState');
           console.log('🧹 Cleaned up game socket listeners');
         } catch (e) {

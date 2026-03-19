@@ -10,16 +10,20 @@ import { TokenManager } from '../services/TokenManager';
 import { t } from '../services/I18nService';
 
 export class HomePage extends AbstractComponent {
+  private navbar: Navbar | null = null;
+  private background: HyperspeedWrapper | null = null;
+
   constructor() {
     super("div", "min-h-screen relative overflow-hidden text-white");
   }
 
   public async render(): Promise<void> {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const bg = new HyperspeedWrapper(hyperspeedPresets.one);
-    bg.render();
-    this.element.appendChild(bg.getElement());
+    this.background = new HyperspeedWrapper(hyperspeedPresets.one);
+    this.background.render();
+    this.element.appendChild(this.background.getElement());
 
     if (TokenManager.isAuthenticated()) {
       try {
@@ -31,9 +35,14 @@ export class HomePage extends AbstractComponent {
       }
     }
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    if (!this.element.isConnected) {
+      this.destroyOwnedUi();
+      return;
+    }
+
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const hero = document.createElement('div');
     hero.className = 'flex flex-col items-center justify-center py-20 bg-gradient-to-b from-gray-800 to-gray-900';
@@ -77,5 +86,16 @@ export class HomePage extends AbstractComponent {
 
     this.element.appendChild(hero);
     this.element.appendChild(grid);
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
+    this.background?.onDestroy();
+    this.background = null;
   }
 }

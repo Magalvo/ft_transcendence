@@ -2,8 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyCookie from "@fastify/cookie";
 import dotenv from "dotenv";
-import path, { dirname } from "path";
-import { fileURLToPath } from "url";
+import path from "path";
 import fastifyStatic from "@fastify/static";
 
 import healthRoutes from "./routes/health.js";
@@ -13,16 +12,11 @@ import { readConfigValue } from "./utils/env.js";
 import "reflect-metadata";
 import { setupSocketIO } from "./socket/index.js";
 import gameRoutes from "./routes/games.js";
-import chatRoutes from './routes/chat.js';
-import tournamentRoutes from './routes/tournament.js';
-import { CONFIG } from './game/config.js';
-import multipart from "@fastify/multipart";
+import chatRoutes from "./routes/chat.js";
+import tournamentRoutes from "./routes/tournament.js";
+import { CONFIG } from "./game/config.js";
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const JWT_SECRET = readConfigValue("JWT_SECRET");
 if (!JWT_SECRET) {
@@ -31,15 +25,18 @@ if (!JWT_SECRET) {
 }
 
 const app = Fastify({ logger: true });
+app.hasMultipart = false;
 
-app.get("/ok", (req, reply) => {
-    sendSuccess(reply, { message: "It works!" });
+app.get("/ok", (_req, reply) => {
+  sendSuccess(reply, { message: "It works!" });
 });
 
 app.register(cors, { origin: true });
 app.register(fastifyCookie);
-app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
-app.register(fastifyStatic, { root: path.join(process.cwd(), "public"), prefix: "/" });
+app.register(fastifyStatic, {
+  root: path.join(process.cwd(), "public"),
+  prefix: "/",
+});
 
 app.register(healthRoutes);
 
@@ -71,40 +68,64 @@ try {
   process.exit(1);
 }
 
-app.ready(err => {
-  if (err) {
-    console.error(err);
-    process.exit(1);
-  }
-  console.log("🛣️ Registered routes:");
-  console.log(app.printRoutes());
-});
-
-app.get("/", async (request, reply) => {
+app.get("/", async () => {
   return { message: "Welcome to ft_transcendence API", status: "ok" };
 });
 
-app.get('/api/test', async () => {
+app.get("/api/test", async () => {
   return { ok: true };
 });
 
+async function importOptionalModule<T>(specifier: string): Promise<T | null> {
+  try {
+    return (await import(specifier)) as T;
+  } catch (error: any) {
+    if (
+      error?.code === "ERR_MODULE_NOT_FOUND" ||
+      error?.code === "MODULE_NOT_FOUND"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function registerOptionalMultipartPlugin() {
+  const multipartModule = await importOptionalModule<{ default?: unknown }>(
+    "@fastify/multipart",
+  );
+
+  if (!multipartModule?.default) {
+    app.log.warn(
+      "Skipping multipart plugin registration because @fastify/multipart is not installed in this workspace.",
+    );
+    return;
+  }
+
+  app.register(multipartModule.default as any, {
+    limits: { fileSize: 10 * 1024 * 1024 },
+  });
+  app.hasMultipart = true;
+}
 
 const start = async () => {
   try {
     const port = Number(process.env.PORT ?? CONFIG.PORT);
 
+    await registerOptionalMultipartPlugin();
     await app.ready();
+    console.log("Registered routes:");
+    console.log(app.printRoutes());
 
-    // Get the underlying HTTP server from Fastify
     const httpServer = app.server;
+    const { io, getRuntimeMetrics } = setupSocketIO(httpServer);
+    app.io = io;
+    app.getRealtimeMetrics = getRuntimeMetrics;
 
-    setupSocketIO(httpServer);
-
-    // Use Fastify's listen method instead
     await app.listen({ port, host: "0.0.0.0" });
 
     console.log(`Server running on port ${port}`);
-
   } catch (err) {
     console.error("Server failed to start:", err);
     process.exit(1);

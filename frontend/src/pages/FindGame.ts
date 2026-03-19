@@ -23,6 +23,7 @@ interface GameLobby {
 }
 
 export class FindGamePage extends AbstractComponent {
+  private navbar: Navbar | null = null;
   private socket: Socket | null = null;
   private lobbies: GameLobby[] = [];
   private currentUser: UserProfile | null = null;
@@ -106,11 +107,12 @@ export class FindGamePage extends AbstractComponent {
   }
 
   public async render(): Promise<void> {
+    this.destroyOwnedUi();
     this.element.innerHTML = '';
 
-    const navbar = new Navbar();
-    navbar.render();
-    this.element.appendChild(navbar.getElement());
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
 
     const container = document.createElement('div');
     container.className = 'flex-1 w-full p-6 bg-neutral-900 text-white';
@@ -549,6 +551,8 @@ export class FindGamePage extends AbstractComponent {
   }
 
   public onDestroy(): void {
+    this.destroyOwnedUi();
+
     if (this.socket) {
       this.socket.off('connect', this.onSocketConnect);
       this.socket.off('disconnect', this.onSocketDisconnect);
@@ -577,6 +581,11 @@ export class FindGamePage extends AbstractComponent {
     this.lobbies = [];
     this.currentUser = null;
     this.isRefreshing = false;
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 
   private getModeLabel(mode: GameLobby['mode']): string {

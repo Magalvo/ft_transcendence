@@ -66,11 +66,5 @@ if (TokenManager.isAuthenticated()) {
   initTournamentInviteNotifier();
 }
 
-window.addEventListener('popstate', () => {
-  if (TokenManager.isAuthenticated()) {
-    initTournamentInviteNotifier();
-  }
-});
-
 // 5. Start the App
 router.init();

@@ -13,12 +13,15 @@ export interface LobbySlot {
 }
 
 export class Lobby {
+  private static readonly USER_CACHE_TTL_MS = 10 * 60 * 1000;
+  private static readonly USER_CACHE_MAX_ENTRIES = 1000;
+
   private io: Server;
   private roomId: string;
   private clients: string[] = [];
   private leader: string | null = null; // Explicitly track the leader
   private socketToUserMap: Map<string, string>;
-  private userDataCache: Map<string, { id: string; username: string }> =
+  private userDataCache: Map<string, { id: string; username: string; cachedAt: number }> =
     new Map();
   private removeCallback?: () => void;
 
@@ -387,8 +390,12 @@ export class Lobby {
   }
 
   private async fetchUserData(userId: string) {
-    if (this.userDataCache.has(userId)) {
-      return this.userDataCache.get(userId)!;
+    const cached = this.userDataCache.get(userId);
+    if (cached) {
+      if (Date.now() - cached.cachedAt <= Lobby.USER_CACHE_TTL_MS) {
+        return { id: cached.id, username: cached.username };
+      }
+      this.userDataCache.delete(userId);
     }
 
     try {
@@ -398,7 +405,19 @@ export class Lobby {
         .first();
 
       if (user) {
-        this.userDataCache.set(userId, user);
+        this.userDataCache.set(userId, {
+          id: user.id,
+          username: user.username,
+          cachedAt: Date.now(),
+        });
+
+        // Keep insertion-ordered map bounded to avoid process-lifetime growth.
+        while (this.userDataCache.size > Lobby.USER_CACHE_MAX_ENTRIES) {
+          const oldestKey = this.userDataCache.keys().next().value;
+          if (!oldestKey) break;
+          this.userDataCache.delete(oldestKey);
+        }
+
         return user;
       }
     } catch (error) {

@@ -6,6 +6,7 @@ import { JoinWarpTransition } from "../games/spacedout/JoinWarpTransition";
 import "../games/spacedout/style.css";
 
 export class SpacedOutPage extends AbstractComponent {
+  private navbar: Navbar | null = null;
   private game: SpacedOutGame | null = null;
   private isMounted = false;
   private joinTransition: JoinWarpTransition | null = null;
@@ -17,13 +18,14 @@ export class SpacedOutPage extends AbstractComponent {
 
   public render(): void {
     this.isMounted = true;
+    this.destroyOwnedUi();
     this.element.innerHTML = "";
 
-    const navbar = new Navbar();
-    navbar.render();
+    this.navbar = new Navbar();
+    this.navbar.render();
     const navbarSlot = document.createElement("div");
     navbarSlot.className = "spacedout-nav-slot";
-    navbarSlot.appendChild(navbar.getElement());
+    navbarSlot.appendChild(this.navbar.getElement());
     this.element.appendChild(navbarSlot);
 
     const content = document.createElement("main");
@@ -561,11 +563,17 @@ export class SpacedOutPage extends AbstractComponent {
 
   public onDestroy(): void {
     this.isMounted = false;
+    this.destroyOwnedUi();
     this.game?.destroy();
     this.game = null;
     this.joinTransition?.destroy();
     this.joinTransition = null;
     this.joinTransitionPlay = null;
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
   }
 
   private mountJoinTransitionOverlay(): void {

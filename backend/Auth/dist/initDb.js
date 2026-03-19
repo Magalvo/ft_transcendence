@@ -420,6 +420,32 @@ async function main() {
         else {
             console.log("Table 'tournament_matches' already exists");
         }
+        // Create tournament_match_invites table
+        const tournamentMatchInvitesExists = await db.schema.hasTable("tournament_match_invites");
+        if (!tournamentMatchInvitesExists) {
+            await db.schema.createTable("tournament_match_invites", (table) => {
+                table.uuid("id").primary().notNullable();
+                table.uuid("tournament_id").notNullable();
+                table.uuid("match_id").notNullable();
+                table.uuid("to_user_id").notNullable();
+                table.uuid("requested_by").notNullable();
+                table.string("invite_token").notNullable().unique();
+                table.string("status").notNullable().defaultTo("pending"); // pending, accepted, expired
+                table.bigInteger("sent_at").notNullable();
+                table.bigInteger("expires_at").notNullable();
+                table.bigInteger("accepted_at").nullable();
+                table.foreign("tournament_id").references("id").inTable("tournaments").onDelete("CASCADE");
+                table.foreign("match_id").references("id").inTable("tournament_matches").onDelete("CASCADE");
+                table.foreign("to_user_id").references("id").inTable("users").onDelete("CASCADE");
+                table.foreign("requested_by").references("id").inTable("users").onDelete("CASCADE");
+                table.index(["match_id", "status"]);
+                table.index(["to_user_id", "status"]);
+            });
+            console.log("Table 'tournament_match_invites' created!");
+        }
+        else {
+            console.log("Table 'tournament_match_invites' already exists");
+        }
         await db.raw("PRAGMA foreign_keys = ON;");
         console.log("Foreign keys enabled!");
         process.exit(0);
