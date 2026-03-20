@@ -25,7 +25,7 @@ export function setupSocketListeners(socket: Socket, handleEvents: HandleEvents)
         console.log("✅ Match recorded:", data);
        
         window.dispatchEvent(new CustomEvent('match-stats-updated', { 
-            detail: { matchId: data.gameId, winner: data.winner }
+            detail: { gameId: data.gameId, winner: data.winner }
         }));
     });
 

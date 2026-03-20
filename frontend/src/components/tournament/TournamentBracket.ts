@@ -83,12 +83,16 @@ export class TournamentBracket extends AbstractComponent {
           `;
 
 
-      const isPendingMatch = !match.winner_id && Boolean(match.player1_id) && Boolean(match.player2_id);
+      const isPlayableMatch =
+        (match.status === "pending" || match.status === "in_progress") &&
+        !match.winner_id &&
+        Boolean(match.player1_id) &&
+        Boolean(match.player2_id);
       const isCurrentUserInMatch =
         Boolean(currentUserId) &&
         (match.player1_id === currentUserId || match.player2_id === currentUserId);
 
-      if (isPendingMatch && isCurrentUserInMatch) {
+      if (isPlayableMatch && isCurrentUserInMatch) {
         const playBtn = document.createElement("button");
         playBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition";
         playBtn.textContent = "PLAY";
@@ -96,6 +100,14 @@ export class TournamentBracket extends AbstractComponent {
           navigateTo(`/game?matchId=${match.id}&p1=${match.player1_id}&p2=${match.player2_id}&tournamentId=${match.tournament_id}`);
         };
         matchCard.appendChild(playBtn);
+      } else if (match.status === "pending_confirmation" || match.status === "review_required") {
+        const statusLabel = document.createElement("div");
+        statusLabel.className = "mt-4 text-center text-xs text-amber-300";
+        statusLabel.textContent =
+          match.status === "pending_confirmation"
+            ? "Waiting for result confirmation"
+            : "Waiting for host review";
+        matchCard.appendChild(statusLabel);
       }
 
           roundContainer.appendChild(matchCard);

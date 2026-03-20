@@ -8,7 +8,7 @@ export interface TournamentMatch {
     winner_id: string | null;
     player1_score: number;
     player2_score: number;
-    status: "pending" | "in_progress" | "completed";
+    status: "pending" | "in_progress" | "pending_confirmation" | "review_required" | "completed";
     round: number;
     match_number: number;
 }

@@ -208,4 +208,18 @@ export class GameScene {
     if (leftScore === rightScore) return null;
     return leftScore > rightScore ? "A" : "B";
   }
+
+  public getTournamentFinalScore():
+    | { player1Score: number; player2Score: number }
+    | null {
+    if (!this.data?.mods?.score) return null;
+    if (this.data.mySide !== "left" && this.data.mySide !== "right") return null;
+
+    const myScore = this.data.mods.score.me;
+    const rivalScore = this.data.mods.score.rival;
+
+    return this.data.mySide === "left"
+      ? { player1Score: myScore, player2Score: rivalScore }
+      : { player1Score: rivalScore, player2Score: myScore };
+  }
 }

@@ -3,6 +3,7 @@ import { Navbar } from '../components/layout/Navbar';
 import { TournamentForm, type TournamentParticipant } from '../components/tournament/TournamentForm';
 import { TournamentBracket } from '../components/tournament/TournamentBracket';
 import { TournamentManager } from '../core/TournamentManager';
+import { TournamentService } from '../services/TournamentService';
 import { UserService } from '../services/UserService';
 
 export class TournamentPage extends AbstractComponent {
@@ -46,7 +47,16 @@ export class TournamentPage extends AbstractComponent {
     container.innerHTML = '';
 
     const manager = TournamentManager.getInstance();
-    const currentTournament = manager.getCurrentTournament();
+    let currentTournament = manager.getCurrentTournament();
+
+    if (currentTournament && !currentTournament.id.startsWith('local-')) {
+      try {
+        currentTournament = await TournamentService.getTournament(currentTournament.id);
+        manager.setCurrentTournament(currentTournament);
+      } catch (error) {
+        console.warn('Failed to refresh remote tournament state:', error);
+      }
+    }
 
     if (!currentTournament) {
       // Show form to create new tournament

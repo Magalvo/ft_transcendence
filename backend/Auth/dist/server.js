@@ -20,6 +20,7 @@ if (!JWT_SECRET) {
     console.error("FATAL: JWT_SECRET is not defined. Authentication will not work.");
     process.exit(1);
 }
+process.env.JWT_SECRET = JWT_SECRET;
 const app = Fastify({ logger: true });
 app.hasMultipart = false;
 app.get("/ok", (_req, reply) => {
@@ -32,13 +33,6 @@ app.register(fastifyStatic, {
     prefix: "/",
 });
 app.register(healthRoutes);
-try {
-    app.register(authRoutes, { prefix: "/api" });
-}
-catch (err) {
-    console.error("Failed to register authRoutes:", err);
-    process.exit(1);
-}
 try {
     app.register(gameRoutes, { prefix: "/api" });
 }
@@ -78,21 +72,23 @@ async function importOptionalModule(specifier) {
         throw error;
     }
 }
-async function registerOptionalMultipartPlugin() {
-    const multipartModule = await importOptionalModule("@fastify/multipart");
-    if (!multipartModule?.default) {
-        app.log.warn("Skipping multipart plugin registration because @fastify/multipart is not installed in this workspace.");
-        return;
-    }
-    app.register(multipartModule.default, {
-        limits: { fileSize: 10 * 1024 * 1024 },
-    });
-    app.hasMultipart = true;
-}
 const start = async () => {
     try {
         const port = Number(process.env.PORT ?? CONFIG.PORT);
-        await registerOptionalMultipartPlugin();
+        app.register(async (authScope) => {
+            authScope.hasMultipart = false;
+            const multipartModule = await importOptionalModule("@fastify/multipart");
+            if (!multipartModule?.default) {
+                authScope.log.warn("Skipping multipart plugin registration because @fastify/multipart is not installed in this workspace.");
+            }
+            else {
+                authScope.register(multipartModule.default, {
+                    limits: { fileSize: 10 * 1024 * 1024 },
+                });
+                authScope.hasMultipart = true;
+            }
+            authScope.register(authRoutes, { prefix: "/api" });
+        });
         await app.ready();
         console.log("Registered routes:");
         console.log(app.printRoutes());

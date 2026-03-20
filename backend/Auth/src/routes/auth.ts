@@ -75,7 +75,10 @@ function normalizeGoogleUsername(profile: any): string {
 }
 
 function normalizeGoogleAvatarUrl(profile: any): string | null {
-  const avatar = String(profile?.picture || "").trim();
+  const rawAvatar = String(profile?.picture || "").trim();
+  const avatar = rawAvatar.startsWith("//")
+    ? `https:${rawAvatar}`
+    : rawAvatar;
   if (!avatar) return null;
   if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
     return null;
@@ -182,7 +185,13 @@ export default async function authRoutes(app: FastifyInstance) {
                     true,
                   ],
                 );
-                user = { id, username, email: profile.email, online: true };
+                user = {
+                  id,
+                  username,
+                  email: profile.email,
+                  online: true,
+                  avatarUrl: googleAvatarUrl,
+                };
               } else {
                 const existingAvatar = String(
                   (user as any).avatarUrl || "",
@@ -199,6 +208,7 @@ export default async function authRoutes(app: FastifyInstance) {
                     googleAvatarUrl,
                     user.id,
                   ]);
+                  (user as any).avatarUrl = googleAvatarUrl;
                 }
               }
 

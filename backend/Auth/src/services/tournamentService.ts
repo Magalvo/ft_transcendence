@@ -26,6 +26,15 @@ type SubmitTournamentMatchResultInput = {
   reviewOverride?: boolean;
 };
 
+type RecordedMatchValidationContext = {
+  player1Id: string;
+  player2Id: string;
+  winnerId: string;
+  player1Score: number;
+  player2Score: number;
+  gameId: string;
+};
+
 interface CreateTournamentInput {
   name: string;
   created_by: string;
@@ -150,6 +159,103 @@ function generateBracket(tournamentId: string, playerIds: string[], now: Date) {
   return matches;
 }
 
+function validateSubmittedTournamentScores(
+  player1Score: number,
+  player2Score: number,
+  winnerId: string,
+  player1Id: string,
+  player2Id: string,
+) {
+  if (!Number.isInteger(player1Score) || !Number.isInteger(player2Score)) {
+    throw new TournamentResultError("Scores must be whole numbers", 400);
+  }
+
+  if (player1Score < 0 || player2Score < 0) {
+    throw new TournamentResultError("Scores cannot be negative", 400);
+  }
+
+  if (player1Score === player2Score) {
+    throw new TournamentResultError("Tournament matches cannot end in a draw", 400);
+  }
+
+  const expectedWinnerId =
+    player1Score > player2Score ? player1Id : player2Id;
+
+  if (winnerId !== expectedWinnerId) {
+    throw new TournamentResultError(
+      "winnerId must match the player with the higher score",
+      400,
+    );
+  }
+}
+
+async function validateRecordedMatchResult(
+  trx: any,
+  context: RecordedMatchValidationContext,
+) {
+  const recordedMatch = await trx("matches")
+    .where({ id: context.gameId })
+    .first();
+
+  if (!recordedMatch) {
+    throw new TournamentResultError("Recorded match not found", 404);
+  }
+
+  const recordedGame = await trx("games")
+    .where({ id: context.gameId })
+    .first();
+
+  if (!recordedGame) {
+    throw new TournamentResultError("Recorded game payload not found", 404);
+  }
+
+  if (
+    String(recordedMatch.player1_id) !== context.player1Id ||
+    String(recordedMatch.player2_id) !== context.player2Id
+  ) {
+    throw new TournamentResultError(
+      "Recorded match participants do not match the tournament bracket",
+      409,
+    );
+  }
+
+  if (
+    Number(recordedMatch.player1_score) !== context.player1Score ||
+    Number(recordedMatch.player2_score) !== context.player2Score
+  ) {
+    throw new TournamentResultError(
+      "Submitted score does not match the recorded match result",
+      409,
+    );
+  }
+
+  if (
+    Number(recordedGame.team_a_score) !== context.player1Score ||
+    Number(recordedGame.team_b_score) !== context.player2Score
+  ) {
+    throw new TournamentResultError(
+      "Submitted score does not match the recorded final game score",
+      409,
+    );
+  }
+
+  const expectedRecordedWinner =
+    context.player1Score > context.player2Score ? "A" : "B";
+  if (String(recordedGame.winner) !== expectedRecordedWinner) {
+    throw new TournamentResultError(
+      "Recorded game winner does not match the submitted result",
+      409,
+    );
+  }
+
+  if (String(recordedMatch.winner_id || "") !== context.winnerId) {
+    throw new TournamentResultError(
+      "Recorded match winner does not match the submitted winner",
+      409,
+    );
+  }
+}
+
 /**
  * Get tournament with all matches
  */
@@ -163,9 +269,10 @@ export async function getTournament(tournamentId: string) {
       return null;
     }
 
-    const participants = await db("tournament_participants")
+    const participants = await db("tournament_participants as tp")
+      .join("users as u", "u.id", "tp.user_id")
       .where({ tournament_id: tournamentId })
-      .select("user_id");
+      .select("u.id", "u.username");
 
     const matches = await db("tournament_matches")
       .where({ tournament_id: tournamentId })
@@ -173,7 +280,11 @@ export async function getTournament(tournamentId: string) {
 
     return {
       ...tournament,
-      participants: participants.map((p: any) => p.user_id),
+      participants: participants.map((p: any) => ({
+        id: String(p.id),
+        username: String(p.username),
+        isAI: false,
+      })),
       matches,
     };
   } catch (error) {
@@ -215,10 +326,6 @@ export async function submitTournamentMatchResult(
     if (!gameId) {
       throw new TournamentResultError("Game id is required", 400);
     }
-    if (!Number.isFinite(player1Score) || !Number.isFinite(player2Score)) {
-      throw new TournamentResultError("Scores must be numeric values", 400);
-    }
-
     return await db.transaction(async (trx) => {
       const match = await trx("tournament_matches as tm")
         .join("tournaments as t", "t.id", "tm.tournament_id")
@@ -260,6 +367,35 @@ export async function submitTournamentMatchResult(
         throw new TournamentResultError(
           "winnerId must be one of the match participants",
           400,
+        );
+      }
+
+      validateSubmittedTournamentScores(
+        player1Score,
+        player2Score,
+        winnerId,
+        String(match.player1_id),
+        String(match.player2_id),
+      );
+
+      await validateRecordedMatchResult(trx, {
+        player1Id: String(match.player1_id),
+        player2Id: String(match.player2_id),
+        winnerId,
+        player1Score,
+        player2Score,
+        gameId,
+      });
+
+      const duplicatedGameUsage = await trx("tournament_matches")
+        .where({ game_id: gameId })
+        .whereNot({ id: match.id })
+        .first();
+
+      if (duplicatedGameUsage) {
+        throw new TournamentResultError(
+          "This recorded game is already attached to another tournament match",
+          409,
         );
       }
 

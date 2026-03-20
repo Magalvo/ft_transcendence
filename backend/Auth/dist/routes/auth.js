@@ -55,7 +55,10 @@ function normalizeGoogleUsername(profile) {
     return base.length < 3 ? `${base}_user`.slice(0, 20) : base;
 }
 function normalizeGoogleAvatarUrl(profile) {
-    const avatar = String(profile?.picture || "").trim();
+    const rawAvatar = String(profile?.picture || "").trim();
+    const avatar = rawAvatar.startsWith("//")
+        ? `https:${rawAvatar}`
+        : rawAvatar;
     if (!avatar)
         return null;
     if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
@@ -136,7 +139,13 @@ export default async function authRoutes(app) {
                                 nowIso,
                                 true,
                             ]);
-                            user = { id, username, email: profile.email, online: true };
+                            user = {
+                                id,
+                                username,
+                                email: profile.email,
+                                online: true,
+                                avatarUrl: googleAvatarUrl,
+                            };
                         }
                         else {
                             const existingAvatar = String(user.avatarUrl || "").trim();
@@ -148,6 +157,7 @@ export default async function authRoutes(app) {
                                     googleAvatarUrl,
                                     user.id,
                                 ]);
+                                user.avatarUrl = googleAvatarUrl;
                             }
                         }
                         await db.raw("UPDATE users SET online = ?, last_request = ? WHERE id = ?", [true, nowIso, user.id]);
