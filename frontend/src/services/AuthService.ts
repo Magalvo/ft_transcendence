@@ -1,8 +1,12 @@
-import { ApiClient } from "./ApiClient";
-import { TokenManager } from "./TokenManager";
-import { UserService } from "./UserService";
-import { API_URL } from "./RuntimeConfig";
-import userRegister from "../interfaces/userRegister";
+import { ApiClient } from "./ApiClient.ts";
+import { TokenManager } from "./TokenManager.ts";
+import { UserService } from "./UserService.ts";
+import { API_URL } from "./RuntimeConfig.ts";
+import userRegister from "../interfaces/userRegister.ts";
+import {
+  processGoogleCallback,
+  type GoogleCallbackResult,
+} from "./OAuthCallbackService.ts";
 
 interface LoginResponse {
   token?: string;
@@ -379,30 +383,22 @@ export class AuthService {
    * Handle Google OAuth callback (called from URL params)
    * Expected URL: /login?token=xxx&refreshToken=yyy
    */
-  async handleGoogleCallback(): Promise<boolean> {
+  async handleGoogleCallback(): Promise<GoogleCallbackResult> {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
-      const refreshToken = params.get("refreshToken");
+      const result = await processGoogleCallback(window.location.search, {
+        setTokens: (token, refreshToken) =>
+          TokenManager.setTokens(token, refreshToken, 1),
+        loadProfile: async () => {
+          await UserService.getProfile();
+          console.log("Google OAuth: User profile loaded");
+        },
+      });
 
-      if (!token || !refreshToken) {
-        throw new Error("Missing token from Google OAuth");
+      if (!result.profileLoaded) {
+        console.warn("Failed to load user profile from Google callback");
       }
 
-      TokenManager.setTokens(token, refreshToken, 1);
-
-      try {
-        await UserService.getProfile();
-        console.log("Google OAuth: User profile loaded");
-      } catch (profileError) {
-        console.warn(
-          "Failed to load user profile from Google callback:",
-          profileError,
-        );
-      }
-
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return true;
+      return result;
     } catch (error: any) {
       console.error("Google OAuth callback failed:", error);
       throw error;

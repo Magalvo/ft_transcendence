@@ -412,7 +412,13 @@ async function main() {
                 table.uuid("winner_id").nullable();
                 table.integer("player1_score").defaultTo(0);
                 table.integer("player2_score").defaultTo(0);
-                table.string("status").notNullable().defaultTo("pending"); // pending, in_progress, completed
+                table.string("status").notNullable().defaultTo("pending"); // pending, in_progress, pending_confirmation, review_required, completed
+                table.uuid("reported_by_user_id").nullable();
+                table.uuid("confirmed_by_user_id").nullable();
+                table.timestamp("result_submitted_at").nullable();
+                table.timestamp("result_confirmed_at").nullable();
+                table.boolean("requires_review").notNullable().defaultTo(false);
+                table.string("review_reason").nullable();
                 table.timestamp("created_at").notNullable();
                 table.timestamp("completed_at").nullable();
                 table.foreign("tournament_id").references("id").inTable("tournaments").onDelete("CASCADE");
@@ -420,6 +426,8 @@ async function main() {
                 table.foreign("player1_id").references("id").inTable("users").onDelete("CASCADE");
                 table.foreign("player2_id").references("id").inTable("users").onDelete("CASCADE");
                 table.foreign("winner_id").references("id").inTable("users").onDelete("SET NULL");
+                table.foreign("reported_by_user_id").references("id").inTable("users").onDelete("SET NULL");
+                table.foreign("confirmed_by_user_id").references("id").inTable("users").onDelete("SET NULL");
             });
             console.log("Table 'tournament_matches' created!");
         }
@@ -446,13 +454,21 @@ async function main() {
           player1_score integer DEFAULT 0,
           player2_score integer DEFAULT 0,
           status varchar NOT NULL DEFAULT 'pending',
+          reported_by_user_id uuid NULL,
+          confirmed_by_user_id uuid NULL,
+          result_submitted_at datetime NULL,
+          result_confirmed_at datetime NULL,
+          requires_review boolean NOT NULL DEFAULT 0,
+          review_reason varchar NULL,
           created_at datetime NOT NULL,
           completed_at datetime NULL,
           FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL,
           FOREIGN KEY (player1_id) REFERENCES users(id) ON DELETE CASCADE,
           FOREIGN KEY (player2_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (winner_id) REFERENCES users(id) ON DELETE SET NULL
+          FOREIGN KEY (winner_id) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (reported_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (confirmed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
         )
       `);
                     await db.raw(`
@@ -468,6 +484,12 @@ async function main() {
           player1_score,
           player2_score,
           status,
+          reported_by_user_id,
+          confirmed_by_user_id,
+          result_submitted_at,
+          result_confirmed_at,
+          requires_review,
+          review_reason,
           created_at,
           completed_at
         )
@@ -483,6 +505,12 @@ async function main() {
           player1_score,
           player2_score,
           status,
+          NULL as reported_by_user_id,
+          NULL as confirmed_by_user_id,
+          NULL as result_submitted_at,
+          NULL as result_confirmed_at,
+          0 as requires_review,
+          NULL as review_reason,
           created_at,
           completed_at
         FROM tournament_matches
@@ -496,6 +524,36 @@ async function main() {
                 }
             }
         }
+        if (!(await db.schema.hasColumn("tournament_matches", "reported_by_user_id"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.uuid("reported_by_user_id").nullable();
+            });
+        }
+        if (!(await db.schema.hasColumn("tournament_matches", "confirmed_by_user_id"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.uuid("confirmed_by_user_id").nullable();
+            });
+        }
+        if (!(await db.schema.hasColumn("tournament_matches", "result_submitted_at"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.timestamp("result_submitted_at").nullable();
+            });
+        }
+        if (!(await db.schema.hasColumn("tournament_matches", "result_confirmed_at"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.timestamp("result_confirmed_at").nullable();
+            });
+        }
+        if (!(await db.schema.hasColumn("tournament_matches", "requires_review"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.boolean("requires_review").notNullable().defaultTo(false);
+            });
+        }
+        if (!(await db.schema.hasColumn("tournament_matches", "review_reason"))) {
+            await db.schema.alterTable("tournament_matches", (table) => {
+                table.string("review_reason").nullable();
+            });
+        }
         // Create tournament_match_invites table
         const tournamentMatchInvitesExists = await db.schema.hasTable("tournament_match_invites");
         if (!tournamentMatchInvitesExists) {
@@ -506,7 +564,7 @@ async function main() {
                 table.uuid("to_user_id").notNullable();
                 table.uuid("requested_by").notNullable();
                 table.string("invite_token").notNullable().unique();
-                table.string("status").notNullable().defaultTo("pending"); // pending, accepted, expired
+                table.string("status").notNullable().defaultTo("pending"); // pending, accepted, expired, superseded
                 table.bigInteger("sent_at").notNullable();
                 table.bigInteger("expires_at").notNullable();
                 table.bigInteger("accepted_at").nullable();

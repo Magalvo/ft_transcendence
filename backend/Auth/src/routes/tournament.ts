@@ -122,8 +122,19 @@ export default async function tournamentRoutes(app: FastifyInstance) {
     { preHandler: auth },
     async (req, reply) => {
       try {
-        const { matchId } = req.params as any;
-        const { gameId, winnerId, player1Score, player2Score } = req.body as any;
+        const userId = (req as any).user?.id as string | undefined;
+        if (!userId) {
+          return sendError(reply, "Unauthorized", 401);
+        }
+
+        const { tournamentId, matchId } = req.params as any;
+        const {
+          gameId,
+          winnerId,
+          player1Score,
+          player2Score,
+          reviewOverride,
+        } = req.body as any;
 
         if (!gameId || !winnerId || player1Score === undefined || player2Score === undefined) {
           return sendError(
@@ -133,21 +144,28 @@ export default async function tournamentRoutes(app: FastifyInstance) {
           );
         }
 
-        const result = await submitTournamentMatchResult(
-          matchId,
-          gameId,
-          winnerId,
-          player1Score,
-          player2Score
-        );
+        const result = await submitTournamentMatchResult({
+          tournamentId: String(tournamentId ?? "").trim(),
+          matchId: String(matchId ?? "").trim(),
+          submittedByUserId: userId,
+          gameId: String(gameId ?? "").trim(),
+          winnerId: String(winnerId ?? "").trim(),
+          player1Score: Number(player1Score),
+          player2Score: Number(player2Score),
+          reviewOverride: Boolean(reviewOverride),
+        });
 
         return sendSuccess(reply, {
-          message: "Match result recorded",
-          match: result,
+          message: "Tournament match result processed",
+          ...result,
         });
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to record match result", 500);
+        const statusCode =
+          Number.isInteger(error?.statusCode) && error.statusCode >= 400
+            ? error.statusCode
+            : 500;
+        return sendError(reply, error.message || "Failed to record match result", statusCode);
       }
     }
   );

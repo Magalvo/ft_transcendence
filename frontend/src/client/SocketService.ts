@@ -4,57 +4,64 @@ import { TokenManager } from '../services/TokenManager';
 
 class SocketService {
   private socket: Socket | null = null;
-  private currentUserId: string | null = null;
-  private requestUserAuthHandler: (() => void) | null = null;
+  private readonly handleForceLogout = (): void => {
+    this.disconnect();
+    TokenManager.clearTokens();
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  };
 
-  private bindUserAuth(userId: string): void {
-    this.currentUserId = userId;
-    if (!this.socket) return;
+  private readonly handleAuthRejected = (): void => {
+    this.handleForceLogout();
+  };
 
-    if (this.requestUserAuthHandler) {
-      this.socket.off('requestUserAuth', this.requestUserAuthHandler);
+  private readonly handleAuthStateChanged = (): void => {
+    this.syncSocketAuth(true);
+  };
+
+  private readonly handleStorageChange = (event: StorageEvent): void => {
+    if (!TokenManager.isAuthStorageKey(event.key)) {
+      return;
     }
 
-    this.requestUserAuthHandler = () => {
-      this.socket?.emit('userAuth', { userId });
-    };
+    const hasToken = Boolean(TokenManager.getAccessToken());
+    this.syncSocketAuth(hasToken);
 
-    this.socket.on('requestUserAuth', this.requestUserAuthHandler);
+    if (!hasToken && typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  };
 
-    if (this.socket.connected) {
-      this.socket.emit('userAuth', { userId });
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener(
+        TokenManager.getAuthStateChangedEventName(),
+        this.handleAuthStateChanged as EventListener,
+      );
+      window.addEventListener('storage', this.handleStorageChange);
     }
   }
 
   public init(url = WS_URL, userId?: string): Socket {
-    const cachedUserId = TokenManager.getUser()?.id as string | undefined;
-    const effectiveUserId = userId || this.currentUserId || cachedUserId;
+    void userId;
     const token = TokenManager.getAccessToken() || undefined;
 
     if (!this.socket) {
       const socketOptions: any = {
         auth: {
-          ...(effectiveUserId ? { userId: effectiveUserId } : {}),
           ...(token ? { token } : {}),
         },
       };
-      if (!effectiveUserId && !token) {
+      if (!token) {
         delete socketOptions.auth;
       }
       this.socket = io(url, socketOptions);
-    } else if (this.socket.auth) {
-      this.socket.auth = {
-        ...(this.socket.auth as object),
-        ...(effectiveUserId ? { userId: effectiveUserId } : {}),
-        ...(token ? { token } : {}),
-      };
+    } else {
+      this.socket.auth = token ? { token } : {};
     }
 
-    if (effectiveUserId && effectiveUserId !== this.currentUserId) {
-      this.bindUserAuth(effectiveUserId);
-    } else if (effectiveUserId && this.socket?.connected) {
-      this.socket.emit('userAuth', { userId: effectiveUserId });
-    }
+    this.attachLifecycleListeners(this.socket);
 
     return this.socket;
   }
@@ -65,13 +72,36 @@ class SocketService {
 
   public disconnect(): void {
     if (this.socket) {
-      if (this.requestUserAuthHandler) {
-        this.socket.off('requestUserAuth', this.requestUserAuthHandler);
-        this.requestUserAuthHandler = null;
-      }
+      this.socket.off('forceLogout', this.handleForceLogout);
+      this.socket.off('authRejected', this.handleAuthRejected);
       this.socket.disconnect();
       this.socket = null;
-      this.currentUserId = null;
+    }
+  }
+
+  private attachLifecycleListeners(socket: Socket): void {
+    socket.off('forceLogout', this.handleForceLogout);
+    socket.on('forceLogout', this.handleForceLogout);
+    socket.off('authRejected', this.handleAuthRejected);
+    socket.on('authRejected', this.handleAuthRejected);
+  }
+
+  private syncSocketAuth(reconnectIfNeeded: boolean): void {
+    if (!this.socket) {
+      return;
+    }
+
+    const token = TokenManager.getAccessToken() || undefined;
+
+    if (!token) {
+      this.disconnect();
+      return;
+    }
+
+    this.socket.auth = { token };
+
+    if (!this.socket.connected && reconnectIfNeeded) {
+      this.socket.connect();
     }
   }
 }

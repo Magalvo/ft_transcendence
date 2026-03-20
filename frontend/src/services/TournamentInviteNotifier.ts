@@ -2,6 +2,10 @@ import { socketService } from "../client/SocketService";
 import { navigateTo, refreshCurrentRoute } from "../core/AppRouter";
 import { TournamentManager, type Tournament } from "../core/TournamentManager";
 import { TokenManager } from "./TokenManager";
+import {
+  TournamentInviteState,
+  type TournamentInviteInvalidatedPayload,
+} from "./TournamentInviteState";
 
 interface TournamentInvitePayload {
   tournamentId: string;
@@ -22,6 +26,7 @@ const TOAST_CONTAINER_ID = "global-toast-container";
 
 class TournamentInviteNotifier {
   private static seenInviteTokens = new Set<string>();
+  private static toastByInviteToken = new Map<string, HTMLElement>();
 
   public static init(): void {
     if (!TokenManager.isAuthenticated()) return;
@@ -31,16 +36,33 @@ class TournamentInviteNotifier {
 
     socket.off("tournamentInvite", this.handleInvite);
     socket.on("tournamentInvite", this.handleInvite);
+    socket.off("tournamentInviteInvalidated", this.handleInviteInvalidated);
+    socket.on("tournamentInviteInvalidated", this.handleInviteInvalidated);
     socket.off("localTournamentStateUpdated", this.handleLocalTournamentStateUpdated);
     socket.on("localTournamentStateUpdated", this.handleLocalTournamentStateUpdated);
   }
 
   private static handleInvite = (payload: TournamentInvitePayload): void => {
     if (!payload?.inviteToken || !payload?.inviteUrl) return;
+    if (TournamentInviteState.isTokenInvalidated(payload.inviteToken)) return;
     if (this.seenInviteTokens.has(payload.inviteToken)) return;
 
     this.seenInviteTokens.add(payload.inviteToken);
     this.showInviteToast(payload);
+  };
+
+  private static handleInviteInvalidated = (
+    payload: TournamentInviteInvalidatedPayload,
+  ): void => {
+    if (!payload?.invalidatedToken) return;
+
+    TournamentInviteState.markInvalidated(payload);
+
+    const staleToast = this.toastByInviteToken.get(payload.invalidatedToken);
+    if (staleToast) {
+      staleToast.remove();
+      this.toastByInviteToken.delete(payload.invalidatedToken);
+    }
   };
 
   private static handleLocalTournamentStateUpdated = (
@@ -113,9 +135,11 @@ class TournamentInviteNotifier {
     toast.appendChild(subtitle);
     toast.appendChild(actions);
     container.appendChild(toast);
+    this.toastByInviteToken.set(payload.inviteToken, toast);
 
     window.setTimeout(() => {
       toast.remove();
+      this.toastByInviteToken.delete(payload.inviteToken);
     }, 12000);
   }
 

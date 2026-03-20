@@ -1,11 +1,29 @@
 const uWS = require("uWebSockets.js");
 const combatEngine = require("bindings")("combat");
 const crypto = require("crypto");
+const fs = require("fs");
 
 const port = Number(process.env.PORT) || 3030;
 let nextPilotId = 1;
 const players = {};
-const SESSION_SECRET = process.env.JWT_SECRET || "";
+
+function readConfigValue(name) {
+  const filePath = String(process.env[`${name}_FILE`] || "").trim();
+  if (filePath) {
+    try {
+      return fs.readFileSync(filePath, "utf8").trim();
+    } catch (error) {
+      console.error(`Failed to read ${name} from ${name}_FILE (${filePath}):`, error);
+    }
+  }
+
+  return String(process.env[name] || "").trim();
+}
+
+const SESSION_SECRET = readConfigValue("JWT_SECRET");
+if (SESSION_SECRET) {
+  process.env.JWT_SECRET = SESSION_SECRET;
+}
 
 // ==========================================
 // GAMEPLAY CONSTANTS (Previously Missing)

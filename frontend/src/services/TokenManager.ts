@@ -10,6 +10,14 @@ export class TokenManager {
   private static readonly USER_KEY = 'user_data';
   private static readonly USER_CACHE_KEY = 'user_data_cache_time';
   private static readonly USER_CACHE_EXPIRY_SECONDS = 300; // 5 minutes
+  private static readonly AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
+  private static readonly AUTH_STORAGE_KEYS = new Set<string>([
+    TokenManager.TOKEN_KEY,
+    TokenManager.REFRESH_TOKEN_KEY,
+    TokenManager.EXPIRES_AT_KEY,
+    TokenManager.USER_KEY,
+    TokenManager.USER_CACHE_KEY,
+  ]);
 
   /**
    * Store tokens (typically called after successful login/register)
@@ -26,6 +34,8 @@ export class TokenManager {
     } catch (e) {
       console.warn('localStorage unavailable, tokens not persisted:', e);
     }
+
+    this.dispatchAuthStateChanged();
   }
 
   /**
@@ -127,6 +137,8 @@ export class TokenManager {
     } catch (e) {
       console.warn('Cannot clear tokens:', e);
     }
+
+    this.dispatchAuthStateChanged();
   }
 
   /**
@@ -190,5 +202,30 @@ export class TokenManager {
     } catch (e) {
       return false;
     }
+  }
+
+  static getAuthStateChangedEventName(): string {
+    return this.AUTH_STATE_CHANGED_EVENT;
+  }
+
+  static isAuthStorageKey(key: string | null): boolean {
+    return key !== null && this.AUTH_STORAGE_KEYS.has(key);
+  }
+
+  private static dispatchAuthStateChanged(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const detail = {
+      authenticated: this.isAuthenticated(),
+      token: this.getAccessToken(),
+    };
+
+    window.dispatchEvent(
+      new CustomEvent(this.AUTH_STATE_CHANGED_EVENT, {
+        detail,
+      }),
+    );
   }
 }

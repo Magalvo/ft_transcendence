@@ -33,7 +33,6 @@ export class FindGamePage extends AbstractComponent {
   private searchInputEl: HTMLInputElement | null = null;
   private filterModeEl: HTMLSelectElement | null = null;
   private filterTypeEl: HTMLSelectElement | null = null;
-  private createLobbyModal: HTMLElement | null = null;
   private myLobbies = new Map<string, string>();
   private refreshTimer: number | null = null;
   private isRefreshing = false;
@@ -84,7 +83,6 @@ export class FindGamePage extends AbstractComponent {
       this.myLobbies.set(data.lobbyId, data.code);
     }
     this.refreshLobbies();
-    this.closeCreateModal();
   };
 
   private onJoinLobbySuccess = (data: { lobbyId: string }): void => {
@@ -184,7 +182,7 @@ export class FindGamePage extends AbstractComponent {
     this.filterTypeEl?.addEventListener('change', () => this.renderLobbies());
     container
       .querySelector('#btn-create-lobby')
-      ?.addEventListener('click', () => this.openCreateModal());
+      ?.addEventListener('click', () => this.createPublicLobby());
     container
       .querySelector('#btn-refresh-lobbies')
       ?.addEventListener('click', () => this.refreshLobbies());
@@ -372,125 +370,23 @@ export class FindGamePage extends AbstractComponent {
     return card;
   }
 
-  private openCreateModal(): void {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-neutral-800 rounded-lg p-6 w-full max-w-md border border-neutral-700">
-        <h2 class="text-2xl font-bold mb-4">${t('findGame.modal.title')}</h2>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium mb-2">${t('findGame.modal.gameMode')}</label>
-            <select id="mode-select" class="w-full px-3 py-2 rounded bg-neutral-700 border border-neutral-600 focus:border-blue-500 outline-none">
-              <option value="1v1">${t('findGame.mode.1v1')}</option>
-              <option value="2v2">${t('findGame.mode.2v2')}</option>
-              <option value="3v3">${t('findGame.mode.3v3')}</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium mb-2">${t('findGame.modal.lobbyType')}</label>
-            <div class="flex gap-3">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="lobby-type" value="public" checked class="w-4 h-4" />
-                <span class="text-sm">${t('findGame.type.public')}</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="lobby-type" value="private" class="w-4 h-4" />
-                <span class="text-sm">${t('findGame.modal.privateGenerate')}</span>
-              </label>
-            </div>
-          </div>
-
-          <div id="code-preview" class="hidden p-3 bg-neutral-900 rounded border border-neutral-600">
-            <div class="text-xs text-neutral-400 mb-2">${t('findGame.modal.codePreview')}</div>
-            <div class="flex items-center gap-2">
-              <code id="preview-code" class="flex-1 text-sm font-mono font-bold text-blue-400"></code>
-              <button id="copy-preview" type="button" class="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs transition">${t('findGame.card.copy')}</button>
-            </div>
-          </div>
-
-          <div class="flex gap-3 pt-4">
-            <button id="btn-cancel" type="button" class="flex-1 px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600 font-medium transition">${t('findGame.modal.cancel')}</button>
-            <button id="btn-create" type="button" class="flex-1 px-4 py-2 rounded bg-blue-700 hover:bg-blue-600 font-medium transition">${t('findGame.modal.create')}</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-    this.createLobbyModal = modal;
-
-    const radios = modal.querySelectorAll('input[name="lobby-type"]');
-    const codePreview = modal.querySelector('#code-preview');
-    const previewCode = modal.querySelector('#preview-code');
-
-    radios.forEach((radio) => {
-      radio.addEventListener('change', () => {
-        const isPrivate = (radio as HTMLInputElement).value === 'private';
-        if (isPrivate && codePreview) {
-          const code = this.generateLobbyCode();
-          if (previewCode) previewCode.textContent = code;
-          codePreview.classList.remove('hidden');
-        } else if (codePreview) {
-          codePreview.classList.add('hidden');
-        }
-      });
-    });
-
-    modal.querySelector('#copy-preview')?.addEventListener('click', () => {
-      const code = (previewCode as HTMLElement)?.textContent;
-      const button = modal.querySelector('#copy-preview') as HTMLButtonElement | null;
-      if (!code || !button) return;
-
-      navigator.clipboard.writeText(code);
-      button.textContent = t('findGame.card.copied');
-      setTimeout(() => {
-        button.textContent = t('findGame.card.copy');
-      }, 2000);
-    });
-
-    modal.querySelector('#btn-create')?.addEventListener('click', () => {
-      const modeSelect = modal.querySelector('#mode-select') as HTMLSelectElement;
-      const typeRadio = modal.querySelector(
-        'input[name="lobby-type"]:checked'
-      ) as HTMLInputElement;
-      const mode = modeSelect.value;
-      const isPrivate = typeRadio.value === 'private';
-      const code = isPrivate ? (previewCode as HTMLElement)?.textContent || '' : '';
-
-      this.createLobby(mode, isPrivate, code);
-    });
-
-    modal.querySelector('#btn-cancel')?.addEventListener('click', () => {
-      this.closeCreateModal();
-    });
-
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        this.closeCreateModal();
-      }
-    });
+  private createPublicLobby(): void {
+    this.createLobby(this.getPreferredCreateMode(), false);
   }
 
-  private closeCreateModal(): void {
-    if (this.createLobbyModal?.parentNode) {
-      this.createLobbyModal.parentNode.removeChild(this.createLobbyModal);
-      this.createLobbyModal = null;
+  private getPreferredCreateMode(): '1v1' | '2v2' | '3v3' {
+    const selectedMode = this.filterModeEl?.value;
+    if (selectedMode === '2v2' || selectedMode === '3v3') {
+      return selectedMode;
     }
+    return '1v1';
   }
 
-  private generateLobbyCode(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i += 1) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  private createLobby(mode: string, isPrivate: boolean, code: string): void {
+  private createLobby(
+    mode: '1v1' | '2v2' | '3v3',
+    isPrivate: boolean,
+    code?: string
+  ): void {
     const user = this.currentUser;
     this.socket?.emit('createLobby', {
       mode,
@@ -578,7 +474,6 @@ export class FindGamePage extends AbstractComponent {
       this.refreshTimer = null;
     }
 
-    this.closeCreateModal();
     this.lobbies = [];
     this.currentUser = null;
     this.isRefreshing = false;

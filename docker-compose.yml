@@ -111,6 +111,9 @@ services:
       - ./backend/Auth/.env
     environment:
       - PORT=3000
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+    secrets:
+      - jwt_secret
     expose:
       - "3000"
     healthcheck:

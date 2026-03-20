@@ -15,6 +15,13 @@ export interface TournamentInviteDispatchResult {
     token: string;
     expiresAt: number;
   }>;
+  invalidatedInvites: Array<{
+    toUserId: string;
+    token: string;
+    invalidatedAt: number;
+    reason: "superseded";
+    supersededByToken: string;
+  }>;
 }
 
 export interface AcceptedTournamentInvite {
@@ -90,10 +97,10 @@ export async function createTournamentMatchInvites(
   }
   const expiresAt = now + INVITE_TTL_MS;
 
-  // Replace active pending invites so each request has fresh tokens.
-  await db("tournament_match_invites")
+  const priorPendingInvites = await db("tournament_match_invites")
     .where({ tournament_id: tournamentId, match_id: matchId, status: "pending" })
-    .update({ status: "expired" });
+    .whereIn("to_user_id", players)
+    .select("id", "to_user_id", "invite_token");
 
   const invites = players.map((toUserId) => ({
     id: crypto.randomUUID(),
@@ -108,8 +115,35 @@ export async function createTournamentMatchInvites(
     accepted_at: null,
   }));
 
+  // Replace active pending invites so each target user has a single active token per match.
+  if (priorPendingInvites.length > 0) {
+    const priorIds = priorPendingInvites.map((invite: any) => invite.id);
+    await db("tournament_match_invites")
+      .whereIn("id", priorIds)
+      .where({ status: "pending" })
+      .update({ status: "superseded" });
+  }
+
   await db("tournament_match_invites").insert(invites);
   const names = await getPlayerNames(players[0], players[1]);
+
+  const latestTokenByUser = new Map<string, string>(
+    invites.map((invite) => [invite.to_user_id, invite.invite_token]),
+  );
+  const invalidatedInvites = priorPendingInvites
+    .map((invite: any) => {
+      const toUserId = String(invite.to_user_id);
+      const supersededByToken = latestTokenByUser.get(toUserId);
+      if (!supersededByToken) return null;
+      return {
+        toUserId,
+        token: String(invite.invite_token),
+        invalidatedAt: now,
+        reason: "superseded" as const,
+        supersededByToken,
+      };
+    })
+    .filter(Boolean) as TournamentInviteDispatchResult["invalidatedInvites"];
 
   return {
     tournamentId,
@@ -123,6 +157,7 @@ export async function createTournamentMatchInvites(
       token: i.invite_token,
       expiresAt: i.expires_at,
     })),
+    invalidatedInvites,
   };
 }
 
@@ -137,6 +172,9 @@ export async function acceptTournamentInvite(token: string, userId: string): Pro
   if (String(invite.to_user_id) !== userId) throw new Error("Invite does not belong to this user");
 
   const now = Date.now();
+  if (invite.status === "superseded") {
+    throw new Error("Invite has been superseded by a newer token");
+  }
   if (invite.status !== "pending") throw new Error("Invite is no longer valid");
   if (Number(invite.expires_at) <= now) {
     await db("tournament_match_invites")

@@ -40,31 +40,40 @@ const hasOAuthToken =
   Boolean(searchParams.get('token')) &&
   Boolean(searchParams.get('refreshToken'));
 
-if (hasOAuthToken) {
-  void AuthService.handleGoogleCallback()
-    .then((ok) => {
-      if (ok) {
-        window.history.replaceState({}, '', '/');
-        router.navigate('/');
-      }
-    })
-    .catch((error) => {
-      console.error('Google OAuth bootstrap failed:', error);
-      window.history.replaceState({}, '', '/login');
-      router.navigate('/login');
-    });
-}
-
 const publicRoutes = ['/login', '/404', '/terms', '/privacy', '/reset-password'];
 
-if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pathname)) {
-  // If we want to enforce login immediately:
-  window.history.replaceState({}, '', '/login');
+async function bootstrapApp(): Promise<void> {
+  let postAuthRoute: string | null = null;
+
+  if (hasOAuthToken) {
+    try {
+      const callbackResult = await AuthService.handleGoogleCallback();
+      if (callbackResult.ok) {
+        postAuthRoute = '/';
+      }
+    } catch (error) {
+      console.error('Google OAuth bootstrap failed:', error);
+      postAuthRoute = '/login';
+    }
+  }
+
+  if (postAuthRoute) {
+    window.history.replaceState({}, '', postAuthRoute);
+  }
+
+  if (!TokenManager.isAuthenticated() && !publicRoutes.includes(window.location.pathname)) {
+    window.history.replaceState({}, '', '/login');
+  }
+
+  if (TokenManager.isAuthenticated()) {
+    initTournamentInviteNotifier();
+  }
+
+  router.init();
+
+  if (postAuthRoute) {
+    router.navigate(postAuthRoute);
+  }
 }
 
-if (TokenManager.isAuthenticated()) {
-  initTournamentInviteNotifier();
-}
-
-// 5. Start the App
-router.init();
+void bootstrapApp();

@@ -23,6 +23,7 @@ if (!JWT_SECRET) {
   console.error("FATAL: JWT_SECRET is not defined. Authentication will not work.");
   process.exit(1);
 }
+process.env.JWT_SECRET = JWT_SECRET;
 
 const app = Fastify({ logger: true });
 app.hasMultipart = false;

@@ -14,6 +14,7 @@ import { io, type Socket } from "socket.io-client";
 import { formatTime, t } from "../services/I18nService";
 import { TokenManager } from "../services/TokenManager";
 import { WS_URL } from "../services/RuntimeConfig";
+import { TournamentInviteState } from "../services/TournamentInviteState";
 
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
@@ -68,6 +69,33 @@ export class ChatPage extends AbstractComponent {
   private userSearchQuery = "";
   private destroyed = false;
   private bootstrapToken = 0;
+  private onTournamentInviteInvalidated = (): void => {
+    this.renderMessages();
+  };
+  private onRealtimeForceLogout = (): void => {
+    this.realtimeReady = false;
+    this.chatSocket?.disconnect();
+    this.chatSocket = null;
+    TokenManager.clearTokens();
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  };
+  private onAuthStateChanged = (): void => {
+    this.syncRealtimeAuth(true);
+  };
+  private onAuthStorageChanged = (event: StorageEvent): void => {
+    if (!TokenManager.isAuthStorageKey(event.key)) {
+      return;
+    }
+
+    const hasToken = Boolean(TokenManager.getAccessToken());
+    this.syncRealtimeAuth(hasToken);
+
+    if (!hasToken && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  };
 
   constructor() {
     super("div", "h-screen overflow-hidden bg-neutral-950 text-white");
@@ -173,6 +201,24 @@ export class ChatPage extends AbstractComponent {
     this.settingsVisibilityEl = shell.querySelector("#settings-visibility");
     this.settingsPasswordEl = shell.querySelector("#settings-password");
     this.settingsBtnEl = shell.querySelector("#settings-save-btn");
+    window.removeEventListener(
+      TournamentInviteState.getInvalidatedEventName(),
+      this.onTournamentInviteInvalidated,
+    );
+    window.addEventListener(
+      TournamentInviteState.getInvalidatedEventName(),
+      this.onTournamentInviteInvalidated,
+    );
+    window.removeEventListener(
+      TokenManager.getAuthStateChangedEventName(),
+      this.onAuthStateChanged as EventListener,
+    );
+    window.addEventListener(
+      TokenManager.getAuthStateChangedEventName(),
+      this.onAuthStateChanged as EventListener,
+    );
+    window.removeEventListener("storage", this.onAuthStorageChanged);
+    window.addEventListener("storage", this.onAuthStorageChanged);
     this.userSearchEl?.addEventListener("input", () => {
       this.userSearchQuery = this.userSearchEl?.value.trim() || "";
       this.scheduleUserSearch();
@@ -290,9 +336,9 @@ export class ChatPage extends AbstractComponent {
       if (this.currentGroupId !== null && this.deniedGroupIds.has(this.currentGroupId)) {
         this.currentGroupId = null;
       }
-      if (this.currentGroupId === null) {
+      /* if (this.currentGroupId === null) {
         await this.selectFirstAccessibleGroup();
-      }
+      } */
 
       // Realtime socket already delivers fresh chat data; fallback poll only if realtime is not ready.
       if (this.currentGroupId !== null && (!this.chatSocket?.connected || !this.realtimeReady)) {
@@ -541,6 +587,7 @@ export class ChatPage extends AbstractComponent {
       auth: { token: TokenManager.getAccessToken() || undefined },
       withCredentials: true,
     });
+    this.chatSocket.on("forceLogout", this.onRealtimeForceLogout);
     this.chatSocket.on("connect", () => {
       this.realtimeReady = false;
       this.chatSocket?.emit("chat_auth", { token: TokenManager.getAccessToken() || undefined });
@@ -734,12 +781,21 @@ export class ChatPage extends AbstractComponent {
       const inviteData = this.parsePongInvite(msg.messagem);
       const inviteUrl = inviteData?.url || msg.invite_url || undefined;
       const isTournamentInvite = this.isTournamentInvite(inviteUrl);
+      const inviteToken = this.extractTournamentInviteToken(inviteUrl);
+      const isInvalidTournamentInvite =
+        isTournamentInvite && TournamentInviteState.isTokenInvalidated(inviteToken);
       const text = document.createElement("div");
       text.className = "break-words text-sm";
       text.textContent = inviteData
         ? (
           isTournamentInvite
-            ? (isMe ? t("chat.tournamentInvite.sent") : t("chat.tournamentInvite.received"))
+            ? (
+                isInvalidTournamentInvite
+                  ? "Tournament invite expired"
+                  : isMe
+                    ? t("chat.tournamentInvite.sent")
+                    : t("chat.tournamentInvite.received")
+              )
             : (isMe ? t("chat.invite.sent") : t("chat.invite.received"))
         )
         : msg.messagem;
@@ -753,8 +809,17 @@ export class ChatPage extends AbstractComponent {
         const openBtn = document.createElement("button");
         openBtn.type = "button";
         openBtn.className = "mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium hover:bg-blue-600";
-        openBtn.textContent = isTournamentInvite ? t("chat.tournamentInvite.open") : t("chat.invite.openLobby");
+        openBtn.textContent = isInvalidTournamentInvite
+          ? "Expired"
+          : isTournamentInvite
+            ? t("chat.tournamentInvite.open")
+            : t("chat.invite.openLobby");
+        openBtn.disabled = isInvalidTournamentInvite;
+        if (isInvalidTournamentInvite) {
+          openBtn.classList.add("cursor-not-allowed", "opacity-50");
+        }
         openBtn.addEventListener("click", () => {
+          if (isInvalidTournamentInvite) return;
           this.navigateToInvite(this.buildInviteUrl(inviteData.url, inviteData.sessionId));
         });
         bubble.appendChild(openBtn);
@@ -763,8 +828,17 @@ export class ChatPage extends AbstractComponent {
         const acceptBtn = document.createElement("button");
         acceptBtn.type = "button";
         acceptBtn.className = "mt-2 rounded bg-emerald-700 px-3 py-1 text-xs font-medium hover:bg-emerald-600";
-        acceptBtn.textContent = isTournamentInvite ? t("chat.tournamentInvite.join") : t("chat.invite.accept");
+        acceptBtn.textContent = isInvalidTournamentInvite
+          ? "Expired"
+          : isTournamentInvite
+            ? t("chat.tournamentInvite.join")
+            : t("chat.invite.accept");
+        acceptBtn.disabled = isInvalidTournamentInvite;
+        if (isInvalidTournamentInvite) {
+          acceptBtn.classList.add("cursor-not-allowed", "opacity-50");
+        }
         acceptBtn.addEventListener("click", () => {
+          if (isInvalidTournamentInvite) return;
           this.navigateToInvite(this.buildInviteUrl(
             inviteData?.url || msg.invite_url,
             inviteData?.sessionId || msg.invite_session
@@ -1197,6 +1271,16 @@ export class ChatPage extends AbstractComponent {
     }
   }
 
+  private extractTournamentInviteToken(rawUrl?: string): string | null {
+    if (!rawUrl) return null;
+    try {
+      const url = new URL(rawUrl, window.location.origin);
+      return url.searchParams.get("tournamentInviteToken");
+    } catch {
+      return null;
+    }
+  }
+
   private resolveSenderName(senderId: string, senderName?: string | null): string {
     const normalized = String(senderName || "").trim();
     if (normalized) return normalized;
@@ -1212,6 +1296,15 @@ export class ChatPage extends AbstractComponent {
     this.destroyed = true;
     this.bootstrapToken += 1;
     this.destroyOwnedUi();
+    window.removeEventListener(
+      TournamentInviteState.getInvalidatedEventName(),
+      this.onTournamentInviteInvalidated,
+    );
+    window.removeEventListener(
+      TokenManager.getAuthStateChangedEventName(),
+      this.onAuthStateChanged as EventListener,
+    );
+    window.removeEventListener("storage", this.onAuthStorageChanged);
 
     if (this.refreshTimer !== null) {
       window.clearInterval(this.refreshTimer);
@@ -1224,6 +1317,32 @@ export class ChatPage extends AbstractComponent {
     this.chatSocket?.disconnect();
     this.chatSocket = null;
     this.lastDirectoryRefreshAt = 0;
+  }
+
+  private syncRealtimeAuth(reconnectIfNeeded: boolean): void {
+    if (!this.chatSocket) {
+      return;
+    }
+
+    const token = TokenManager.getAccessToken() || undefined;
+
+    if (!token) {
+      this.realtimeReady = false;
+      this.chatSocket.disconnect();
+      this.chatSocket = null;
+      return;
+    }
+
+    this.chatSocket.auth = { token };
+
+    if (this.chatSocket.connected) {
+      this.chatSocket.emit("chat_auth", { token });
+      return;
+    }
+
+    if (reconnectIfNeeded) {
+      this.chatSocket.connect();
+    }
   }
 
   private destroyOwnedUi(): void {

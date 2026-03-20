@@ -1,65 +1,51 @@
-ENV_FILE = ./backend/Auth/.env
-SECRETS_DIR = .secrets
-JWT_SECRET_FILE = $(SECRETS_DIR)/jwt_secret.txt
-GOOGLE_SECRET_FILE = $(SECRETS_DIR)/google_client_secret.txt
+ENV_FILE := backend/Auth/.env
+SECRETS_DIR := .secrets
+JWT_SECRET_FILE := $(SECRETS_DIR)/jwt_secret.txt
+GOOGLE_SECRET_FILE := $(SECRETS_DIR)/google_client_secret.txt
 
-COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
-COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker compose
-DB_VOLUME = $(COMPOSE_PROJECT_NAME)_auth_database
+COMPOSE_PROJECT_NAME ?= $(notdir $(subst \,/,$(CURDIR)))
+COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
+DB_VOLUME := $(COMPOSE_PROJECT_NAME)_auth_database
 
 # Default target - runs 'up' command
 all: up
 
 # Setup environment:
 # - create secrets directory
-# - generate .env file
-# - generate secrets if they don't exist
+# - generate .env file if it doesn't exist
+# - generate runtime secrets if they don't exist yet
+ifeq ($(OS),Windows_NT)
 setup:
-	@mkdir -p $(SECRETS_DIR)
-	@chmod 700 $(SECRETS_DIR)
-
-	@if [ ! -f $(ENV_FILE) ]; then \
-		echo "Generating .env file..."; \
-		echo "GOOGLE_CLIENT_ID=596804197978-d726nn0a3smhs1ve3ha3h0sh2n690rij.apps.googleusercontent.com" > $(ENV_FILE); \
-		echo "GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback" >> $(ENV_FILE); \
-		echo "FRONTEND_URL=https://localhost:8443" >> $(ENV_FILE); \
-		echo "PORT=3000" >> $(ENV_FILE); \
-		echo "DB_FILE=dev.sqlite" >> $(ENV_FILE); \
-		echo "SMTP_HOST=mailpit" >> $(ENV_FILE); \
-		echo "SMTP_PORT=1025" >> $(ENV_FILE); \
-		echo "SMTP_USER=noreply@ft.local" >> $(ENV_FILE); \
-		echo "SMTP_PASS=devpass" >> $(ENV_FILE); \
-		echo ".env file generated"; \
+	@powershell -NoProfile -ExecutionPolicy Bypass -Command "$$envFile = '$(ENV_FILE)'; if (-not (Test-Path $$envFile)) { @('GOOGLE_CLIENT_ID=596804197978-d726nn0a3smhs1ve3ha3h0sh2n690rij.apps.googleusercontent.com','GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback','FRONTEND_URL=https://localhost:8443','PORT=3000','DB_FILE=dev.sqlite','SMTP_HOST=mailpit','SMTP_PORT=1025','SMTP_USER=noreply@ft.local','SMTP_PASS=devpass') | Set-Content -Path $$envFile; Write-Host ('Generated ' + $$envFile) }"
+	@powershell -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference = 'Stop'; $$secretsDir = '$(SECRETS_DIR)'; $$jwtFile = '$(JWT_SECRET_FILE)'; $$googleFile = '$(GOOGLE_SECRET_FILE)'; New-Item -ItemType Directory -Force -Path $$secretsDir | Out-Null; if (-not (Test-Path $$jwtFile) -or [string]::IsNullOrWhiteSpace((Get-Content $$jwtFile -Raw -ErrorAction SilentlyContinue))) { $$bytes = New-Object byte[] 48; $$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $$rng.GetBytes($$bytes); $$rng.Dispose(); [Convert]::ToBase64String($$bytes) | Set-Content -Path $$jwtFile -NoNewline; Write-Host ('Generated ' + $$jwtFile) }; if (-not (Test-Path $$googleFile)) { '' | Set-Content -Path $$googleFile -NoNewline; Write-Host ('Created empty ' + $$googleFile) }"
+else
+setup:
+	@mkdir -p "$(SECRETS_DIR)"
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		printf '%s\n' \
+			'GOOGLE_CLIENT_ID=596804197978-d726nn0a3smhs1ve3ha3h0sh2n690rij.apps.googleusercontent.com' \
+			'GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback' \
+			'FRONTEND_URL=https://localhost:8443' \
+			'PORT=3000' \
+			'DB_FILE=dev.sqlite' \
+			'SMTP_HOST=mailpit' \
+			'SMTP_PORT=1025' \
+			'SMTP_USER=noreply@ft.local' \
+			'SMTP_PASS=devpass' \
+			> "$(ENV_FILE)"; \
+		echo "Generated $(ENV_FILE)"; \
 	fi
-
-	@if [ ! -f $(JWT_SECRET_FILE) ]; then \
-		openssl rand -base64 48 > $(JWT_SECRET_FILE); \
-		chmod 600 $(JWT_SECRET_FILE); \
-		echo "JWT Secret generated"; \
+	@if [ ! -s "$(JWT_SECRET_FILE)" ]; then \
+		openssl rand -base64 48 > "$(JWT_SECRET_FILE)"; \
+		chmod 600 "$(JWT_SECRET_FILE)" 2>/dev/null || true; \
+		echo "Generated $(JWT_SECRET_FILE)"; \
 	fi
-
-	@if [ ! -f $(GOOGLE_SECRET_FILE) ]; then \
-		printf "Enter GOOGLE_CLIENT_SECRET: "; \
-		read -s GSEC; echo $$GSEC > $(GOOGLE_SECRET_FILE); \
-		chmod 600 $(GOOGLE_SECRET_FILE); \
-		echo "Google Client Secret saved"; \
+	@if [ ! -f "$(GOOGLE_SECRET_FILE)" ]; then \
+		: > "$(GOOGLE_SECRET_FILE)"; \
+		chmod 600 "$(GOOGLE_SECRET_FILE)" 2>/dev/null || true; \
+		echo "Created empty $(GOOGLE_SECRET_FILE)"; \
 	fi
-
-	@JWT_SECRET_VALUE="$$(tr -d '\r\n' < $(JWT_SECRET_FILE))"; \
-	if grep -q '^JWT_SECRET=' $(ENV_FILE); then \
-		sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$$JWT_SECRET_VALUE|" $(ENV_FILE); \
-	else \
-		echo "JWT_SECRET=$$JWT_SECRET_VALUE" >> $(ENV_FILE); \
-	fi; \
-	rm -f $(ENV_FILE).bak
-
-	@GOOGLE_SECRET_VALUE="$$(tr -d '\r\n' < $(GOOGLE_SECRET_FILE))"; \
-	if grep -q '^GOOGLE_CLIENT_SECRET=' $(ENV_FILE); then \
-		sed -i.bak "s|^GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE|" $(ENV_FILE); \
-	else \
-		echo "GOOGLE_CLIENT_SECRET=$$GOOGLE_SECRET_VALUE" >> $(ENV_FILE); \
-	fi; \
-	rm -f $(ENV_FILE).bak
+endif
 
 # Start the application in detached mode with build
 up: setup
@@ -75,7 +61,11 @@ logs:
 
 # Clean environment: stop containers and remove .env file
 clean: down
-	rm -f $(ENV_FILE)
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Force -ErrorAction SilentlyContinue '$(ENV_FILE)'"
+else
+	rm -f "$(ENV_FILE)"
+endif
 
 # Fully clean the environment: stop containers, remove volumes, images, networks
 # - Removes all Docker volumes, images, containers, and networks
@@ -91,7 +81,7 @@ fclean:
 # - Rebuilds the entire application
 dbre:
 	$(COMPOSE) down
-	docker volume rm $(DB_VOLUME) || true
+	-docker volume rm $(DB_VOLUME)
 	$(MAKE) re
 
 # Rebuild the application
@@ -117,4 +107,4 @@ status:
 	$(COMPOSE) ps
 
 # Declare phony targets (targets that are not files)
-.PHONY: all up down logs clean fclean dbre re build pull logs-f status
+.PHONY: all setup up down logs clean fclean dbre re build pull logs-f status

@@ -1,6 +1,31 @@
 import db from "../db.js";
 import crypto from "crypto";
 
+const RESULT_CONFIRMATION_TIMEOUT_MINUTES = Number(
+  process.env.TOURNAMENT_RESULT_CONFIRM_TIMEOUT_MINUTES || "15",
+);
+
+class TournamentResultError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode = 400) {
+    super(message);
+    this.name = "TournamentResultError";
+    this.statusCode = statusCode;
+  }
+}
+
+type SubmitTournamentMatchResultInput = {
+  tournamentId: string;
+  matchId: string;
+  submittedByUserId: string;
+  gameId: string;
+  winnerId: string;
+  player1Score: number;
+  player2Score: number;
+  reviewOverride?: boolean;
+};
+
 interface CreateTournamentInput {
   name: string;
   created_by: string;
@@ -161,84 +186,350 @@ export async function getTournament(tournamentId: string) {
  * Submit match result for a tournament match
  */
 export async function submitTournamentMatchResult(
-  matchId: string,
-  gameId: string,
-  winnerId: string,
-  player1Score: number,
-  player2Score: number
+  input: SubmitTournamentMatchResultInput,
 ) {
+  const {
+    tournamentId,
+    matchId,
+    submittedByUserId,
+    gameId,
+    winnerId,
+    player1Score,
+    player2Score,
+    reviewOverride = false,
+  } = input;
+
   try {
-    const match = await db("tournament_matches")
-      .where({ id: matchId })
-      .first();
-
-    if (!match) {
-      throw new Error("Tournament match not found");
+    if (!tournamentId) {
+      throw new TournamentResultError("Tournament id is required", 400);
+    }
+    if (!matchId) {
+      throw new TournamentResultError("Match id is required", 400);
+    }
+    if (!submittedByUserId) {
+      throw new TournamentResultError("Submitting user is required", 401);
+    }
+    if (!winnerId) {
+      throw new TournamentResultError("Winner id is required", 400);
+    }
+    if (!gameId) {
+      throw new TournamentResultError("Game id is required", 400);
+    }
+    if (!Number.isFinite(player1Score) || !Number.isFinite(player2Score)) {
+      throw new TournamentResultError("Scores must be numeric values", 400);
     }
 
-    const now = new Date();
-
-    // Update the match with results
-    await db("tournament_matches")
-      .where({ id: matchId })
-      .update({
-        winner_id: winnerId,
-        game_id: gameId,
-        player1_score: player1Score,
-        player2_score: player2Score,
-        status: "completed",
-        completed_at: now,
-      });
-
-    // Check if next round matches can be progressed
-    const nextRoundMatches = await db("tournament_matches")
-      .where({ tournament_id: match.tournament_id, round: match.round + 1 });
-
-    // Update next round matches with winners (handle empty strings and nulls as placeholders)
-    for (const nextMatch of nextRoundMatches) {
-      let updated = false;
-      if (!nextMatch.player1_id || nextMatch.player1_id === "") {
-        await db("tournament_matches")
-          .where({ id: nextMatch.id })
-          .update({ player1_id: winnerId });
-        updated = true;
-      } else if (!nextMatch.player2_id || nextMatch.player2_id === "") {
-        await db("tournament_matches")
-          .where({ id: nextMatch.id })
-          .update({ player2_id: winnerId });
-        updated = true;
-      }
-
-      if (updated) break; // Only update one slot per match
-    }
-
-    // Check if tournament is complete (finals match completed)
-    const pendingMatches = await db("tournament_matches")
-      .where({ tournament_id: match.tournament_id, status: "pending" });
-
-    if (pendingMatches.length === 0) {
-      // Find finals match to get winner
-      const finalsMatch = await db("tournament_matches")
-        .where({ tournament_id: match.tournament_id })
-        .orderBy("round", "desc")
+    return await db.transaction(async (trx) => {
+      const match = await trx("tournament_matches as tm")
+        .join("tournaments as t", "t.id", "tm.tournament_id")
+        .where("tm.id", matchId)
+        .select(
+          "tm.*",
+          "t.created_by as tournament_created_by",
+          "t.status as tournament_status",
+        )
         .first();
 
-      if (finalsMatch && finalsMatch.winner_id) {
-        // Mark tournament as completed
-        await db("tournaments")
-          .where({ id: match.tournament_id })
+      if (!match) {
+        throw new TournamentResultError("Tournament match not found", 404);
+      }
+
+      if (match.tournament_id !== tournamentId) {
+        throw new TournamentResultError(
+          "Match does not belong to the provided tournament",
+          400,
+        );
+      }
+
+      if (match.tournament_status === "completed") {
+        throw new TournamentResultError("Tournament is already completed", 409);
+      }
+
+      if (!match.player1_id || !match.player2_id) {
+        throw new TournamentResultError(
+          "Match participants are not fully assigned yet",
+          409,
+        );
+      }
+
+      const participants = [match.player1_id, match.player2_id];
+      const submittedByIsParticipant = participants.includes(submittedByUserId);
+      const submittedByIsHost = submittedByUserId === match.tournament_created_by;
+
+      if (!participants.includes(winnerId)) {
+        throw new TournamentResultError(
+          "winnerId must be one of the match participants",
+          400,
+        );
+      }
+
+      if (reviewOverride) {
+        if (!submittedByIsHost) {
+          throw new TournamentResultError(
+            "Only the tournament host can resolve disputed results",
+            403,
+          );
+        }
+
+        if (match.status === "completed") {
+          const completedMatch = await trx("tournament_matches")
+            .where({ id: match.id })
+            .first();
+          return {
+            resolution: "already_completed",
+            status: "completed",
+            requiresReview: false,
+            match: completedMatch,
+          };
+        }
+
+        const now = new Date();
+        await trx("tournament_matches")
+          .where({ id: match.id })
+          .update({
+            winner_id: winnerId,
+            game_id: gameId,
+            player1_score: player1Score,
+            player2_score: player2Score,
+            status: "completed",
+            completed_at: now,
+            reported_by_user_id: submittedByUserId,
+            confirmed_by_user_id: submittedByUserId,
+            result_submitted_at: now,
+            result_confirmed_at: now,
+            requires_review: false,
+            review_reason: null,
+          });
+
+        await progressTournamentAfterCompletedMatch(
+          trx,
+          match.tournament_id,
+          match.round,
+          winnerId,
+        );
+
+        const finalMatch = await trx("tournament_matches")
+          .where({ id: match.id })
+          .first();
+
+        return {
+          resolution: "host_override_completed",
+          status: "completed",
+          requiresReview: false,
+          match: finalMatch,
+        };
+      }
+
+      if (!submittedByIsParticipant) {
+        throw new TournamentResultError(
+          "Only match participants can submit results",
+          403,
+        );
+      }
+
+      if (match.status === "review_required" || match.requires_review) {
+        throw new TournamentResultError(
+          "Match result requires host review",
+          409,
+        );
+      }
+
+      if (match.status === "completed") {
+        const completedMatch = await trx("tournament_matches")
+          .where({ id: match.id })
+          .first();
+        return {
+          resolution: "already_completed",
+          status: "completed",
+          requiresReview: false,
+          match: completedMatch,
+        };
+      }
+
+      const now = new Date();
+
+      if (match.status === "pending" || match.status === "in_progress") {
+        await trx("tournament_matches")
+          .where({ id: match.id })
+          .update({
+            winner_id: winnerId,
+            game_id: gameId,
+            player1_score: player1Score,
+            player2_score: player2Score,
+            status: "pending_confirmation",
+            completed_at: null,
+            reported_by_user_id: submittedByUserId,
+            confirmed_by_user_id: null,
+            result_submitted_at: now,
+            result_confirmed_at: null,
+            requires_review: false,
+            review_reason: null,
+          });
+
+        const pendingMatch = await trx("tournament_matches")
+          .where({ id: match.id })
+          .first();
+
+        return {
+          resolution: "submitted_waiting_confirmation",
+          status: "pending_confirmation",
+          requiresReview: false,
+          match: pendingMatch,
+        };
+      }
+
+      if (match.status === "pending_confirmation") {
+        const reportedByUserId = String(match.reported_by_user_id || "").trim();
+
+        if (!reportedByUserId) {
+          throw new TournamentResultError(
+            "Pending confirmation state is invalid; host review required",
+            409,
+          );
+        }
+
+        if (reportedByUserId === submittedByUserId) {
+          throw new TournamentResultError(
+            "The reporting participant cannot self-confirm the result",
+            409,
+          );
+        }
+
+        const submittedAt = match.result_submitted_at
+          ? new Date(match.result_submitted_at)
+          : null;
+        if (
+          submittedAt &&
+          Number.isFinite(submittedAt.getTime()) &&
+          Date.now() - submittedAt.getTime() >
+            RESULT_CONFIRMATION_TIMEOUT_MINUTES * 60 * 1000
+        ) {
+          await trx("tournament_matches")
+            .where({ id: match.id })
+            .update({
+              status: "review_required",
+              requires_review: true,
+              review_reason: "confirmation_timeout",
+            });
+
+          throw new TournamentResultError(
+            "Result confirmation timed out and now requires host review",
+            409,
+          );
+        }
+
+        const sameWinner = match.winner_id === winnerId;
+        const sameScores =
+          Number(match.player1_score) === player1Score &&
+          Number(match.player2_score) === player2Score;
+        const sameGame = String(match.game_id || "") === String(gameId || "");
+
+        if (!sameWinner || !sameScores || !sameGame) {
+          await trx("tournament_matches")
+            .where({ id: match.id })
+            .update({
+              status: "review_required",
+              requires_review: true,
+              review_reason: "conflicting_submissions",
+            });
+
+          throw new TournamentResultError(
+            "Conflicting participant submissions; host review required",
+            409,
+          );
+        }
+
+        await trx("tournament_matches")
+          .where({ id: match.id })
           .update({
             status: "completed",
-            winner_id: finalsMatch.winner_id,
             completed_at: now,
+            confirmed_by_user_id: submittedByUserId,
+            result_confirmed_at: now,
+            requires_review: false,
+            review_reason: null,
           });
-      }
-    }
 
-    return match;
+        await progressTournamentAfterCompletedMatch(
+          trx,
+          match.tournament_id,
+          match.round,
+          winnerId,
+        );
+
+        const completedMatch = await trx("tournament_matches")
+          .where({ id: match.id })
+          .first();
+
+        return {
+          resolution: "confirmed_and_completed",
+          status: "completed",
+          requiresReview: false,
+          match: completedMatch,
+        };
+      }
+
+      throw new TournamentResultError(
+        `Match status '${match.status}' is not eligible for result submission`,
+        409,
+      );
+    });
   } catch (error) {
     console.error("Error submitting tournament match result:", error);
+    if (error instanceof TournamentResultError) {
+      throw error;
+    }
     throw error;
+  }
+}
+
+async function progressTournamentAfterCompletedMatch(
+  trx: any,
+  tournamentId: string,
+  round: number,
+  winnerId: string,
+) {
+  const nextRoundMatches = await trx("tournament_matches")
+    .where({ tournament_id: tournamentId, round: round + 1 });
+
+  for (const nextMatch of nextRoundMatches) {
+    let updated = false;
+    if (!nextMatch.player1_id || nextMatch.player1_id === "") {
+      await trx("tournament_matches")
+        .where({ id: nextMatch.id })
+        .update({ player1_id: winnerId });
+      updated = true;
+    } else if (!nextMatch.player2_id || nextMatch.player2_id === "") {
+      await trx("tournament_matches")
+        .where({ id: nextMatch.id })
+        .update({ player2_id: winnerId });
+      updated = true;
+    }
+
+    if (updated) break;
+  }
+
+  const unresolvedMatches = await trx("tournament_matches")
+    .where({ tournament_id: tournamentId })
+    .whereNot({ status: "completed" });
+
+  if (unresolvedMatches.length > 0) {
+    return;
+  }
+
+  const finalsMatch = await trx("tournament_matches")
+    .where({ tournament_id: tournamentId })
+    .orderBy("round", "desc")
+    .first();
+
+  if (finalsMatch && finalsMatch.winner_id) {
+    await trx("tournaments")
+      .where({ id: tournamentId })
+      .update({
+        status: "completed",
+        winner_id: finalsMatch.winner_id,
+        completed_at: new Date(),
+      });
   }
 }
 

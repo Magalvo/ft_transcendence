@@ -34,6 +34,7 @@ dist-ssr
 # Linker files
 *.ilk
 .secrets/*
+!.secrets/.gitkeep
 
 # Debugger Files
 *.pdb

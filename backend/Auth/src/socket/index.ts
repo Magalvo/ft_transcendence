@@ -503,6 +503,38 @@ export function setupSocketIO(httpServer: any) {
     }
   };
 
+  const emitTournamentInviteInvalidatedToUser = async (
+    toUserId: string,
+    payload: {
+      tournamentId: string;
+      matchId: string;
+      invalidatedToken: string;
+      supersededByToken: string;
+      requestedBy: string;
+      reason: "superseded";
+      invalidatedAt: number;
+    },
+  ) => {
+    const targetSockets = userToSocketsMap.get(toUserId);
+    if (!targetSockets) return;
+
+    for (const sid of targetSockets) {
+      const targetSocket = io.sockets.sockets.get(sid);
+      if (!targetSocket) continue;
+
+      targetSocket.emit("tournamentInviteInvalidated", {
+        version: 1,
+        tournamentId: payload.tournamentId,
+        matchId: payload.matchId,
+        invalidatedToken: payload.invalidatedToken,
+        supersededByToken: payload.supersededByToken,
+        reason: payload.reason,
+        requestedBy: payload.requestedBy,
+        invalidatedAt: payload.invalidatedAt,
+      });
+    }
+  };
+
   const mainLobby = new Lobby(io, socketToUserMap, "lobby:main");
 
   const normalizeInviteSession = (raw?: string): string | null => {
@@ -654,21 +686,21 @@ export function setupSocketIO(httpServer: any) {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    const authUserId =
-      (socket.handshake.auth?.userId as string | undefined) ||
-      (socket.data.userId as string | undefined);
-    if (authUserId) {
-      socketToUserMap.set(socket.id, authUserId);
-      socket.data.userId = authUserId;
-      if (!userToSocketsMap.has(authUserId)) userToSocketsMap.set(authUserId, new Set());
-      userToSocketsMap.get(authUserId)!.add(socket.id);
-      void setUserOnlineStatus(authUserId, true);
-      console.log(`Mapped socket ${socket.id} to user ${authUserId} (handshake auth)`);
-    }
+    const bindSocketIdentity = (userId: string, source: string): void => {
+      socketToUserMap.set(socket.id, userId);
+      socket.data.userId = userId;
+      if (!userToSocketsMap.has(userId)) userToSocketsMap.set(userId, new Set());
+      userToSocketsMap.get(userId)!.add(socket.id);
+      socket.join(`user:${userId}`);
+      void setUserOnlineStatus(userId, true);
+      console.log(`Mapped socket ${socket.id} to user ${userId} (${source})`);
+    };
 
     const authTokenRaw =
       socket.handshake.auth?.token || socket.handshake.headers.authorization;
-    if (authTokenRaw && !socketToUserMap.has(socket.id)) {
+    let authenticatedUserId: string | undefined;
+
+    if (authTokenRaw) {
       try {
         const token = String(authTokenRaw)
           .replace(/^Bearer\s+/i, "")
@@ -676,33 +708,40 @@ export function setupSocketIO(httpServer: any) {
         const JWT_SECRET = process.env.JWT_SECRET as string;
         if (JWT_SECRET && token) {
           const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-          if (decoded?.userId) {
-            socketToUserMap.set(socket.id, decoded.userId);
-            socket.data.userId = decoded.userId;
-            if (!userToSocketsMap.has(decoded.userId)) userToSocketsMap.set(decoded.userId, new Set());
-            userToSocketsMap.get(decoded.userId)!.add(socket.id);
-            void setUserOnlineStatus(decoded.userId, true);
-            console.log(`Mapped socket ${socket.id} to user ${decoded.userId} (jwt)`);
-          }
+          authenticatedUserId = decoded?.userId;
         }
       } catch (error) {
-        console.log("Could not extract user info from token");
+        console.warn(`Socket ${socket.id} failed JWT auth:`, error);
       }
     }
 
-    if (!socketToUserMap.has(socket.id)) {
-      socket.emit("requestUserAuth");
+    if (!authenticatedUserId) {
+      socket.emit("authRejected", {
+        reason: "missing_or_invalid_token",
+        message: "Socket authentication requires a valid access token",
+      });
+      socket.disconnect(true);
+      return;
     }
+
+    bindSocketIdentity(authenticatedUserId, "jwt");
 
     socket.on("userAuth", (data: { userId: string }) => {
-      if (data.userId) {
-        socketToUserMap.set(socket.id, data.userId);
-        socket.data.userId = data.userId;
-        if (!userToSocketsMap.has(data.userId)) userToSocketsMap.set(data.userId, new Set());
-        userToSocketsMap.get(data.userId)!.add(socket.id);
-        void setUserOnlineStatus(data.userId, true);
-        getActiveLobby(socket.id).broadcastStatePublic();
+      const boundUserId = socketToUserMap.get(socket.id);
+      if (!boundUserId || !data?.userId || data.userId !== boundUserId) {
+        console.warn(
+          `Socket ${socket.id} attempted identity override via userAuth`,
+          { claimedUserId: data?.userId, boundUserId },
+        );
+        socket.emit("authRejected", {
+          reason: "identity_mismatch",
+          message: "Socket identity is bound to JWT and cannot be overridden",
+        });
+        socket.disconnect(true);
+        return;
       }
+
+      getActiveLobby(socket.id).broadcastStatePublic();
     });
 
     mainLobby.addClient(socket.id);
@@ -1290,6 +1329,18 @@ export function setupSocketIO(httpServer: any) {
         }
 
         const inviteDispatch = await createTournamentMatchInvites(tournamentId, matchId, userId);
+
+        for (const invalidated of inviteDispatch.invalidatedInvites) {
+          await emitTournamentInviteInvalidatedToUser(invalidated.toUserId, {
+            tournamentId,
+            matchId,
+            invalidatedToken: invalidated.token,
+            supersededByToken: invalidated.supersededByToken,
+            requestedBy: userId,
+            reason: invalidated.reason,
+            invalidatedAt: invalidated.invalidatedAt,
+          });
+        }
 
         for (const invite of inviteDispatch.invites) {
           await emitTournamentInviteToUser(userId, invite.toUserId, {

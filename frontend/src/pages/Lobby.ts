@@ -69,10 +69,6 @@ export class LobbyPage extends AbstractComponent {
 
   private onSocketConnect = (): void => {
     this.myId = this.socket?.id ?? '';
-    const userId = UserStore.getUser()?.id || TokenManager.getUser()?.id;
-    if (userId) {
-      this.socket?.emit('userAuth', { userId });
-    }
     this.joinRequestedLobby();
   };
 
