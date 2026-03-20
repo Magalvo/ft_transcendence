@@ -3,6 +3,7 @@ import { navigateTo } from "../../core/AppRouter";
 import { TournamentMatch } from "../../core/TournamentManager";
 import { TournamentManager } from "../../core/TournamentManager";
 import { UserStore } from "../../core/UserStore";
+import { TokenManager } from "../../services/TokenManager";
 
 export class TournamentBracket extends AbstractComponent {
   private matches: TournamentMatch[];
@@ -16,7 +17,8 @@ export class TournamentBracket extends AbstractComponent {
 
   public render(): void {
     this.element.innerHTML = "";
-    const currentUserId = UserStore.getUser()?.id || null;
+    const currentUserId =
+      UserStore.getUser()?.id || TokenManager.getUser()?.id || null;
 
     const title = document.createElement("h3");
     title.className = "text-2xl font-bold mb-4 text-gray-200";
@@ -89,7 +91,7 @@ export class TournamentBracket extends AbstractComponent {
       if (isPendingMatch && isCurrentUserInMatch) {
         const playBtn = document.createElement("button");
         playBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition";
-        playBtn.textContent = "JOGAR PARTIDA";
+        playBtn.textContent = "PLAY";
         playBtn.onclick = () => {
           navigateTo(`/game?matchId=${match.id}&p1=${match.player1_id}&p2=${match.player2_id}&tournamentId=${match.tournament_id}`);
         };
