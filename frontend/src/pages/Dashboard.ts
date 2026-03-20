@@ -105,7 +105,7 @@ export class DashboardPage extends AbstractComponent {
     const createGameBtn = new Button(
       t('dashboard.profile.createLobby'),
       () => {
-        navigateTo('/lobby');
+        navigateTo('/lobby?create=1');
       },
       'secondary'
     );

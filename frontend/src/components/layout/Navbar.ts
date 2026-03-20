@@ -33,7 +33,7 @@ export class Navbar extends AbstractComponent {
     linksContainer.className = 'flex gap-6';
 
     const links = [
-      { label: t('nav.createGame'), path: '/lobby' },
+      { label: t('nav.createGame'), path: '/lobby?create=1' },
       { label: t('nav.findGame'), path: '/find-game' },
       { label: t('nav.spacedOut'), path: '/spacedout' },
       { label: t('nav.tournament'), path: '/tournament' },

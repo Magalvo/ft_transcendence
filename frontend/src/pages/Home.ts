@@ -76,7 +76,13 @@ export class HomePage extends AbstractComponent {
         return card;
     };
 
-    const playCard = createActionCard(t('home.quickMatch.title'), t('home.quickMatch.description'), t('home.quickMatch.cta'), '/lobby', 'border-blue-500');
+    const playCard = createActionCard(
+      t('home.quickMatch.title'),
+      t('home.quickMatch.description'),
+      t('home.quickMatch.cta'),
+      '/lobby?create=1&mode=1v1',
+      'border-blue-500'
+    );
     const tournCard = createActionCard(t('home.tournament.title'), t('home.tournament.description'), t('home.tournament.cta'), '/tournament', 'border-purple-500');
     const profileCard = createActionCard(t('home.profile.title'), t('home.profile.description'), t('home.profile.cta'), '/profile', 'border-green-500');
 

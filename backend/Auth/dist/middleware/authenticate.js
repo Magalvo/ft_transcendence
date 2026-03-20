@@ -16,7 +16,7 @@ const authenticate = async (req, reply) => {
         const decoded = jwt.verify(accessToken, JWT_SECRET);
         const userId = decoded.userId;
         // atualizar last_request (ok 👍)
-        await db.raw("UPDATE users SET last_request = ? WHERE id = ?", [new Date().toISOString(), userId]);
+        await db.raw("UPDATE users SET last_request = ?, online = ? WHERE id = ?", [new Date().toISOString(), true, userId]);
         // 🔑 MUITO IMPORTANTE
         req.user = {
             id: userId,

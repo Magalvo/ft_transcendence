@@ -49,6 +49,7 @@ export class LobbyPage extends AbstractComponent {
   private currentPowerUpsState = true;
   private isTransitioningToGame = false;
   private selectedLobbyId: string | null = null;
+  private isAutoCreatingLobby = false;
 
   private slotsLeftEl: HTMLElement | null = null;
   private slotsRightEl: HTMLElement | null = null;
@@ -92,6 +93,23 @@ export class LobbyPage extends AbstractComponent {
   private onJoinLobbyError = (data: { message: string }): void => {
     alert(t('lobby.error.join', { message: data.message }));
     navigateTo('/find-game');
+  };
+
+  private onJoinLobbySuccess = (data: {
+    lobbyId: string;
+    inviteSession?: string;
+  }): void => {
+    this.selectedLobbyId = data.lobbyId;
+    this.isAutoCreatingLobby = false;
+
+    const url = new URL(window.location.href);
+    if (data.lobbyId && data.lobbyId !== 'main') {
+      url.searchParams.set('id', data.lobbyId);
+      url.searchParams.delete('create');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    }
+
+    this.socket?.emit('requestLobbyState');
   };
 
   private onLobbyStartError = (data: {
@@ -252,19 +270,37 @@ export class LobbyPage extends AbstractComponent {
     const params = new URLSearchParams(window.location.search);
     const inviteSession = params.get('inviteSession');
     const lobbyId = params.get('id');
+    const shouldCreate = params.get('create') === '1';
+    const requestedMode = params.get('mode');
 
     if (lobbyId) {
       this.selectedLobbyId = lobbyId;
+      this.isAutoCreatingLobby = false;
       this.socket.emit('joinLobbyById', { lobbyId });
       return;
     }
 
     if (inviteSession) {
+      this.isAutoCreatingLobby = false;
       this.socket.emit('joinLobby', { inviteSession });
       return;
     }
 
-    this.socket.emit('joinLobby');
+    if (shouldCreate) {
+      const mode =
+        requestedMode === '2v2' || requestedMode === '3v3'
+          ? requestedMode
+          : '1v1';
+      this.isAutoCreatingLobby = true;
+      this.socket.emit('createLobby', {
+        mode,
+        isPrivate: false,
+      });
+      return;
+    }
+
+    this.isAutoCreatingLobby = false;
+    navigateTo('/find-game');
   }
 
   private leaveCurrentLobby(): void {
@@ -286,6 +322,7 @@ export class LobbyPage extends AbstractComponent {
     this.socket.on('lobbyState', this.onLobbyState);
     this.socket.on('gameStarted', this.onGameStarted);
     this.socket.on('kicked', this.onKicked);
+    this.socket.on('joinLobbySuccess', this.onJoinLobbySuccess);
     this.socket.on('joinLobbyError', this.onJoinLobbyError);
     this.socket.on('lobby_start_error', this.onLobbyStartError);
 
@@ -303,6 +340,10 @@ export class LobbyPage extends AbstractComponent {
       !this.leaderControls ||
       !this.leaderMsg
     ) {
+      return;
+    }
+
+    if (this.isAutoCreatingLobby && !this.selectedLobbyId) {
       return;
     }
 
@@ -548,6 +589,7 @@ export class LobbyPage extends AbstractComponent {
     this.socket.off('lobbyState', this.onLobbyState);
     this.socket.off('gameStarted', this.onGameStarted);
     this.socket.off('kicked', this.onKicked);
+    this.socket.off('joinLobbySuccess', this.onJoinLobbySuccess);
     this.socket.off('joinLobbyError', this.onJoinLobbyError);
     this.socket.off('lobby_start_error', this.onLobbyStartError);
   }

@@ -539,6 +539,16 @@ export function setupSocketIO(httpServer: any) {
     }
   };
 
+  const cleanupPublicLobbyIfEmpty = (lobbyId: string): void => {
+    if (!lobbyId || lobbyId === "main" || lobbyId.startsWith("invite:")) return;
+
+    const entry = lobbiesRegistry.get(lobbyId);
+    if (!entry) return;
+    if (entry.lobby.getClientCount() > 0) return;
+
+    lobbiesRegistry.delete(lobbyId);
+  };
+
   const getLobbyById = (lobbyId: string): Lobby | null => {
     if (lobbyId === "main") return mainLobby;
     if (inviteLobbies.has(lobbyId)) return inviteLobbies.get(lobbyId) ?? null;
@@ -565,6 +575,7 @@ export function setupSocketIO(httpServer: any) {
       if (currentLobby?.hasClient(socketId)) {
         currentLobby.removeClient(socketId);
         cleanupInviteLobbyIfEmpty(currentLobbyId);
+        cleanupPublicLobbyIfEmpty(currentLobbyId);
       }
     }
 
@@ -584,11 +595,17 @@ export function setupSocketIO(httpServer: any) {
     }
     activeLobbyBySocket.delete(socketId);
     cleanupInviteLobbyIfEmpty(currentLobbyId);
+    cleanupPublicLobbyIfEmpty(currentLobbyId);
   };
 
   const buildAvailableLobbies = async () => {
     return Promise.all(
-      Array.from(lobbiesRegistry.entries()).map(async ([lobbyId, entry]) => {
+      Array.from(lobbiesRegistry.entries())
+        .filter(
+          ([, entry]) =>
+            entry.lobby.getClientCount() > 0 && !entry.lobby.gameInstance,
+        )
+        .map(async ([lobbyId, entry]) => {
         const lobbyState = await entry.lobby.getStatePublic();
 
         const playerCount = [lobbyState.slots.left, lobbyState.slots.right]
@@ -622,7 +639,7 @@ export function setupSocketIO(httpServer: any) {
           createdAt: entry.createdAt,
           status: "waiting" as const,
         };
-      }),
+        }),
     );
   };
 
@@ -910,6 +927,7 @@ export function setupSocketIO(httpServer: any) {
       }
 
       cleanupInviteLobbyIfEmpty(data.lobbyId);
+      cleanupPublicLobbyIfEmpty(data.lobbyId);
 
       await broadcastLobbyList();
     });
