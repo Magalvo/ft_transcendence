@@ -8,7 +8,7 @@ import {
   GamePlayer,
 } from "./index.js";
 import { recordMatch } from "../services/matchService.js";
-import { releaseGameUsers } from "./ActiveGameRegistry.js";
+import { releaseGameUser, releaseGameUsers } from "./ActiveGameRegistry.js";
 
 export class Game {
   private io: Server;
@@ -52,8 +52,28 @@ export class Game {
       (p) => p.socket_id === socketId,
     );
     if (index !== -1) {
+      const removedPlayer = this.engine.data.players[index];
       console.log(`[Game] Player ${socketId} removed mid-game.`);
       this.engine.data.players.splice(index, 1);
+
+      if (removedPlayer?.type === "human" && removedPlayer.user_id) {
+        releaseGameUser(removedPlayer.user_id);
+      }
+
+      this.totalHumans = this.engine.data.players.filter(
+        (p) => p.type === "human",
+      ).length;
+      this.humansReady = Math.min(this.humansReady, this.totalHumans);
+
+      if (this.totalHumans === 0) {
+        this.cleanup();
+        if (this.onGameEnd) this.onGameEnd();
+        return;
+      }
+
+      if (!this.gameLoopInterval && this.humansReady >= this.totalHumans) {
+        this.startGameLoop();
+      }
     }
   }
 

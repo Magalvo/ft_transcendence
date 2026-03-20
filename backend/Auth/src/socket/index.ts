@@ -1414,7 +1414,6 @@ export function setupSocketIO(httpServer: any) {
             if (match.slots.length === 0) {
               pendingTournamentMatches.delete(matchId);
             }
-            break;
           }
         }
 
@@ -1425,7 +1424,6 @@ export function setupSocketIO(httpServer: any) {
             if (match.slots.length === 0) {
               pendingLocalTournamentMatches.delete(matchKey);
             }
-            break;
           }
         }
       }

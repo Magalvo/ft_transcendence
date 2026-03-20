@@ -38,3 +38,20 @@ export function releaseGameUsers(gameId: string): void {
 
   gameToUsers.delete(gameId);
 }
+
+export function releaseGameUser(userId: string): void {
+  if (!userId) return;
+
+  const gameId = userToGame.get(userId);
+  if (!gameId) return;
+
+  userToGame.delete(userId);
+
+  const users = gameToUsers.get(gameId);
+  if (!users) return;
+
+  users.delete(userId);
+  if (users.size === 0) {
+    gameToUsers.delete(gameId);
+  }
+}
