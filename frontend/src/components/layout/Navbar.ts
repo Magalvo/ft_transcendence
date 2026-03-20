@@ -208,7 +208,6 @@ export class Navbar extends AbstractComponent {
         // Presence socket is best-effort and should not block navbar rendering.
       });
   }
-
   private navigate(path: string): void {
     navigateTo(path);
   }

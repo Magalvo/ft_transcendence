@@ -78,7 +78,6 @@ function getSocketCorsOrigin() {
   if (origins.length === 1) return origins[0];
   return origins;
 }
-
 function normalizeLobbyCode(raw?: string): string {
   return (raw || "").trim().toUpperCase();
 }

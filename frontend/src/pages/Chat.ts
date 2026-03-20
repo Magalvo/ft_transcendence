@@ -278,7 +278,6 @@ export class ChatPage extends AbstractComponent {
       if (shouldRefreshDirectory) {
         await this.refreshDirectoryData();
       }
-
       if (this.currentGroupId !== null && !this.groups.some((g) => g.id_group === this.currentGroupId)) {
         this.currentGroupId = null;
         this.currentRole = null;
@@ -402,6 +401,9 @@ export class ChatPage extends AbstractComponent {
       return false;
     }
     const targetGroup = this.groups.find((g) => g.id_group === groupId);
+    if (silent && targetGroup && !targetGroup.is_member && targetGroup.visibility !== "public") {
+      return false;
+    }
     const previousGroupId = this.currentGroupId;
     this.currentPrivateChatId = null;
     this.currentDmTargetId = null;
@@ -412,6 +414,7 @@ export class ChatPage extends AbstractComponent {
 
     try {
       if (targetGroup?.visibility === "protected" && !targetGroup.is_member) {
+        if (silent) return false;
         const pass = window.prompt(t("chat.prompt.channelPassword"));
         if (!pass) {
           this.currentGroupId = previousGroupId;
@@ -426,6 +429,9 @@ export class ChatPage extends AbstractComponent {
       const errorText = String(e?.response?.data?.error || e?.message || "");
       const lowered = errorText.toLowerCase();
       if (lowered.includes("password")) {
+        if (silent) {
+          return false;
+        }
         const pass = window.prompt(t("chat.prompt.channelPassword"));
         if (pass) {
           try {
