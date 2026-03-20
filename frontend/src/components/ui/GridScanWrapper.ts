@@ -13,7 +13,7 @@ export class GridScanWrapper extends AbstractComponent {
         
         // Default props matching your desired look
         this.props = {
-            enableWebcam: true,      // Set to true if you want the face tracking
+            enableWebcam: false,
             enablePost: true,
             scanColor: '#FF9FFC',
             linesColor: '#5227FF',

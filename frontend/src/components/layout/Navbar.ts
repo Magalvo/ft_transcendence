@@ -22,6 +22,7 @@ export class Navbar extends AbstractComponent {
 
   public render(): void {
     this.element.innerHTML = '';
+    this.ensurePresenceSocket();
 
     const brand = document.createElement('div');
     brand.className = 'text-xl font-bold tracking-wider text-blue-400 cursor-pointer';
@@ -192,6 +193,20 @@ export class Navbar extends AbstractComponent {
     const existing = document.querySelector('.navbar-profile-menu');
     if (existing) existing.remove();
     delete anchor.dataset.open;
+  }
+
+  private ensurePresenceSocket(): void {
+    const user = UserStore.getUser();
+    const userId = user?.id;
+    if (!userId) return;
+
+    void import('../../client/SocketService')
+      .then(({ socketService }) => {
+        socketService.init(undefined, userId);
+      })
+      .catch(() => {
+        // Presence socket is best-effort and should not block navbar rendering.
+      });
   }
 
   private navigate(path: string): void {

@@ -36,9 +36,16 @@ export class UserService {
   static async getProfile(forceRefresh: boolean = false): Promise<UserProfile> {
     try {
       const cached = UserStore.getUser();
-      if (cached && !forceRefresh) {
+      const hasValidCache =
+        cached && !forceRefresh && !TokenManager.isUserCacheExpired();
+
+      if (hasValidCache) {
         console.log('Using cached user profile');
         return cached;
+      }
+
+      if (cached && !forceRefresh) {
+        console.log('Cached user profile expired, fetching a fresh copy');
       }
 
 
@@ -102,6 +109,7 @@ export class UserService {
 
       const cached = TokenManager.getUser();
       if (cached) {
+        console.warn('Falling back to last stored user profile after fetch failure');
         UserStore.setUser(cached);
         return cached as UserProfile;
       }
@@ -204,6 +212,9 @@ export class UserService {
    * Get cached profile (doesn't fetch)
    */
   static getCachedProfile(): UserProfile | null {
+    if (TokenManager.isUserCacheExpired()) {
+      return null;
+    }
     return UserStore.getUser();
   }
 

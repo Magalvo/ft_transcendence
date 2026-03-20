@@ -53,7 +53,7 @@ export class LoginPage extends AbstractComponent {
     this.element.innerHTML = '';
 
     this.background = new GridScanWrapper({
-      enableWebcam: true,
+      enableWebcam: false,
       bloomIntensity: 1.5,
     });
     this.background.render();

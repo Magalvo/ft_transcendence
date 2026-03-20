@@ -7,26 +7,54 @@ interface CreateTournamentInput {
   player_ids: string[];
 }
 
+export function validateTournamentCreateInput(input: CreateTournamentInput): {
+  normalizedName: string;
+  uniquePlayerIds: string[];
+} {
+  const normalizedName = String(input.name ?? "").trim();
+  const normalizedPlayerIds = input.player_ids
+    .map((playerId) => String(playerId ?? "").trim())
+    .filter(Boolean);
+  const uniquePlayerIds = Array.from(new Set(normalizedPlayerIds));
+
+  if (!normalizedName) {
+    throw new Error("Tournament name is required");
+  }
+  if (uniquePlayerIds.length !== 4) {
+    throw new Error("Tournament requires exactly 4 unique players");
+  }
+  if (!uniquePlayerIds.includes(input.created_by)) {
+    throw new Error("Tournament creator must be included in the player list");
+  }
+
+  return {
+    normalizedName,
+    uniquePlayerIds,
+  };
+}
+
 /**
  * Create a new tournament with initial bracket
  */
 export async function createTournament(input: CreateTournamentInput) {
   const tournamentId = crypto.randomUUID();
   const now = new Date();
+  const { normalizedName, uniquePlayerIds } =
+    validateTournamentCreateInput(input);
 
   try {
     // 1. Create tournament
     await db("tournaments").insert({
       id: tournamentId,
-      name: input.name,
+      name: normalizedName,
       created_by: input.created_by,
       status: "active",
-      player_count: input.player_ids.length,
+      player_count: uniquePlayerIds.length,
       created_at: now,
     });
 
     // 2. Add participants
-    for (const userId of input.player_ids) {
+    for (const userId of uniquePlayerIds) {
       await db("tournament_participants").insert({
         tournament_id: tournamentId,
         user_id: userId,
@@ -36,7 +64,7 @@ export async function createTournament(input: CreateTournamentInput) {
     }
 
     // 3. Generate initial bracket (simple single elimination)
-    const matches = generateBracket(tournamentId, input.player_ids, now);
+    const matches = generateBracket(tournamentId, uniquePlayerIds, now);
     for (const match of matches) {
       await db("tournament_matches").insert(match);
     }

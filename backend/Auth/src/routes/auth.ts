@@ -16,7 +16,6 @@ import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
 import {
   recordMatch,
-  recordTeamMatch,
   getPlayerStats,
   getPlayerMatches,
   getMatchDetails,
@@ -24,6 +23,7 @@ import {
 import UserProfileResponseDTO from "../dto/userProfile.response.dto.js";
 import UserStatsDTO from "../dto/userStats.dto.js";
 import { readConfigValue } from "../utils/env.js";
+import authenticate from "../middleware/authenticate.js";
 
 const AVATARS_PATH =
   process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
@@ -302,6 +302,10 @@ export default async function authRoutes(app: FastifyInstance) {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
       const userId = decoded?.userId;
 
+      if (userId) {
+        await db("users").where({ id: userId }).update({ online: false });
+      }
+
       // Broadcast a best-effort logout hint to the Socket.IO layer so that
       // any active sockets for this user can leave lobbies / games.
       if (userId && app.io) {
@@ -558,6 +562,60 @@ export default async function authRoutes(app: FastifyInstance) {
     return Date.now() - ts <= 60_000;
   };
 
+  const getValidatedDate = (rawValue: unknown, fieldName: string): Date => {
+    const parsed = new Date(String(rawValue ?? ""));
+    if (!Number.isFinite(parsed.getTime())) {
+      throw new Error(`Invalid ${fieldName}`);
+    }
+    return parsed;
+  };
+
+  const getValidatedScore = (rawValue: unknown, fieldName: string): number => {
+    const score = Number(rawValue);
+    if (!Number.isInteger(score) || score < 0) {
+      throw new Error(`${fieldName} must be a non-negative integer`);
+    }
+    return score;
+  };
+
+  const readAuthenticatedUserId = (req: any): string => {
+    return String(req?.user?.id ?? "").trim();
+  };
+
+  const ensureActorIsMatchParticipant = (
+    actorUserId: string,
+    participantIds: string[],
+  ): void => {
+    if (!actorUserId) {
+      throw new Error("Unauthorized");
+    }
+    if (!participantIds.includes(actorUserId)) {
+      throw new Error("Authenticated user must be a participant in the recorded match");
+    }
+  };
+
+  const getMatchRecordingErrorStatus = (errorMessage: string): number => {
+    if (errorMessage === "Unauthorized") return 401;
+    if (
+      errorMessage ===
+      "Authenticated user must be a participant in the recorded match"
+    ) {
+      return 403;
+    }
+    if (
+      errorMessage.startsWith("Invalid ") ||
+      errorMessage.includes("non-negative integer") ||
+      errorMessage.includes("Missing required") ||
+      errorMessage.includes("distinct participants") ||
+      errorMessage.includes("must include at least one player") ||
+      errorMessage.includes("ended_at must") ||
+      errorMessage.includes("Duplicate players")
+    ) {
+      return 400;
+    }
+    return 500;
+  };
+
   // --- SEND FRIEND REQUEST ---
   const sendFriendRequestHandler = async (req: any, reply: any) => {
     try {
@@ -599,6 +657,33 @@ export default async function authRoutes(app: FastifyInstance) {
         .first();
 
       if (existing) {
+        if (
+          String(existing.requester_id) === String(targetUser.id) &&
+          String(existing.target_id) === String(requesterId)
+        ) {
+          await db("friendships")
+            .insert({
+              user_a: userA,
+              user_b: userB,
+              created_at: Date.now(),
+            })
+            .onConflict(["user_a", "user_b"])
+            .ignore();
+
+          await db("friend_requests")
+            .where({ id: existing.id })
+            .delete();
+
+          return {
+            success: true,
+            autoAccepted: true,
+            friend: {
+              id: targetUser.id,
+              username: targetUser.username,
+            },
+          };
+        }
+
         return sendError(reply, "Friend request already exists", 409);
       }
 
@@ -747,13 +832,16 @@ export default async function authRoutes(app: FastifyInstance) {
             );
           });
         })
-        .select("u.id", "u.username", "u.last_request")
+        .select("u.id", "u.username", "u.last_request", "u.online")
         .orderBy("u.username", "asc");
 
       return friends.map((f: any) => ({
         id: f.id,
         username: f.username,
-        status: isOnlineByLastRequest(f.last_request) ? "online" : "offline",
+        status:
+          Boolean(f.online) || isOnlineByLastRequest(f.last_request)
+            ? "online"
+            : "offline",
       }));
     } catch (err: any) {
       app.log.error(err);
@@ -789,8 +877,9 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // --- RECORD MATCH ---
-  app.post("/matches", async (req, reply) => {
+  app.post("/matches", { preHandler: authenticate }, async (req, reply) => {
     try {
+      const actorUserId = readAuthenticatedUserId(req);
       const {
         player1_id,
         player2_id,
@@ -802,36 +891,58 @@ export default async function authRoutes(app: FastifyInstance) {
         ended_at,
       } = req.body as any;
 
-      if (
-        !player1_id ||
-        !player2_id ||
-        player1_score === undefined ||
-        player2_score === undefined
-      ) {
+      const normalizedPlayer1Id = String(player1_id ?? "").trim();
+      const normalizedPlayer2Id = String(player2_id ?? "").trim();
+
+      if (!normalizedPlayer1Id || !normalizedPlayer2Id) {
         return sendError(reply, "Missing required match fields", 400);
       }
+      if (normalizedPlayer1Id === normalizedPlayer2Id) {
+        return sendError(reply, "Match requires two distinct participants", 400);
+      }
+
+      const validatedPlayer1Score = getValidatedScore(
+        player1_score,
+        "player1_score",
+      );
+      const validatedPlayer2Score = getValidatedScore(
+        player2_score,
+        "player2_score",
+      );
+      const validatedStartedAt = getValidatedDate(started_at, "started_at");
+      const validatedEndedAt = getValidatedDate(ended_at, "ended_at");
+      if (validatedEndedAt.getTime() < validatedStartedAt.getTime()) {
+        return sendError(reply, "ended_at must be greater than or equal to started_at", 400);
+      }
+
+      ensureActorIsMatchParticipant(actorUserId, [
+        normalizedPlayer1Id,
+        normalizedPlayer2Id,
+      ]);
 
       const matchId = await recordMatch({
-        player1_id,
-        player2_id,
-        player1_score,
-        player2_score,
+        player1_id: normalizedPlayer1Id,
+        player2_id: normalizedPlayer2Id,
+        player1_score: validatedPlayer1Score,
+        player2_score: validatedPlayer2Score,
         game_mode: game_mode || "1v1",
         status: status || "completed",
-        started_at: new Date(started_at),
-        ended_at: new Date(ended_at),
+        started_at: validatedStartedAt,
+        ended_at: validatedEndedAt,
       });
 
       return { success: true, matchId };
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Match recording failed", 500);
+      const message = err?.message || "Match recording failed";
+      return sendError(reply, message, getMatchRecordingErrorStatus(message));
     }
   });
 
   // --- RECORD TEAM GAME ---
-  app.post("/team-games", async (req, reply) => {
+  app.post("/team-games", { preHandler: authenticate }, async (req, reply) => {
     try {
+      const actorUserId = readAuthenticatedUserId(req);
       const {
         leftTeamPlayers,
         rightTeamPlayers,
@@ -857,22 +968,78 @@ export default async function authRoutes(app: FastifyInstance) {
         return sendError(reply, "Team players must be arrays", 400);
       }
 
-      const gameId = await recordTeamMatch({
-        leftTeamPlayers,
-        rightTeamPlayers,
+      const normalizedLeftTeamPlayers = leftTeamPlayers
+        .map((player: any) => ({
+          ...player,
+          user_id: String(player?.user_id ?? "").trim(),
+        }))
+        .filter((player: any) => player.user_id);
+      const normalizedRightTeamPlayers = rightTeamPlayers
+        .map((player: any) => ({
+          ...player,
+          user_id: String(player?.user_id ?? "").trim(),
+        }))
+        .filter((player: any) => player.user_id);
+
+      if (
+        normalizedLeftTeamPlayers.length === 0 ||
+        normalizedRightTeamPlayers.length === 0
+      ) {
+        return sendError(reply, "Each team must include at least one player", 400);
+      }
+
+      const participantIds = [
+        ...normalizedLeftTeamPlayers.map((player: any) => player.user_id),
+        ...normalizedRightTeamPlayers.map((player: any) => player.user_id),
+      ];
+      if (new Set(participantIds).size !== participantIds.length) {
+        return sendError(reply, "Duplicate players are not allowed in team games", 400);
+      }
+      ensureActorIsMatchParticipant(actorUserId, participantIds);
+
+      const validatedLeftTeamScore = getValidatedScore(
         leftTeamScore,
+        "leftTeamScore",
+      );
+      const validatedRightTeamScore = getValidatedScore(
         rightTeamScore,
-        duration: duration || "normal",
-        powerups: powerups || false,
-        gameMode: gameMode || "1v1",
-        started_at: new Date(started_at),
-        ended_at: new Date(ended_at),
+        "rightTeamScore",
+      );
+      const validatedStartedAt = getValidatedDate(started_at, "started_at");
+      const validatedEndedAt = getValidatedDate(ended_at, "ended_at");
+      if (validatedEndedAt.getTime() < validatedStartedAt.getTime()) {
+        return sendError(reply, "ended_at must be greater than or equal to started_at", 400);
+      }
+
+      const primaryLeftPlayer = normalizedLeftTeamPlayers[0]?.user_id;
+      const primaryRightPlayer = normalizedRightTeamPlayers[0]?.user_id;
+      if (!primaryLeftPlayer || !primaryRightPlayer) {
+        return sendError(reply, "Each team must include at least one tracked player", 400);
+      }
+
+      const gameId = await recordMatch({
+        player1_id: primaryLeftPlayer,
+        player2_id: primaryRightPlayer,
+        player1_score: validatedLeftTeamScore,
+        player2_score: validatedRightTeamScore,
+        game_mode: gameMode || "1v1",
+        status: "completed",
+        started_at: validatedStartedAt,
+        ended_at: validatedEndedAt,
+        teamGameData: {
+          leftTeamPlayers: normalizedLeftTeamPlayers,
+          rightTeamPlayers: normalizedRightTeamPlayers,
+          duration: duration || "normal",
+          powerups: powerups || false,
+          gameMode: gameMode || "1v1",
+        },
       });
 
       return { success: true, gameId };
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Team game recording failed", 500);
+      const message = err?.message || "Team game recording failed";
+      return sendError(reply, message, getMatchRecordingErrorStatus(message));
     }
   });
 

@@ -26,15 +26,34 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         }
 
         const { name, player_ids } = req.body as any;
+        const normalizedName = String(name ?? "").trim();
+        const normalizedPlayerIds = Array.isArray(player_ids)
+          ? player_ids
+              .map((playerId: unknown) => String(playerId ?? "").trim())
+              .filter(Boolean)
+          : [];
+        const uniquePlayerIds = Array.from(new Set(normalizedPlayerIds));
 
-        if (!name || !Array.isArray(player_ids) || player_ids.length < 4) {
-          return sendError(reply, "Tournament requires a name and at least 4 players", 400);
+        if (!normalizedName || uniquePlayerIds.length !== 4) {
+          return sendError(
+            reply,
+            "Tournament requires exactly 4 unique players",
+            400,
+          );
+        }
+
+        if (!uniquePlayerIds.includes(userId)) {
+          return sendError(
+            reply,
+            "Tournament creator must be included in the player list",
+            400,
+          );
         }
 
         const result = await createTournament({
-          name,
+          name: normalizedName,
           created_by: userId,
-          player_ids,
+          player_ids: uniquePlayerIds,
         });
 
         reply.code(201);

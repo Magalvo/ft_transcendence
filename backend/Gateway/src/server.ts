@@ -29,6 +29,14 @@ app.register(proxy, {
 
 app.register(proxy, {
   upstream,
+  // Compatibility alias for legacy callers that still use /api/tournaments/*
+  prefix: '/api/tournaments',
+  rewritePrefix: '/api/tournaments',
+  http2: false,
+})
+
+app.register(proxy, {
+  upstream,
   // Compatibility alias for OAuth redirects/callbacks that use /api/google/*
   prefix: '/api/google',
   rewritePrefix: '/api/google',

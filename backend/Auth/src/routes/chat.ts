@@ -28,9 +28,43 @@ import {
   unblockUser,
 } from "../services/chat.js";
 import { sendError } from "../utils/respond.js";
+import db from "../db.js";
 
 const chatRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", authenticate);
+
+  const emitGroupMembersUpdated = (
+    groupId: number,
+    reason: string,
+    actorId?: string,
+  ) => {
+    void (async () => {
+      const members = await db("chat_group_members")
+        .select("user_id")
+        .where({ id_group: groupId });
+      const payload = { groupId, reason, actorId };
+      for (const member of members) {
+        app.io?.to(`user:${String(member.user_id)}`).emit(
+          "chat_group_members_updated",
+          payload,
+        );
+      }
+    })();
+  };
+
+  const emitGroupRemovedForUser = (
+    groupId: number,
+    targetId: string,
+    reason: string,
+    actorId?: string,
+  ) => {
+    app.io?.to(`user:${targetId}`).emit("chat_group_removed", {
+      groupId,
+      reason,
+      actorId,
+      targetId,
+    });
+  };
 
   app.get("/groups", async (request, reply) => {
     try {
@@ -58,7 +92,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
       const { password } = request.body as any;
-      return await joinGroup(Number(groupId), userId, password);
+      const numericGroupId = Number(groupId);
+      const joined = await joinGroup(numericGroupId, userId, password);
+      emitGroupMembersUpdated(numericGroupId, "join", userId);
+      return joined;
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to join group", 400);
     }
@@ -68,7 +105,9 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      await leaveGroup(Number(groupId), userId);
+      const numericGroupId = Number(groupId);
+      await leaveGroup(numericGroupId, userId);
+      emitGroupMembersUpdated(numericGroupId, "leave", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to leave group", 400);
@@ -113,7 +152,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const { targetId, username, target } = request.body as any;
       const targetValue = String(target ?? username ?? targetId ?? "").trim();
       if (!targetValue) return sendError(reply, "Target username is required", 400);
-      return await inviteMember(Number(groupId), userId, targetValue);
+      const numericGroupId = Number(groupId);
+      const invited = await inviteMember(numericGroupId, userId, targetValue);
+      emitGroupMembersUpdated(numericGroupId, "invite", userId);
+      return invited;
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to invite member", 400);
     }
@@ -136,8 +178,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
+      const numericGroupId = Number(groupId);
       const { enabled } = request.body as any;
-      await setGroupAdmin(Number(groupId), userId, targetId, !!enabled);
+      await setGroupAdmin(numericGroupId, userId, targetId, !!enabled);
+      emitGroupMembersUpdated(numericGroupId, "set_admin", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to update admin role", 400);
@@ -148,7 +192,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
-      await banMember(Number(groupId), userId, targetId);
+      const numericGroupId = Number(groupId);
+      await banMember(numericGroupId, userId, targetId);
+      emitGroupMembersUpdated(numericGroupId, "ban", userId);
+      emitGroupRemovedForUser(numericGroupId, targetId, "ban", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to ban user", 400);
@@ -159,7 +206,9 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
-      await unbanMember(Number(groupId), userId, targetId);
+      const numericGroupId = Number(groupId);
+      await unbanMember(numericGroupId, userId, targetId);
+      emitGroupMembersUpdated(numericGroupId, "unban", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to unban user", 400);
@@ -171,7 +220,9 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
-      await unbanMember(Number(groupId), userId, targetId);
+      const numericGroupId = Number(groupId);
+      await unbanMember(numericGroupId, userId, targetId);
+      emitGroupMembersUpdated(numericGroupId, "unban", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to unban user", 400);
@@ -182,7 +233,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
-      await kickMember(Number(groupId), userId, targetId);
+      const numericGroupId = Number(groupId);
+      await kickMember(numericGroupId, userId, targetId);
+      emitGroupMembersUpdated(numericGroupId, "kick", userId);
+      emitGroupRemovedForUser(numericGroupId, targetId, "kick", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to kick user", 400);
@@ -193,8 +247,10 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
+      const numericGroupId = Number(groupId);
       const { seconds } = request.body as any;
-      await muteMember(Number(groupId), userId, targetId, Number(seconds));
+      await muteMember(numericGroupId, userId, targetId, Number(seconds));
+      emitGroupMembersUpdated(numericGroupId, "mute", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to mute user", 400);
@@ -205,7 +261,9 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
-      await unmuteMember(Number(groupId), userId, targetId);
+      const numericGroupId = Number(groupId);
+      await unmuteMember(numericGroupId, userId, targetId);
+      emitGroupMembersUpdated(numericGroupId, "unmute", userId);
       return { ok: true };
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to unmute user", 400);
@@ -335,7 +393,18 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
   app.get("/users", async (request, reply) => {
     try {
       const userId = (request as any).user.id as string;
-      return await getChatUsersList(userId);
+      const { limit, search, offset } =
+        (request.query as {
+          limit?: string | number;
+          search?: string;
+          offset?: string | number;
+        }) || {};
+      return await getChatUsersList(
+        userId,
+        Number(limit),
+        search,
+        Number(offset),
+      );
     } catch (e: any) {
       return sendError(reply, e.message || "Failed to fetch users", 400);
     }

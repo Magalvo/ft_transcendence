@@ -7,7 +7,7 @@ import {
   GameConfiguration,
   GamePlayer,
 } from "./index.js";
-import { recordTeamMatch } from "../services/matchService.js";
+import { recordMatch } from "../services/matchService.js";
 import { releaseGameUsers } from "./ActiveGameRegistry.js";
 
 export class Game {
@@ -279,24 +279,43 @@ export class Game {
         const matchStartTime = new Date(Date.now() - eData.gameTime * 1000);
         const matchEndTime = new Date();
 
-        // Use the new team-based match recording function
         const gameMode = String(eData.configs.players_per_side);
-        const gameId = await recordTeamMatch({
-          leftTeamPlayers: leftPlayers.map((p) => ({
+        const normalizedLeftTeamPlayers = leftPlayers
+          .map((p) => ({
             user_id: p.user_id || "",
             socket_id: p.socket_id,
-          })),
-          rightTeamPlayers: rightPlayers.map((p) => ({
+          }))
+          .filter((player) => player.user_id);
+        const normalizedRightTeamPlayers = rightPlayers
+          .map((p) => ({
             user_id: p.user_id || "",
             socket_id: p.socket_id,
-          })),
-          leftTeamScore: eData.score.left,
-          rightTeamScore: eData.score.right,
-          duration: eData.configs.duration_label,
-          powerups: eData.configs.power_ups,
-          gameMode: gameMode,
+          }))
+          .filter((player) => player.user_id);
+
+        const primaryLeftPlayer = normalizedLeftTeamPlayers[0]?.user_id;
+        const primaryRightPlayer = normalizedRightTeamPlayers[0]?.user_id;
+
+        if (!primaryLeftPlayer || !primaryRightPlayer) {
+          throw new Error("Team matches require at least one tracked player on each side");
+        }
+
+        const gameId = await recordMatch({
+          player1_id: primaryLeftPlayer,
+          player2_id: primaryRightPlayer,
+          player1_score: eData.score.left,
+          player2_score: eData.score.right,
+          game_mode: gameMode,
+          status: "completed",
           started_at: matchStartTime,
           ended_at: matchEndTime,
+          teamGameData: {
+            leftTeamPlayers: normalizedLeftTeamPlayers,
+            rightTeamPlayers: normalizedRightTeamPlayers,
+            duration: eData.configs.duration_label,
+            powerups: eData.configs.power_ups,
+            gameMode,
+          },
         });
 
         console.log("✅ Game recorded with ID:", gameId);

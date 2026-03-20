@@ -12,7 +12,7 @@ export abstract class AbstractComponent {
     return this.element;
   }
 
-  public abstract render(): void;
+  public abstract render(): void | Promise<void>;
 
   public onDestroy(): void {}
 }

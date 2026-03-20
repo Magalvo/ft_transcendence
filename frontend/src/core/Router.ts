@@ -45,6 +45,18 @@ export class Router {
     void this.handleRoute();
   }
 
+  private renderRouteStatus(message: string): void {
+    const wrapper = document.createElement("div");
+    wrapper.className = "min-h-screen flex items-center justify-center px-6 text-center";
+
+    const text = document.createElement("div");
+    text.className = "max-w-md text-sm text-gray-400";
+    text.textContent = message;
+
+    wrapper.appendChild(text);
+    this.rootElement.replaceChildren(wrapper);
+  }
+
   private async handleRoute(): Promise<void> {
     const requestId = ++this.navigationRequestId;
     const path = window.location.pathname;
@@ -67,10 +79,10 @@ export class Router {
       this.currentComponent = null;
     }
 
-    this.rootElement.innerHTML = "";
+    this.rootElement.replaceChildren();
 
     if (!route) {
-      this.rootElement.innerHTML = `<h1>${t("router.notFound")}</h1>`;
+      this.renderRouteStatus(t("router.notFound"));
       return;
     }
 
@@ -83,15 +95,37 @@ export class Router {
 
     if (!Component || requestId !== this.navigationRequestId) {
       if (!Component) {
-        this.rootElement.innerHTML = `<h1>${t("router.notFound")}</h1>`;
+        this.renderRouteStatus(t("router.notFound"));
       }
       return;
     }
 
     const pageInstance = new Component();
     this.rootElement.appendChild(pageInstance.getElement());
-    pageInstance.render();
     this.currentComponent = pageInstance;
+
+    try {
+      await pageInstance.render();
+    } catch (error) {
+      console.error(`Failed to render route ${targetPath}:`, error);
+
+      if (this.currentComponent === pageInstance) {
+        pageInstance.onDestroy();
+        this.currentComponent = null;
+      }
+
+      if (requestId === this.navigationRequestId) {
+        this.renderRouteStatus("Something went wrong loading this page.");
+      }
+      return;
+    }
+
+    if (requestId !== this.navigationRequestId || this.currentComponent !== pageInstance) {
+      pageInstance.onDestroy();
+      if (this.currentComponent === pageInstance) {
+        this.currentComponent = null;
+      }
+    }
   }
 
   public init(): void {

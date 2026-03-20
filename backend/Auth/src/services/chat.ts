@@ -31,7 +31,7 @@ function normalizePair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-async function isGroupMember(groupId: number, userId: string): Promise<boolean> {
+export async function isGroupMember(groupId: number, userId: string): Promise<boolean> {
   const row = await db("chat_group_members").where({ id_group: groupId, user_id: userId }).first();
   return !!row;
 }
@@ -76,7 +76,17 @@ export async function getGroupsForUser(userId: string) {
     .leftJoin("chat_group_members as m", function () {
       this.on("m.id_group", "=", "g.id_group").andOnVal("m.user_id", "=", userId);
     })
-    .select("g.id_group", "g.name", "g.visibility", "g.owner_id")
+    .leftJoin("chat_group_bans as b", function () {
+      this.on("b.id_group", "=", "g.id_group").andOnVal("b.user_id", "=", userId);
+    })
+    .select(
+      "g.id_group",
+      "g.name",
+      "g.visibility",
+      "g.owner_id",
+      db.raw("CASE WHEN m.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member")
+    )
+    .whereNull("b.user_id")
     .where((qb) =>
       qb
         .whereIn("g.visibility", ["public", "protected"])
@@ -163,6 +173,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     .select(
       "u.id",
       "u.username",
+      "u.online",
       "u.last_request",
       "g.owner_id",
       db.raw("CASE WHEN a.user_id IS NOT NULL THEN 1 ELSE 0 END as is_admin"),
@@ -178,6 +189,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     .select(
       "u.id",
       "u.username",
+      "u.online",
       "u.last_request",
       "g.owner_id",
       db.raw("0 as is_admin"),
@@ -198,7 +210,7 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
     username: row.username,
     role: row.owner_id === row.id ? "owner" : row.is_admin ? "admin" : "member",
     is_banned: Number(row.is_banned) === 1,
-    online: isUserOnlineByLastRequest(row.last_request),
+    online: Boolean(row.online) || isUserOnlineByLastRequest(row.last_request),
     muted_until: row.muted_until || null,
   })).sort((a, b) => a.username.localeCompare(b.username));
 }
@@ -481,27 +493,66 @@ export async function getChatProfileByUserId(userId: string) {
     avatarUrl:
       user.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=0D8ABC&color=fff`,
-    online: isUserOnlineByLastRequest(user.last_request),
+    online: Boolean(user.online) || isUserOnlineByLastRequest(user.last_request),
   };
 }
 
-export async function getChatUsersList(currentUserId: string) {
-  const users = await db("users")
-    .select("id", "username", "avatarUrl", "last_request")
-    .whereNot({ id: currentUserId })
-    .orderBy("username", "asc");
+export async function getChatUsersList(
+  currentUserId: string,
+  limit: number = 100,
+  search?: string,
+  offset: number = 0,
+) {
+  const normalizedLimit = Number.isFinite(limit)
+    ? Math.max(1, Math.min(Math.floor(limit), 200))
+    : 100;
+  const normalizedOffset = Number.isFinite(offset)
+    ? Math.max(0, Math.floor(offset))
+    : 0;
+  const onlineThreshold = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
+  const normalizedSearch = String(search || "").trim();
 
-  return users
-    .map((row) => ({
-      id: row.id,
-      username: row.username,
-      avatarUrl:
-        row.avatarUrl ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(row.username)}&background=0D8ABC&color=fff`,
-      online: isUserOnlineByLastRequest(row.last_request),
-    }))
-    .sort((a, b) => {
-      if (a.online === b.online) return a.username.localeCompare(b.username);
-      return a.online ? -1 : 1;
-    });
+  const usersQuery = db("users")
+    .select("id", "username", "avatarUrl", "online", "last_request")
+    .whereNot({ id: currentUserId });
+
+  if (normalizedSearch) {
+    usersQuery.andWhere("username", "like", `%${normalizedSearch}%`);
+  }
+
+  const users = await usersQuery
+    .orderByRaw(
+      "CASE WHEN last_request IS NOT NULL AND last_request >= ? THEN 0 ELSE 1 END ASC",
+      [onlineThreshold],
+    )
+    .orderBy("username", "asc")
+    .offset(normalizedOffset)
+    .limit(normalizedLimit);
+
+  const countQuery = db("users")
+    .countDistinct({ total: "id" })
+    .whereNot({ id: currentUserId });
+
+  if (normalizedSearch) {
+    countQuery.andWhere("username", "like", `%${normalizedSearch}%`);
+  }
+
+  const countResult = await countQuery.first();
+  const total = Number((countResult as any)?.total || 0);
+  const mappedUsers = users.map((row) => ({
+    id: row.id,
+    username: row.username,
+    avatarUrl:
+      row.avatarUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(row.username)}&background=0D8ABC&color=fff`,
+    online: Boolean(row.online) || isUserOnlineByLastRequest(row.last_request),
+  }));
+
+  return {
+    users: mappedUsers,
+    total,
+    hasMore: normalizedOffset + mappedUsers.length < total,
+    offset: normalizedOffset,
+    limit: normalizedLimit,
+  };
 }

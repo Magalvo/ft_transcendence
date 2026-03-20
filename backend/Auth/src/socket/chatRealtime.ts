@@ -5,6 +5,7 @@ import {
   createPrivateMessage,
   getOrCreatePrivateChat,
   isBlocked,
+  isGroupMember,
   joinGroup,
 } from "../services/chat.js";
 
@@ -74,6 +75,11 @@ export function attachChatRealtime(io: Server, socket: Socket) {
       for (const sid of clientIds) {
         const viewerId = socketUsers.get(sid);
         if (!viewerId) continue;
+        if (!(await isGroupMember(Number(data.groupId), viewerId))) {
+          const clientSocket = io.sockets.sockets.get(sid);
+          clientSocket?.leave(roomName);
+          continue;
+        }
         if (await isBlocked(viewerId, userId)) continue;
         io.to(sid).emit("chat_group_message", msg);
       }

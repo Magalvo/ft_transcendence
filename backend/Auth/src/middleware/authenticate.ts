@@ -27,8 +27,8 @@ const authenticate = async (
 
     // atualizar last_request (ok 👍)
     await db.raw(
-      "UPDATE users SET last_request = ? WHERE id = ?",
-      [new Date().toISOString(), userId]
+      "UPDATE users SET last_request = ?, online = ? WHERE id = ?",
+      [new Date().toISOString(), true, userId]
     );
 
     // 🔑 MUITO IMPORTANTE

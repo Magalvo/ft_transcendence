@@ -12,7 +12,7 @@ export interface AcceptedTournamentInvitePayload {
 
 export class TournamentService {
   static async acceptInvite(token: string): Promise<AcceptedTournamentInvitePayload> {
-    const response = await ApiClient.post("/api/tournaments/invites/accept", { token });
+    const response = await ApiClient.post("/api/auth/tournaments/invites/accept", { token });
     return response.data?.data as AcceptedTournamentInvitePayload;
   }
 }

@@ -12,6 +12,7 @@ export interface ChatGroup {
   admin_id?: number;
   visibility?: GroupVisibility;
   owner_id?: string;
+  is_member?: boolean;
 }
 
 export type GroupVisibility = "public" | "private" | "protected";
@@ -49,6 +50,14 @@ export interface ChatListUser {
   avatarUrl?: string;
 }
 
+export interface ChatUsersResponse {
+  users: ChatListUser[];
+  total: number;
+  hasMore: boolean;
+  offset: number;
+  limit: number;
+}
+
 export class ChatService {
   static async getCurrentUser(): Promise<ChatUser> {
     const cached = TokenManager.getUser();
@@ -70,12 +79,49 @@ export class ChatService {
 
   static async getGroups(): Promise<ChatGroup[]> {
     const response = await ApiClient.get<ChatGroup[]>('/api/auth/groups');
-    return response.data ?? [];
+    return (response.data ?? []).map((group) => ({
+      ...group,
+      is_member: Boolean((group as any).is_member),
+    }));
   }
 
-  static async getUsers(): Promise<ChatListUser[]> {
-    const response = await ApiClient.get<ChatListUser[]>("/api/auth/users");
-    return response.data ?? [];
+  static async getUsers(
+    limit: number = 100,
+    search?: string,
+    offset: number = 0,
+  ): Promise<ChatUsersResponse> {
+    const normalizedLimit = Math.max(1, Math.floor(limit));
+    const normalizedOffset = Math.max(0, Math.floor(offset));
+    const params = new URLSearchParams();
+    params.set("limit", String(normalizedLimit));
+    params.set("offset", String(normalizedOffset));
+    const normalizedSearch = search?.trim();
+    if (normalizedSearch) {
+      params.set("search", normalizedSearch);
+    }
+
+    const response = await ApiClient.get<ChatUsersResponse | ChatListUser[]>(
+      `/api/auth/users?${params.toString()}`,
+    );
+    const data = response.data;
+
+    if (Array.isArray(data)) {
+      return {
+        users: data,
+        total: data.length,
+        hasMore: false,
+        offset: normalizedOffset,
+        limit: normalizedLimit,
+      };
+    }
+
+    return {
+      users: data?.users ?? [],
+      total: Number(data?.total ?? 0),
+      hasMore: Boolean(data?.hasMore),
+      offset: Number(data?.offset ?? normalizedOffset),
+      limit: Number(data?.limit ?? normalizedLimit),
+    };
   }
 
   static async getGroupMessages(groupId: number): Promise<ChatMessage[]> {

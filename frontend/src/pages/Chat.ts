@@ -17,6 +17,10 @@ import { WS_URL } from "../services/RuntimeConfig";
 
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
+  private static readonly CHAT_REFRESH_INTERVAL_MS = 12_000;
+  private static readonly DIRECTORY_REFRESH_INTERVAL_MS = 30_000;
+  private static readonly USER_DIRECTORY_LIMIT = 100;
+  private static readonly USER_SEARCH_DEBOUNCE_MS = 250;
   private navbar: Navbar | null = null;
   private currentUser: ChatUser | null = null;
   private groups: ChatGroup[] = [];
@@ -28,9 +32,14 @@ export class ChatPage extends AbstractComponent {
   private members: GroupMember[] = [];
   private messages: ChatMessage[] = [];
   private blockedUserIds = new Set<string>();
+  private unreadGroupIds = new Set<number>();
+  private unreadDmUserIds = new Set<string>();
+  private deniedGroupIds = new Set<number>();
+  private syncingRemovedGroup = false;
 
   private groupsEl: HTMLElement | null = null;
   private usersEl: HTMLElement | null = null;
+  private userSearchEl: HTMLInputElement | null = null;
   private titleEl: HTMLElement | null = null;
   private listEl: HTMLElement | null = null;
   private inputEl: HTMLInputElement | null = null;
@@ -54,6 +63,9 @@ export class ChatPage extends AbstractComponent {
   private chatSocket: Socket | null = null;
   private realtimeReady = false;
   private refreshTimer: number | null = null;
+  private userSearchTimer: number | null = null;
+  private lastDirectoryRefreshAt = 0;
+  private userSearchQuery = "";
   private destroyed = false;
   private bootstrapToken = 0;
 
@@ -77,6 +89,7 @@ export class ChatPage extends AbstractComponent {
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <div class="flex min-h-0 flex-1 flex-col">
             <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">${t("chat.users")}</h2>
+            <input id="chat-user-search" type="search" placeholder="Search users" class="mb-2 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-100 outline-none focus:border-blue-500" />
             <div id="chat-users" class="min-h-0 flex flex-1 flex-col gap-2 overflow-auto pb-2"></div>
           </div>
           <div class="flex min-h-0 flex-1 flex-col">
@@ -140,6 +153,7 @@ export class ChatPage extends AbstractComponent {
 
     this.groupsEl = shell.querySelector("#chat-groups");
     this.usersEl = shell.querySelector("#chat-users");
+    this.userSearchEl = shell.querySelector("#chat-user-search");
     this.titleEl = shell.querySelector("#chat-title");
     this.listEl = shell.querySelector("#chat-messages");
     this.inputEl = shell.querySelector("#chat-input");
@@ -159,6 +173,10 @@ export class ChatPage extends AbstractComponent {
     this.settingsVisibilityEl = shell.querySelector("#settings-visibility");
     this.settingsPasswordEl = shell.querySelector("#settings-password");
     this.settingsBtnEl = shell.querySelector("#settings-save-btn");
+    this.userSearchEl?.addEventListener("input", () => {
+      this.userSearchQuery = this.userSearchEl?.value.trim() || "";
+      this.scheduleUserSearch();
+    });
 
     const form = shell.querySelector<HTMLFormElement>("#chat-form");
     form?.addEventListener("submit", (e) => {
@@ -226,18 +244,14 @@ export class ChatPage extends AbstractComponent {
     await this.refreshBlockedUsers();
     if (this.destroyed || token !== this.bootstrapToken) return;
     this.initRealtime();
-    this.users = await ChatService.getUsers();
+    await this.refreshDirectoryData();
     if (this.destroyed || token !== this.bootstrapToken) return;
-    this.groups = await ChatService.getGroups();
-    if (this.destroyed || token !== this.bootstrapToken) return;
-    this.currentGroupId = this.groups[0]?.id_group ?? null;
+    this.currentGroupId = null;
     this.renderUsers();
     this.renderGroups();
-
-    if (this.currentGroupId !== null) {
-      await this.selectGroup(this.currentGroupId);
-      if (this.destroyed || token !== this.bootstrapToken) return;
-    } else {
+    await this.selectFirstAccessibleGroup();
+    if (this.destroyed || token !== this.bootstrapToken) return;
+    if (this.currentGroupId === null) {
       this.renderMessages();
       this.renderMembers();
     }
@@ -250,16 +264,36 @@ export class ChatPage extends AbstractComponent {
     if (this.refreshTimer !== null) window.clearInterval(this.refreshTimer);
     this.refreshTimer = window.setInterval(() => {
       void this.refreshChatData();
-    }, 12000);
+    }, ChatPage.CHAT_REFRESH_INTERVAL_MS);
   }
 
   private async refreshChatData(): Promise<void> {
     try {
-      const [users, groups] = await Promise.all([ChatService.getUsers(), ChatService.getGroups()]);
-      this.users = users;
-      this.groups = groups;
-      this.renderUsers();
-      this.renderGroups();
+      const now = Date.now();
+      const shouldRefreshDirectory =
+        !this.chatSocket?.connected ||
+        !this.realtimeReady ||
+        now - this.lastDirectoryRefreshAt >= ChatPage.DIRECTORY_REFRESH_INTERVAL_MS;
+
+      if (shouldRefreshDirectory) {
+        await this.refreshDirectoryData();
+      }
+
+      if (this.currentGroupId !== null && !this.groups.some((g) => g.id_group === this.currentGroupId)) {
+        this.currentGroupId = null;
+        this.currentRole = null;
+        this.members = [];
+        this.messages = [];
+        if (this.titleEl) this.titleEl.textContent = t("chat.title");
+        this.renderMessages();
+        this.renderMembers();
+      }
+      if (this.currentGroupId !== null && this.deniedGroupIds.has(this.currentGroupId)) {
+        this.currentGroupId = null;
+      }
+      if (this.currentGroupId === null) {
+        await this.selectFirstAccessibleGroup();
+      }
 
       // Realtime socket already delivers fresh chat data; fallback poll only if realtime is not ready.
       if (this.currentGroupId !== null && (!this.chatSocket?.connected || !this.realtimeReady)) {
@@ -281,6 +315,35 @@ export class ChatPage extends AbstractComponent {
     }
   }
 
+  private async refreshDirectoryData(): Promise<void> {
+    const [groups] = await Promise.all([
+      ChatService.getGroups(),
+      this.refreshUserDirectory(),
+    ]);
+    this.groups = groups;
+    this.lastDirectoryRefreshAt = Date.now();
+    this.renderGroups();
+  }
+
+  private async refreshUserDirectory(): Promise<void> {
+    const response = await ChatService.getUsers(
+      ChatPage.USER_DIRECTORY_LIMIT,
+      this.userSearchQuery || undefined,
+    );
+    this.users = response.users;
+    this.renderUsers();
+  }
+
+  private scheduleUserSearch(): void {
+    if (this.userSearchTimer !== null) {
+      window.clearTimeout(this.userSearchTimer);
+    }
+
+    this.userSearchTimer = window.setTimeout(() => {
+      void this.refreshUserDirectory();
+    }, ChatPage.USER_SEARCH_DEBOUNCE_MS);
+  }
+
   private renderGroups(): void {
     if (!this.groupsEl) return;
     this.groupsEl.innerHTML = "";
@@ -289,12 +352,14 @@ export class ChatPage extends AbstractComponent {
       const btn = document.createElement("button");
       btn.type = "button";
       const active = group.id_group === this.currentGroupId;
+      const hasUnread = this.unreadGroupIds.has(group.id_group);
       btn.className = `w-full rounded-md px-3 py-2 text-left text-sm transition ${
         active ? "bg-blue-700 text-white" : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700"
       }`;
       const groupName = group.name || t("chat.groupFallback", { id: group.id_group });
       const visibilityLabel = group.visibility ? this.getVisibilityLabel(group.visibility) : "";
-      btn.textContent = visibilityLabel ? `${groupName} (${visibilityLabel})` : groupName;
+      const label = visibilityLabel ? `${groupName} (${visibilityLabel})` : groupName;
+      btn.textContent = hasUnread && !active ? `● ${label}` : label;
       btn.addEventListener("click", () => void this.selectGroup(group.id_group));
       this.groupsEl?.appendChild(btn);
     });
@@ -315,11 +380,12 @@ export class ChatPage extends AbstractComponent {
       const btn = document.createElement("button");
       btn.type = "button";
       const active = this.currentDmTargetId === user.id;
+      const hasUnread = this.unreadDmUserIds.has(user.id);
       btn.className = `flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm transition ${
         active ? "bg-blue-700 text-white" : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700"
       }`;
       btn.innerHTML = `
-        <span class="truncate">${user.username}</span>
+        <span class="truncate">${hasUnread && !active ? `● ${user.username}` : user.username}</span>
         <span class="ml-2 inline-flex items-center gap-1 text-[11px] ${user.online ? "text-emerald-400" : "text-neutral-500"}">
           <span class="inline-block h-2 w-2 rounded-full ${user.online ? "bg-emerald-400" : "bg-neutral-600"}"></span>
           ${this.getUserStatusLabel(user.online)}
@@ -330,32 +396,72 @@ export class ChatPage extends AbstractComponent {
     });
   }
 
-  private async selectGroup(groupId: number): Promise<void> {
+  private async selectGroup(groupId: number, options?: { silent?: boolean }): Promise<boolean> {
+    const silent = !!options?.silent;
+    if (silent && this.deniedGroupIds.has(groupId)) {
+      return false;
+    }
+    const targetGroup = this.groups.find((g) => g.id_group === groupId);
+    const previousGroupId = this.currentGroupId;
     this.currentPrivateChatId = null;
     this.currentDmTargetId = null;
+    this.unreadGroupIds.delete(groupId);
     this.updateDmBlockButton();
     this.renderUsers();
-    this.currentGroupId = groupId;
     this.renderGroups();
 
     try {
-      await ChatService.joinGroup(groupId);
+      if (targetGroup?.visibility === "protected" && !targetGroup.is_member) {
+        const pass = window.prompt(t("chat.prompt.channelPassword"));
+        if (!pass) {
+          this.currentGroupId = previousGroupId;
+          this.renderGroups();
+          return false;
+        }
+        await ChatService.joinGroup(groupId, pass);
+      } else {
+        await ChatService.joinGroup(groupId);
+      }
     } catch (e: any) {
       const errorText = String(e?.response?.data?.error || e?.message || "");
-      if (errorText.toLowerCase().includes("password")) {
+      const lowered = errorText.toLowerCase();
+      if (lowered.includes("password")) {
         const pass = window.prompt(t("chat.prompt.channelPassword"));
         if (pass) {
-          await ChatService.joinGroup(groupId, pass);
+          try {
+            await ChatService.joinGroup(groupId, pass);
+          } catch (retryError: any) {
+            this.currentGroupId = previousGroupId;
+            this.renderGroups();
+            const retryText = String(retryError?.response?.data?.error || retryError?.message || "");
+            if (!silent) window.alert(retryText || t("chat.error.joinChannel"));
+            return false;
+          }
         } else {
-          return;
+          this.currentGroupId = previousGroupId;
+          this.renderGroups();
+          return false;
         }
       } else {
-        window.alert(errorText || t("chat.error.joinChannel"));
-        return;
+        if (
+          lowered.includes("banned") ||
+          lowered.includes("not a group member") ||
+          lowered.includes("private channel requires an invitation")
+        ) {
+          this.deniedGroupIds.add(groupId);
+        }
+        this.currentGroupId = previousGroupId;
+        this.renderGroups();
+        if (!silent) window.alert(errorText || t("chat.error.joinChannel"));
+        return false;
       }
     }
 
+    this.deniedGroupIds.delete(groupId);
+    if (targetGroup) targetGroup.is_member = true;
+    this.currentGroupId = groupId;
     const selected = this.groups.find((g) => g.id_group === groupId);
+    this.renderGroups();
     if (this.titleEl) this.titleEl.textContent = selected ? `# ${selected.name}` : t("chat.title");
     this.inviteBtnEl?.classList.add("hidden");
     if (this.settingsVisibilityEl) this.settingsVisibilityEl.value = selected?.visibility || "public";
@@ -366,13 +472,23 @@ export class ChatPage extends AbstractComponent {
       await this.refreshGroupMeta();
       this.renderMessages();
     } catch (e: any) {
-      window.alert(e?.response?.data?.error || e?.message || t("chat.error.loadChannelMessages"));
+      const errorText = String(e?.response?.data?.error || e?.message || "");
+      const lowered = errorText.toLowerCase();
+      if (lowered.includes("not a group member") || lowered.includes("banned")) {
+        this.deniedGroupIds.add(groupId);
+        await this.handleRemovedFromGroup(groupId);
+        return false;
+      }
+      if (!silent) window.alert(errorText || t("chat.error.loadChannelMessages"));
+      return false;
     }
+    return true;
   }
 
   private async openPrivateChat(targetId: string, username: string): Promise<void> {
     this.currentGroupId = null;
     this.currentDmTargetId = targetId;
+    this.unreadDmUserIds.delete(targetId);
     this.currentRole = null;
     this.members = [];
     this.renderGroups();
@@ -399,9 +515,16 @@ export class ChatPage extends AbstractComponent {
     try {
       this.currentRole = await ChatService.getGroupRole(this.currentGroupId);
       this.members = await ChatService.getGroupMembers(this.currentGroupId);
-    } catch {
+    } catch (e: any) {
+      const msg = String(e?.response?.data?.error || e?.message || "").toLowerCase();
+      const notMember = msg.includes("not a group member");
+      const banned = msg.includes("banned");
       this.currentRole = null;
       this.members = [];
+      if (notMember || banned) {
+        if (this.currentGroupId !== null) this.deniedGroupIds.add(this.currentGroupId);
+        await this.handleRemovedFromGroup(this.currentGroupId);
+      }
     }
     this.renderMembers();
   }
@@ -423,20 +546,58 @@ export class ChatPage extends AbstractComponent {
       if (this.currentGroupId) this.chatSocket?.emit("chat_join_group", { groupId: this.currentGroupId });
     });
 
+    this.chatSocket.on("chat_joined_group", async (data: { groupId?: number }) => {
+      if (this.currentGroupId === null || Number(data?.groupId) !== this.currentGroupId) return;
+      await this.refreshGroupMeta();
+    });
+
     this.chatSocket.on("chat_error", (err: any) => {
-      this.realtimeReady = false;
       const msg = err?.message || t("chat.error.realtime");
+      const lowered = String(msg).toLowerCase();
+      const isFatalAuthError =
+        lowered.includes("missing chat auth token") ||
+        lowered.includes("invalid chat auth token") ||
+        lowered.includes("not authenticated for chat socket");
+      if (isFatalAuthError) {
+        this.realtimeReady = false;
+      }
       if (msg) window.alert(msg);
     });
 
+    this.chatSocket.on("chat_group_members_updated", async (payload: { groupId?: number }) => {
+      if (this.currentGroupId === null || Number(payload?.groupId) !== this.currentGroupId) return;
+      await this.refreshGroupMeta();
+      try {
+        await this.refreshUserDirectory();
+      } catch {
+        // Ignore transient users refresh errors.
+      }
+    });
+
+    this.chatSocket.on("chat_group_removed", async (payload: { groupId?: number }) => {
+      const removedGroupId = Number(payload?.groupId);
+      if (!Number.isFinite(removedGroupId)) return;
+      await this.handleRemovedFromGroup(removedGroupId);
+    });
+
     this.chatSocket.on("chat_group_message", (msg: any) => {
-      if (!this.currentGroupId || this.currentPrivateChatId !== null) return;
-      if (Number(msg.id_group) !== this.currentGroupId) return;
+      const incomingGroupId = Number(msg.id_group);
+      if (!Number.isFinite(incomingGroupId)) return;
+
+      const viewingThisGroup =
+        this.currentPrivateChatId === null && this.currentGroupId === incomingGroupId;
+      if (!viewingThisGroup) {
+        this.unreadGroupIds.add(incomingGroupId);
+        this.renderGroups();
+        return;
+      }
+
       if (this.messages.some((m) => String(m.id_message) === String(msg.id_message))) return;
+      const senderId = String(msg.id_usersender);
       this.messages.push({
         id_message: msg.id_message,
-        id_usersender: String(msg.id_usersender),
-        sender_name: msg.sender_name,
+        id_usersender: senderId,
+        sender_name: this.resolveSenderName(senderId, msg.sender_name),
         messagem: msg.messagem,
         timestamp: Number(msg.timestamp),
       });
@@ -445,26 +606,82 @@ export class ChatPage extends AbstractComponent {
 
     this.chatSocket.on("chat_private_message", async (msg: any) => {
       const senderId = String(msg.id_usersender);
-      if (this.currentDmTargetId && senderId !== this.currentDmTargetId && senderId !== this.currentUser?.id) return;
+      const incomingChatId = Number(msg.id_privatechat);
+      const isActiveDm =
+        this.currentPrivateChatId !== null && incomingChatId === this.currentPrivateChatId;
 
-      if (this.currentPrivateChatId && Number(msg.id_privatechat) !== this.currentPrivateChatId) return;
-
-      if (!this.currentPrivateChatId && this.currentDmTargetId && senderId === this.currentDmTargetId) {
-        const chat = await ChatService.getOrCreatePrivateChat(this.currentDmTargetId);
-        this.currentPrivateChatId = chat.id_privatechat;
+      if (!isActiveDm) {
+        if (senderId !== this.currentUser?.id) {
+          this.unreadDmUserIds.add(senderId);
+          this.renderUsers();
+        }
+        return;
       }
 
       if (this.messages.some((m) => String(m.id_message) === String(msg.id_message))) return;
       this.messages.push({
         id_message: msg.id_message,
-        id_usersender: String(msg.id_usersender),
-        sender_name: msg.sender_name,
+        id_usersender: senderId,
+        sender_name: this.resolveSenderName(senderId, msg.sender_name),
         messagem: msg.messagem,
         timestamp: Number(msg.timestamp),
       });
       this.renderMessages();
     });
 
+  }
+
+  private async handleRemovedFromGroup(groupId: number | null): Promise<void> {
+    if (!Number.isFinite(groupId) || this.syncingRemovedGroup) return;
+    this.syncingRemovedGroup = true;
+    try {
+      const numericGroupId = Number(groupId);
+      this.unreadGroupIds.delete(numericGroupId);
+      this.deniedGroupIds.add(numericGroupId);
+      this.groups = this.groups.filter((g) => g.id_group !== numericGroupId);
+      this.renderGroups();
+
+      if (this.currentGroupId === numericGroupId) {
+        this.currentGroupId = null;
+        this.currentRole = null;
+        this.members = [];
+        this.messages = [];
+        if (this.titleEl) this.titleEl.textContent = t("chat.title");
+        this.renderMembers();
+        this.renderMessages();
+      }
+
+      this.groups = await ChatService.getGroups();
+      this.renderGroups();
+
+      if (this.currentGroupId === null) {
+        await this.selectFirstAccessibleGroup(new Set<number>([numericGroupId]));
+      }
+    } catch {
+      // Keep current UI; next refresh cycle will recover.
+    } finally {
+      this.syncingRemovedGroup = false;
+    }
+  }
+
+  private async selectFirstAccessibleGroup(excluded?: Set<number>): Promise<void> {
+    const blocked = excluded || new Set<number>();
+    for (const group of this.groups) {
+      if (blocked.has(group.id_group)) continue;
+      if (this.deniedGroupIds.has(group.id_group)) continue;
+      if (!group.is_member && group.visibility !== "public") continue;
+      const ok = await this.selectGroup(group.id_group, { silent: true });
+      if (ok) return;
+    }
+
+    this.currentGroupId = null;
+    this.currentRole = null;
+    this.members = [];
+    this.messages = [];
+    if (this.titleEl) this.titleEl.textContent = t("chat.title");
+    this.renderGroups();
+    this.renderMembers();
+    this.renderMessages();
   }
 
   private renderMessages(): void {
@@ -509,10 +726,16 @@ export class ChatPage extends AbstractComponent {
       });
 
       const inviteData = this.parsePongInvite(msg.messagem);
+      const inviteUrl = inviteData?.url || msg.invite_url || undefined;
+      const isTournamentInvite = this.isTournamentInvite(inviteUrl);
       const text = document.createElement("div");
       text.className = "break-words text-sm";
       text.textContent = inviteData
-        ? (isMe ? t("chat.invite.sent") : t("chat.invite.received"))
+        ? (
+          isTournamentInvite
+            ? (isMe ? t("chat.tournamentInvite.sent") : t("chat.tournamentInvite.received"))
+            : (isMe ? t("chat.invite.sent") : t("chat.invite.received"))
+        )
         : msg.messagem;
 
       const time = document.createElement("div");
@@ -524,7 +747,7 @@ export class ChatPage extends AbstractComponent {
         const openBtn = document.createElement("button");
         openBtn.type = "button";
         openBtn.className = "mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium hover:bg-blue-600";
-        openBtn.textContent = t("chat.invite.openLobby");
+        openBtn.textContent = isTournamentInvite ? t("chat.tournamentInvite.open") : t("chat.invite.openLobby");
         openBtn.addEventListener("click", () => {
           this.navigateToInvite(this.buildInviteUrl(inviteData.url, inviteData.sessionId));
         });
@@ -534,7 +757,7 @@ export class ChatPage extends AbstractComponent {
         const acceptBtn = document.createElement("button");
         acceptBtn.type = "button";
         acceptBtn.className = "mt-2 rounded bg-emerald-700 px-3 py-1 text-xs font-medium hover:bg-emerald-600";
-        acceptBtn.textContent = t("chat.invite.accept");
+        acceptBtn.textContent = isTournamentInvite ? t("chat.tournamentInvite.join") : t("chat.invite.accept");
         acceptBtn.addEventListener("click", () => {
           this.navigateToInvite(this.buildInviteUrl(
             inviteData?.url || msg.invite_url,
@@ -717,9 +940,12 @@ export class ChatPage extends AbstractComponent {
     try {
       await ChatService.createGroup(name, visibility, password);
       this.groups = await ChatService.getGroups();
-      this.currentGroupId = this.groups.find((g) => g.name === name)?.id_group ?? this.groups[0]?.id_group ?? null;
+      const targetGroupId =
+        this.groups.find((g) => g.name === name)?.id_group ??
+        this.groups[0]?.id_group ??
+        null;
       this.renderGroups();
-      if (this.currentGroupId !== null) await this.selectGroup(this.currentGroupId);
+      if (targetGroupId !== null) await this.selectGroup(targetGroupId);
       this.createNameEl.value = "";
       if (this.createPasswordEl) this.createPasswordEl.value = "";
     } catch (e: any) {
@@ -953,6 +1179,29 @@ export class ChatPage extends AbstractComponent {
     return isOnline ? t("chat.userStatus.online") : t("chat.userStatus.offline");
   }
 
+  private isTournamentInvite(rawUrl?: string): boolean {
+    if (!rawUrl) return false;
+    try {
+      const url = new URL(rawUrl, window.location.origin);
+      const hasToken = !!url.searchParams.get("tournamentInviteToken");
+      const hasMatchPair = !!url.searchParams.get("tournamentId") && !!url.searchParams.get("matchId");
+      return hasToken || hasMatchPair;
+    } catch {
+      return false;
+    }
+  }
+
+  private resolveSenderName(senderId: string, senderName?: string | null): string {
+    const normalized = String(senderName || "").trim();
+    if (normalized) return normalized;
+    if (this.currentUser?.id === senderId) return this.currentUser.username;
+    const member = this.members.find((m) => m.id === senderId);
+    if (member?.username) return member.username;
+    const user = this.users.find((u) => u.id === senderId);
+    if (user?.username) return user.username;
+    return t("chat.userFallback", { id: senderId });
+  }
+
   public onDestroy(): void {
     this.destroyed = true;
     this.bootstrapToken += 1;
@@ -962,8 +1211,13 @@ export class ChatPage extends AbstractComponent {
       window.clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    if (this.userSearchTimer !== null) {
+      window.clearTimeout(this.userSearchTimer);
+      this.userSearchTimer = null;
+    }
     this.chatSocket?.disconnect();
     this.chatSocket = null;
+    this.lastDirectoryRefreshAt = 0;
   }
 
   private destroyOwnedUi(): void {
