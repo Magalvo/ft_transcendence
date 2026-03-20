@@ -2,20 +2,20 @@
 
 A real-time multiplayer Pong game featuring a microservices architecture, user authentication, live chat, and competitive matchmaking. 
 
-## 🚀 Tech Stack
+## Tech Stack
 
 * **Frontend:** Vanilla TypeScript, Vite, Tailwind CSS (Custom SPA Router)
 * **Backend:** Node.js, Fastify, Socket.IO
 * **Database:** SQLite
 * **Infrastructure:** Docker & Docker Compose
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 Make sure you have the following installed on your machine:
 * [Docker](https://docs.docker.com/get-docker/)
 * [Make](https://www.gnu.org/software/make/)
 
-## ⚡ Quick Start
+## Quick Start
 
 1.  **Clone the repository:**
     ```bash
@@ -32,7 +32,7 @@ Make sure you have the following installed on your machine:
 3.  **Access the application:**
     * **Frontend (App):** [http://localhost:8080](http://localhost:8080)
 
-## 🛑 Stopping the Application
+## Stopping the Application
 
 To safely stop and remove the containers, run:
 ```bash
@@ -44,7 +44,7 @@ To completely clean up (including volumes and database resets), run:
 make fclean
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 The project is divided into specialized microservices:
 * `/frontend` - The Single Page Application (UI, Game Engine, Router).
