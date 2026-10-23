@@ -4,6 +4,7 @@ import { User } from "../interfaces/user.js";
 import crypto from "crypto";
 import { sendMail } from "../utils/email.js";
 import db from '../db.js';
+import { hashToken } from "../utils/tokens.js";
 
 function getFrontendBaseUrl(headers: Record<string, unknown>): string {
   const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
@@ -55,7 +56,7 @@ const forgotPass = async (req: FastifyRequest, reply : FastifyReply) => {
       const token = crypto.randomBytes(32).toString("hex");
       const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-      await db.raw("UPDATE users SET resetToken = ?, resetExpires = ? WHERE id = ?", [token, expires, user.id]);
+      await db.raw("UPDATE users SET resetToken = ?, resetExpires = ? WHERE id = ?", [hashToken(token), expires, user.id]);
       
       const frontendBaseUrl = getFrontendBaseUrl(
         req.headers as Record<string, unknown>,

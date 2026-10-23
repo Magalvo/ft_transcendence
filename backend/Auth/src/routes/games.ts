@@ -1,16 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import jwt from "jsonwebtoken";
 import db from "../db.js";
-import createGame from "../services/createGame.js";
 import auth from "../middleware/authenticate.js";
 import getMyGames from "../services/getMyGames.js";
 import { sendError } from "../utils/respond.js";
 
 export default async function gameRoutes(app: FastifyInstance) {
-  app.post("/games", async (req, reply) => {
-    return await createGame(req, reply);
-  });
-
   app.get(
     "/games/me",
     { preHandler: auth },

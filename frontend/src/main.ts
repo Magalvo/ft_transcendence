@@ -6,6 +6,7 @@ import { Router } from './core/Router';
 
 import { TokenManager } from './services/TokenManager';
 import AuthService from './services/AuthService';
+import { parseOAuthParams } from './services/OAuthCallbackService';
 import { i18n } from './services/I18nService';
 import { initTournamentInviteNotifier } from './services/TournamentInviteNotifier';
 
@@ -34,18 +35,23 @@ router.addLazyRoute('/terms', async () => (await import('./pages/Terms')).TermsP
 router.addLazyRoute('/privacy', async () => (await import('./pages/Privacy')).PrivacyPage);
 router.addLazyRoute('/reset-password', async () => (await import('./pages/PasswordResetPage')).PasswordResetPage);
 
-const searchParams = new URLSearchParams(window.location.search);
+const oauthParams = parseOAuthParams(window.location.hash || window.location.search);
+const isGoogleCallback = oauthParams.get('provider') === 'google';
 const hasOAuthToken =
-  searchParams.get('provider') === 'google' &&
-  Boolean(searchParams.get('token')) &&
-  Boolean(searchParams.get('refreshToken'));
+  isGoogleCallback &&
+  Boolean(oauthParams.get('token')) &&
+  Boolean(oauthParams.get('refreshToken'));
+const oauthTwoFactorToken = isGoogleCallback ? oauthParams.get('twoFactorToken') : null;
 
 const publicRoutes = ['/login', '/404', '/terms', '/privacy', '/reset-password'];
 
 async function bootstrapApp(): Promise<void> {
   let postAuthRoute: string | null = null;
 
-  if (hasOAuthToken) {
+  if (oauthTwoFactorToken) {
+    AuthService.setPendingOAuthTwoFactorToken(oauthTwoFactorToken);
+    postAuthRoute = '/login';
+  } else if (hasOAuthToken) {
     try {
       const callbackResult = await AuthService.handleGoogleCallback();
       if (callbackResult.ok) {

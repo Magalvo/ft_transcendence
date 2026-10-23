@@ -210,14 +210,15 @@ export class ProfilePage extends AbstractComponent {
 
     disableBtn.onclick = async () => {
       if (!user.twoFactorEnabled) return;
-      if (!confirm('Are you sure you want to disable Two-Factor Authentication?')) {
+      const code = prompt('Enter the 6-digit code from your authenticator app to disable Two-Factor Authentication:');
+      if (!code) {
         return;
       }
 
       disableBtn.disabled = true;
 
       try {
-        await AuthService.disable2FA();
+        await AuthService.disable2FA(code.trim());
         await UserService.refreshProfile();
         alert('Two-Factor Authentication has been disabled.');
         void this.render();

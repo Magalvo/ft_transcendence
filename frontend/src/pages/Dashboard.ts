@@ -11,6 +11,7 @@ import { navigateTo } from '../core/AppRouter';
 import { formatDateTime, t } from '../services/I18nService';
 import { getUserAvatarUrl } from '../shared/avatar';
 
+import { escapeHtml } from '../shared/utils';
 export class DashboardPage extends AbstractComponent {
   private navbar: Navbar | null = null;
   private background: HyperspeedWrapper | null = null;
@@ -241,7 +242,7 @@ export class DashboardPage extends AbstractComponent {
       const isOnline = friend.status === 'online';
 
       li.innerHTML = `
-        <span>${friend.username}</span>
+        <span>${escapeHtml(friend.username)}</span>
         <span class="w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}"
               title="${this.getStatusLabel(friend.status)}"></span>
       `;

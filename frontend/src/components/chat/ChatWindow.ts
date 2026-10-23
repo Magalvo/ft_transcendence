@@ -3,6 +3,7 @@ import { MessageBubble, ChatMessage } from './MessageBubble';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
+import { escapeHtml } from '../../shared/utils';
 export class ChatWindow extends AbstractComponent {
   private messagesContainer: HTMLElement;
   private currentMessages: ChatMessage[] = [];
@@ -13,7 +14,7 @@ export class ChatWindow extends AbstractComponent {
     
     const header = document.createElement('div');
     header.className = 'p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800';
-    header.innerHTML = `<h3 class="font-bold text-lg">Chat with ${username}</h3>`;
+    header.innerHTML = `<h3 class="font-bold text-lg">Chat with ${escapeHtml(username)}</h3>`;
 
     const actions = document.createElement('div');
     actions.className = 'flex gap-2';

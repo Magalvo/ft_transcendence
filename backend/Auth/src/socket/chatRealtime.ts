@@ -1,5 +1,5 @@
 import type { Server, Socket } from "socket.io";
-import jwt from "jsonwebtoken";
+import { verifyAccessToken } from "../utils/tokens.js";
 import {
   createGroupMessage,
   createPrivateMessage,
@@ -42,8 +42,7 @@ export function attachChatRealtime(io: Server, socket: Socket) {
         (socket.handshake.auth?.token as string | undefined) ||
         readTokenFromCookieHeader(socket.handshake.headers.cookie);
       if (!token) return socket.emit("chat_error", { message: "Missing chat auth token" });
-      const JWT_SECRET = process.env.JWT_SECRET as string;
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const decoded = verifyAccessToken(token);
       socketUsers.set(socket.id, decoded.userId);
       socket.join(`user:${decoded.userId}`);
       socket.emit("chat_auth_ok", { userId: decoded.userId });

@@ -5,6 +5,7 @@ import { SpacedOutGame } from "../games/spacedout/SpacedOutGame";
 import { JoinWarpTransition } from "../games/spacedout/JoinWarpTransition";
 import "../games/spacedout/style.css";
 
+import { escapeHtml } from "../shared/utils";
 export class SpacedOutPage extends AbstractComponent {
   private navbar: Navbar | null = null;
   private game: SpacedOutGame | null = null;
@@ -557,7 +558,7 @@ export class SpacedOutPage extends AbstractComponent {
       statusMount.textContent =
         "Failed to create an authenticated SpacedOut session.";
       loadingText.textContent = "Session bootstrap failed.";
-      logsMount.innerHTML = `<li class="spacedout-log spacedout-log-error">${error?.message || "Unknown SpacedOut session error."}</li>`;
+      logsMount.innerHTML = `<li class="spacedout-log spacedout-log-error">${escapeHtml(error?.message || "Unknown SpacedOut session error.")}</li>`;
     }
   }
 

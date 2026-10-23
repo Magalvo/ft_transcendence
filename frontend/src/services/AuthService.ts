@@ -8,6 +8,8 @@ import {
   type GoogleCallbackResult,
 } from "./OAuthCallbackService.ts";
 
+const OAUTH_2FA_TOKEN_KEY = "oauth_2fa_token";
+
 interface LoginResponse {
   token?: string;
   refreshToken?: string;
@@ -172,6 +174,23 @@ export class AuthService {
    */
   async verify2FA(code: string): Promise<{ message: string }> {
     try {
+      const oauthTwoFactorToken = this.getPendingOAuthTwoFactorToken();
+      if (oauthTwoFactorToken) {
+        const response = await ApiClient.post("/api/auth/2fa/login", {
+          twoFactorToken: oauthTwoFactorToken,
+          code,
+        });
+        const { token, refreshToken } = response.data.data;
+        TokenManager.setTokens(token, refreshToken, 1);
+        this.clearPendingTwoFactor();
+        try {
+          await UserService.getProfile();
+        } catch (profileError) {
+          console.warn("Failed to load user profile after 2FA:", profileError);
+        }
+        return { message: "2FA verified" };
+      }
+
       if (!this.pendingTwoFactorCredentials) {
         throw new Error("No pending 2FA login session");
       }
@@ -220,9 +239,9 @@ export class AuthService {
   /**
    * Disable Two-Factor Authentication on the account
    */
-  async disable2FA(): Promise<{ message: string }> {
+  async disable2FA(code: string): Promise<{ message: string }> {
     try {
-      const response = await ApiClient.post("/api/auth/2fa/disable", {});
+      const response = await ApiClient.post("/api/auth/2fa/disable", { code });
 
       if (response.status === 200 && response.data.success) {
         return response.data.data;
@@ -385,7 +404,7 @@ export class AuthService {
    */
   async handleGoogleCallback(): Promise<GoogleCallbackResult> {
     try {
-      const result = await processGoogleCallback(window.location.search, {
+      const result = await processGoogleCallback(window.location.hash || window.location.search, {
         setTokens: (token, refreshToken) =>
           TokenManager.setTokens(token, refreshToken, 1),
         loadProfile: async () => {
@@ -479,6 +498,31 @@ export class AuthService {
    */
   clearPendingTwoFactor(): void {
     this.pendingTwoFactorCredentials = null;
+    try {
+      sessionStorage.removeItem(OAUTH_2FA_TOKEN_KEY);
+    } catch {
+      // Storage unavailable: nothing to clear.
+    }
+  }
+
+  /**
+   * Google login for an account with 2FA: the backend hands back a short-lived
+   * token that must be exchanged together with a TOTP code.
+   */
+  setPendingOAuthTwoFactorToken(token: string): void {
+    try {
+      sessionStorage.setItem(OAUTH_2FA_TOKEN_KEY, token);
+    } catch {
+      // Storage unavailable: the user will have to log in again.
+    }
+  }
+
+  getPendingOAuthTwoFactorToken(): string | null {
+    try {
+      return sessionStorage.getItem(OAUTH_2FA_TOKEN_KEY);
+    } catch {
+      return null;
+    }
   }
 }
 

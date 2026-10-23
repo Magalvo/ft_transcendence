@@ -16,6 +16,7 @@ import { TokenManager } from "../services/TokenManager";
 import { WS_URL } from "../services/RuntimeConfig";
 import { TournamentInviteState } from "../services/TournamentInviteState";
 
+import { escapeHtml } from "../shared/utils";
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
   private static readonly CHAT_REFRESH_INTERVAL_MS = 12_000;
@@ -430,7 +431,7 @@ export class ChatPage extends AbstractComponent {
         active ? "bg-blue-700 text-white" : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700"
       }`;
       btn.innerHTML = `
-        <span class="truncate">${hasUnread && !active ? `● ${user.username}` : user.username}</span>
+        <span class="truncate">${hasUnread && !active ? `● ${escapeHtml(user.username)}` : escapeHtml(user.username)}</span>
         <span class="ml-2 inline-flex items-center gap-1 text-[11px] ${user.online ? "text-emerald-400" : "text-neutral-500"}">
           <span class="inline-block h-2 w-2 rounded-full ${user.online ? "bg-emerald-400" : "bg-neutral-600"}"></span>
           ${this.getUserStatusLabel(user.online)}
@@ -960,7 +961,7 @@ export class ChatPage extends AbstractComponent {
       top.innerHTML = `
         <span class="inline-flex items-center gap-2 text-sm">
           <span class="inline-block h-2 w-2 rounded-full ${member.online ? "bg-emerald-400" : "bg-neutral-600"}"></span>
-          ${member.username}
+          ${escapeHtml(member.username)}
         </span>
         <span class="text-xs text-neutral-400">${isBanned ? t("chat.memberStatus.banned") : this.getRoleLabel(member.role)}</span>
       `;

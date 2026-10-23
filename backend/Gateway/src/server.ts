@@ -4,8 +4,15 @@ import proxy from '@fastify/http-proxy'
 
 const app = fastify()
 
+const allowedOrigins = String(
+  process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'https://localhost:8443',
+)
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/g, ''))
+  .filter(Boolean)
+
 app.register(cors, {
-  origin: true,
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 })

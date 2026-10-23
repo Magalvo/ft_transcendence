@@ -8,6 +8,8 @@ import bcrypt from "bcrypt";
 import { plainToInstance } from "class-transformer";
 import  userResetPassDTO  from "../dto/userResetPass.dto.js"
 import { validate, ValidationError } from "class-validator";
+import { hashToken } from "../utils/tokens.js";
+import { revokeSessions } from "./session.js";
 
 
 const resetPass =  async (req: FastifyRequest, reply : FastifyReply) =>{
@@ -31,7 +33,7 @@ const resetPass =  async (req: FastifyRequest, reply : FastifyReply) =>{
       // Find user by reset token
       const rawUser: any = await db.raw(
         "SELECT id, resetToken, resetExpires FROM users WHERE resetToken = ? LIMIT 1",
-        [resetToken]
+        [hashToken(resetToken)]
       );
       const userData: User | null = Array.isArray(rawUser[0]) ? rawUser[0][0] ?? null : rawUser[0] ?? null;
 
@@ -53,6 +55,7 @@ const resetPass =  async (req: FastifyRequest, reply : FastifyReply) =>{
         "UPDATE users SET passwordHash = ?, resetToken = NULL, resetExpires = NULL WHERE id = ?",
         [passwordHash, userData.id]
       );
+      await revokeSessions(userData.id);
 
       return sendSuccess(reply, { message: "Password has been reset successfully" });
     } catch (err: any) {

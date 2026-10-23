@@ -53,3 +53,20 @@ test('processGoogleCallback rejects when OAuth params are missing', async () => 
     /Missing token from Google OAuth/,
   );
 });
+
+test('processGoogleCallback reads tokens from the URL fragment', async () => {
+  let persistedToken = '';
+
+  const result = await processGoogleCallback(
+    '#provider=google&token=fragment-token&refreshToken=fragment-refresh',
+    {
+      setTokens: (token) => {
+        persistedToken = token;
+      },
+      loadProfile: async () => {},
+    },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(persistedToken, 'fragment-token');
+});

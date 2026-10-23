@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import jwt from "jsonwebtoken";
 import db from "../db.js";
 import crypto from "crypto";
 import fastifyOauth2 from "@fastify/oauth2";
 import { access, mkdir, unlink, writeFile } from "fs/promises";
-import { basename, extname, join } from "path";
+import { basename, join } from "path";
 import { sendError, sendSuccess } from "../utils/respond.js";
 import registerUser from "../services/register.js";
 import Login from "../services/login.js";
@@ -14,8 +13,8 @@ import resetPass from "../services/resetPass.js";
 import faSetup from "../services/faSetup.js";
 import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
+import speakeasy from "speakeasy";
 import {
-  recordMatch,
   getPlayerStats,
   getPlayerMatches,
   getMatchDetails,
@@ -23,16 +22,38 @@ import {
 import UserProfileResponseDTO from "../dto/userProfile.response.dto.js";
 import UserStatsDTO from "../dto/userStats.dto.js";
 import { readConfigValue } from "../utils/env.js";
+import { detectImageExtension } from "../utils/image.js";
 import authenticate from "../middleware/authenticate.js";
+import {
+  USERNAME_PATTERN,
+  USERNAME_PATTERN_MESSAGE,
+} from "../dto/userRegister.dto.js";
+import { issueSession, revokeSessions } from "../services/session.js";
+import {
+  readBearerToken,
+  signTwoFactorPendingToken,
+  verifyAccessToken,
+  verifyTwoFactorPendingToken,
+} from "../utils/tokens.js";
+import {
+  createRateLimiter,
+  rateLimitByIp,
+  rejectIfLimited,
+} from "../utils/rateLimit.js";
 
 const AVATARS_PATH =
   process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
-const ALLOWED_AVATAR_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
+const authIpLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
+const twoFactorLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 5 });
+
+function verifyTotp(secret: string, code: unknown): boolean {
+  return speakeasy.totp.verify({
+    secret,
+    encoding: "base32",
+    token: String(code ?? "").trim(),
+    window: 1,
+  });
+}
 
 function getFrontendBaseUrl(headers: Record<string, unknown>): string {
   const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
@@ -111,7 +132,6 @@ async function reserveUniqueUsername(baseUsername: string): Promise<string> {
 }
 
 export default async function authRoutes(app: FastifyInstance) {
-  const JWT_SECRET = readConfigValue("JWT_SECRET");
   const GOOGLE_CLIENT_ID = readConfigValue("GOOGLE_CLIENT_ID");
   const GOOGLE_CLIENT_SECRET = readConfigValue("GOOGLE_CLIENT_SECRET");
   const GOOGLE_REDIRECT_URI = readConfigValue("GOOGLE_REDIRECT_URI");
@@ -158,6 +178,11 @@ export default async function authRoutes(app: FastifyInstance) {
               }
 
               const profile = (await userInfoRes.json()) as any;
+              // Accounts are linked by email, so only trust addresses Google
+              // has verified.
+              if (!profile?.email || profile.verified_email !== true) {
+                return sendError(reply, "Google account email is not verified", 403);
+              }
               const rawUser: any = await db.raw(
                 "SELECT * FROM users WHERE email = ? LIMIT 1",
                 [profile.email],
@@ -165,7 +190,6 @@ export default async function authRoutes(app: FastifyInstance) {
               let user: User | null = Array.isArray(rawUser[0])
                 ? (rawUser[0][0] ?? null)
                 : (rawUser[0] ?? null);
-              const nowIso = new Date().toISOString();
               const googleAvatarUrl = normalizeGoogleAvatarUrl(profile);
 
               if (!user) {
@@ -181,7 +205,7 @@ export default async function authRoutes(app: FastifyInstance) {
                     profile.email,
                     googleAvatarUrl,
                     true,
-                    nowIso,
+                    new Date().toISOString(),
                     true,
                   ],
                 );
@@ -212,55 +236,23 @@ export default async function authRoutes(app: FastifyInstance) {
                 }
               }
 
-              await db.raw(
-                "UPDATE users SET online = ?, last_request = ? WHERE id = ?",
-                [true, nowIso, user.id],
-              );
-
-              const jwtToken = jwt.sign(
-                { userId: user.id, email: user.email },
-                JWT_SECRET,
-                { expiresIn: "1h" },
-              );
-              const refreshToken = crypto.randomBytes(64).toString("hex");
-              const refreshExpiresAt = new Date(
-                Date.now() + 7 * 24 * 60 * 60 * 1000,
-              ).toISOString();
-
-              const existingRefreshToken: any = await db.raw(
-                "SELECT id FROM refresh_tokens WHERE userId = ? LIMIT 1",
-                [user.id],
-              );
-
-              if (
-                Array.isArray(existingRefreshToken[0]) &&
-                existingRefreshToken[0][0]
-              ) {
-                await db.raw(
-                  "UPDATE refresh_tokens SET token = ?, expires_at = ?, last_update = ? WHERE userId = ?",
-                  [refreshToken, refreshExpiresAt, nowIso, user.id],
-                );
-              } else {
-                await db.raw(
-                  "INSERT INTO refresh_tokens (username, userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)",
-                  [
-                    user.username,
-                    user.id,
-                    refreshToken,
-                    refreshExpiresAt,
-                    nowIso,
-                  ],
-                );
-              }
-
               const frontendBaseUrl = getFrontendBaseUrl(
                 req.headers as Record<string, unknown>,
               );
-              const redirectUrl = new URL(`${frontendBaseUrl}/login`);
-              redirectUrl.searchParams.set("token", jwtToken);
-              redirectUrl.searchParams.set("refreshToken", refreshToken);
-              redirectUrl.searchParams.set("provider", "google");
-              reply.redirect(redirectUrl.toString());
+              // Tokens travel in the URL fragment so they never reach server
+              // logs or Referer headers.
+              const fragment = new URLSearchParams({ provider: "google" });
+
+              if ((user as any).twoFactorSecret) {
+                fragment.set("twoFactorToken", signTwoFactorPendingToken(user.id));
+              } else {
+                const session = await issueSession(user);
+                fragment.set("token", session.token);
+                fragment.set("refreshToken", session.refreshToken);
+              }
+
+              const redirectUrl = `${frontendBaseUrl}/login#${fragment.toString()}`;
+              reply.redirect(redirectUrl);
             } catch (err: any) {
               app.log.error("Google OAuth error:", err);
               sendError(reply, "Google login failed", 500);
@@ -283,7 +275,7 @@ export default async function authRoutes(app: FastifyInstance) {
   }
 
   // --- REGISTER ---
-  app.post("/register", async (req, reply) => {
+  app.post("/register", { preHandler: rateLimitByIp(authIpLimiter, "register") }, async (req, reply) => {
     return await registerUser(req, reply);
   });
 
@@ -295,25 +287,17 @@ export default async function authRoutes(app: FastifyInstance) {
   // --- LOGOUT ---
   app.post("/logout", async (req, reply) => {
     try {
-      const authHeader = req.headers.authorization;
-      const JWT_SECRET = process.env.JWT_SECRET;
-      if (!authHeader || !JWT_SECRET) {
+      const token = readBearerToken(req.headers.authorization);
+      if (!token) {
         // Even if we cannot identify the user, respond OK so client can clear state
         return sendSuccess(reply, { message: "Logged out" });
       }
 
-      const token = String(authHeader)
-        .replace(/^Bearer\s+/i, "")
-        .trim();
-      if (!token) {
-        return sendSuccess(reply, { message: "Logged out" });
-      }
-
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-      const userId = decoded?.userId;
+      const { userId } = verifyAccessToken(token);
 
       if (userId) {
         await db("users").where({ id: userId }).update({ online: false });
+        await revokeSessions(userId);
       }
 
       // Broadcast a best-effort logout hint to the Socket.IO layer so that
@@ -336,58 +320,105 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // --- FORGOT / RESET PASSWORD ---
-  app.post("/forgot", async (req, reply) => {
+  app.post("/forgot", { preHandler: rateLimitByIp(authIpLimiter, "forgot") }, async (req, reply) => {
     return await forgotPass(req, reply);
   });
 
-  app.post("/reset-password", async (req, reply) => {
+  app.post("/reset-password", { preHandler: rateLimitByIp(authIpLimiter, "reset") }, async (req, reply) => {
     return await resetPass(req, reply);
   });
 
+  const limitTwoFactorByUser = async (req: any, reply: any) => {
+    if (rejectIfLimited(twoFactorLimiter, `2fa:${req.user?.id}`, reply)) return reply;
+  };
+
   // --- 2FA SETUP ---
-  app.post("/2fa/setup", async (req, reply) => {
+  app.post("/2fa/setup", { preHandler: authenticate }, async (req, reply) => {
     return await faSetup(req, reply);
   });
 
   // --- 2FA VERIFY ---
-  app.post("/2fa/verify", async (req, reply) => {
-    return await faVerify(req, reply);
+  app.post(
+    "/2fa/verify",
+    { preHandler: [authenticate, limitTwoFactorByUser] },
+    async (req, reply) => {
+      return await faVerify(req, reply);
+    },
+  );
+
+  // --- 2FA LOGIN (second step after Google OAuth) ---
+  app.post("/2fa/login", async (req, reply) => {
+    try {
+      const { twoFactorToken, code } = (req.body ?? {}) as {
+        twoFactorToken?: string;
+        code?: string;
+      };
+
+      let userId: string;
+      try {
+        userId = verifyTwoFactorPendingToken(String(twoFactorToken ?? ""));
+      } catch {
+        return sendError(reply, "2FA session expired, please log in again", 401);
+      }
+
+      if (rejectIfLimited(twoFactorLimiter, `2fa:${userId}`, reply)) return;
+
+      const user = await db("users")
+        .select("id", "username", "email", "twoFactorSecret")
+        .where({ id: userId })
+        .first();
+      if (!user || !user.twoFactorSecret) {
+        return sendError(reply, "2FA session expired, please log in again", 401);
+      }
+
+      if (!verifyTotp(user.twoFactorSecret, code)) {
+        return sendError(reply, "Invalid 2FA code", 401);
+      }
+
+      twoFactorLimiter.reset(`2fa:${userId}`);
+      return sendSuccess(reply, await issueSession(user));
+    } catch (err: any) {
+      app.log.error(err);
+      return sendError(reply, "Internal server error", 500);
+    }
   });
 
   // --- 2FA DISABLE ---
-  app.post("/2fa/disable", async (req, reply) => {
-    try {
-      const userId = getAuthUserId(req as any);
+  app.post(
+    "/2fa/disable",
+    { preHandler: [authenticate, limitTwoFactorByUser] },
+    async (req, reply) => {
+      try {
+        const userId = String((req as any).user?.id ?? "");
+        const { code } = (req.body ?? {}) as { code?: string };
 
-      await db("users")
-        .where({ id: userId })
-        .update({ twoFactorSecret: null, tempTwoFactorSecret: null });
+        const user = await db("users")
+          .select("twoFactorSecret")
+          .where({ id: userId })
+          .first();
+        if (!user?.twoFactorSecret) {
+          return sendError(reply, "2FA is not enabled", 400);
+        }
+        if (!verifyTotp(user.twoFactorSecret, code)) {
+          return sendError(reply, "Invalid 2FA code", 401);
+        }
 
-      return sendSuccess(reply, { message: "2FA disabled" });
-    } catch (err: any) {
-      app.log.error(err);
-      if (err.message === "Missing or invalid Authorization header") {
-        return sendError(reply, err.message, 401);
+        await db("users")
+          .where({ id: userId })
+          .update({ twoFactorSecret: null, tempTwoFactorSecret: null });
+
+        return sendSuccess(reply, { message: "2FA disabled" });
+      } catch (err: any) {
+        app.log.error(err);
+        return sendError(reply, "Failed to disable 2FA", 500);
       }
-      return sendError(reply, err.message || "Failed to disable 2FA", 500);
-    }
-  });
+    },
+  );
 
   // --- GET CURRENT USER ---
   app.get("/me", async (req, reply) => {
     try {
-      const authHeader = req.headers.authorization;
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return sendError(reply, "Missing or invalid Authorization header", 401);
-      }
-
-      const token = authHeader.split(" ")[1];
-
-      const decoded = jwt.verify(token, JWT_SECRET) as {
-        userId: string;
-        email: string;
-      };
+      const decoded = { userId: getAuthUserId(req) };
 
       const rawUser: any = await db.raw(
         "SELECT id, username, email, avatarUrl, online, twoFactorSecret FROM users WHERE id = ? LIMIT 1",
@@ -434,17 +465,12 @@ export default async function authRoutes(app: FastifyInstance) {
         );
       }
 
-      const authHeader = req.headers.authorization;
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      let decoded: { userId: string };
+      try {
+        decoded = { userId: getAuthUserId(req) };
+      } catch {
         return sendError(reply, "Missing or invalid Authorization header", 401);
       }
-
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, JWT_SECRET) as {
-        userId: string;
-        email: string;
-      };
 
       const data = await (req as any).file();
 
@@ -452,12 +478,11 @@ export default async function authRoutes(app: FastifyInstance) {
         return sendError(reply, "No file uploaded", 400);
       }
 
-      if (!ALLOWED_AVATAR_MIME_TYPES.has(String(data.mimetype || "").toLowerCase())) {
+      const buffer = await data.toBuffer();
+      const ext = detectImageExtension(buffer);
+      if (!ext) {
         return sendError(reply, "Only JPEG, PNG, WEBP, and GIF avatars are allowed", 400);
       }
-
-      const buffer = await data.toBuffer();
-      const ext = extname(data.filename).replace(".", "") || "jpg";
       const filename = `${decoded.userId}_${Date.now()}.${ext}`;
       const uploadPath = join(AVATARS_PATH, filename);
       const publicUrl = `/avatars/${filename}`;
@@ -496,22 +521,19 @@ export default async function authRoutes(app: FastifyInstance) {
       return { success: true, url: publicUrl };
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Avatar upload failed", 500);
+      return sendError(reply, "Avatar upload failed", 500);
     }
   });
 
   // --- UPDATE USERNAME ---
   const updateUsernameHandler = async (req: any, reply: any) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      let decoded: { userId: string };
+      try {
+        decoded = { userId: getAuthUserId(req) };
+      } catch {
         return sendError(reply, "Missing or invalid Authorization header", 401);
       }
-
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, JWT_SECRET) as {
-        userId: string;
-      };
 
       const { username } = (req.body ?? {}) as { username?: string };
       const normalized = String(username ?? "").trim();
@@ -525,6 +547,9 @@ export default async function authRoutes(app: FastifyInstance) {
           "Username must be between 3 and 20 characters",
           400,
         );
+      }
+      if (!USERNAME_PATTERN.test(normalized)) {
+        return sendError(reply, USERNAME_PATTERN_MESSAGE, 400);
       }
 
       const existing = await db("users")
@@ -543,7 +568,7 @@ export default async function authRoutes(app: FastifyInstance) {
       return { success: true, username: normalized };
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Failed to update username", 500);
+      return sendError(reply, "Failed to update username", 500);
     }
   };
   app.patch("/users/username", updateUsernameHandler);
@@ -551,13 +576,15 @@ export default async function authRoutes(app: FastifyInstance) {
   app.post("/users/username", updateUsernameHandler);
 
   const getAuthUserId = (req: any): string => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const token = readBearerToken(req.headers.authorization);
+    if (!token) {
       throw new Error("Missing or invalid Authorization header");
     }
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    return decoded.userId;
+    try {
+      return verifyAccessToken(token).userId;
+    } catch {
+      throw new Error("Missing or invalid Authorization header");
+    }
   };
 
   const isOnlineByLastRequest = (
@@ -570,60 +597,6 @@ export default async function authRoutes(app: FastifyInstance) {
         : new Date(String(lastRequest)).getTime();
     if (!Number.isFinite(ts)) return false;
     return Date.now() - ts <= 60_000;
-  };
-
-  const getValidatedDate = (rawValue: unknown, fieldName: string): Date => {
-    const parsed = new Date(String(rawValue ?? ""));
-    if (!Number.isFinite(parsed.getTime())) {
-      throw new Error(`Invalid ${fieldName}`);
-    }
-    return parsed;
-  };
-
-  const getValidatedScore = (rawValue: unknown, fieldName: string): number => {
-    const score = Number(rawValue);
-    if (!Number.isInteger(score) || score < 0) {
-      throw new Error(`${fieldName} must be a non-negative integer`);
-    }
-    return score;
-  };
-
-  const readAuthenticatedUserId = (req: any): string => {
-    return String(req?.user?.id ?? "").trim();
-  };
-
-  const ensureActorIsMatchParticipant = (
-    actorUserId: string,
-    participantIds: string[],
-  ): void => {
-    if (!actorUserId) {
-      throw new Error("Unauthorized");
-    }
-    if (!participantIds.includes(actorUserId)) {
-      throw new Error("Authenticated user must be a participant in the recorded match");
-    }
-  };
-
-  const getMatchRecordingErrorStatus = (errorMessage: string): number => {
-    if (errorMessage === "Unauthorized") return 401;
-    if (
-      errorMessage ===
-      "Authenticated user must be a participant in the recorded match"
-    ) {
-      return 403;
-    }
-    if (
-      errorMessage.startsWith("Invalid ") ||
-      errorMessage.includes("non-negative integer") ||
-      errorMessage.includes("Missing required") ||
-      errorMessage.includes("distinct participants") ||
-      errorMessage.includes("must include at least one player") ||
-      errorMessage.includes("ended_at must") ||
-      errorMessage.includes("Duplicate players")
-    ) {
-      return 400;
-    }
-    return 500;
   };
 
   // --- SEND FRIEND REQUEST ---
@@ -886,172 +859,8 @@ export default async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  // --- RECORD MATCH ---
-  app.post("/matches", { preHandler: authenticate }, async (req, reply) => {
-    try {
-      const actorUserId = readAuthenticatedUserId(req);
-      const {
-        player1_id,
-        player2_id,
-        player1_score,
-        player2_score,
-        game_mode,
-        status,
-        started_at,
-        ended_at,
-      } = req.body as any;
-
-      const normalizedPlayer1Id = String(player1_id ?? "").trim();
-      const normalizedPlayer2Id = String(player2_id ?? "").trim();
-
-      if (!normalizedPlayer1Id || !normalizedPlayer2Id) {
-        return sendError(reply, "Missing required match fields", 400);
-      }
-      if (normalizedPlayer1Id === normalizedPlayer2Id) {
-        return sendError(reply, "Match requires two distinct participants", 400);
-      }
-
-      const validatedPlayer1Score = getValidatedScore(
-        player1_score,
-        "player1_score",
-      );
-      const validatedPlayer2Score = getValidatedScore(
-        player2_score,
-        "player2_score",
-      );
-      const validatedStartedAt = getValidatedDate(started_at, "started_at");
-      const validatedEndedAt = getValidatedDate(ended_at, "ended_at");
-      if (validatedEndedAt.getTime() < validatedStartedAt.getTime()) {
-        return sendError(reply, "ended_at must be greater than or equal to started_at", 400);
-      }
-
-      ensureActorIsMatchParticipant(actorUserId, [
-        normalizedPlayer1Id,
-        normalizedPlayer2Id,
-      ]);
-
-      const matchId = await recordMatch({
-        player1_id: normalizedPlayer1Id,
-        player2_id: normalizedPlayer2Id,
-        player1_score: validatedPlayer1Score,
-        player2_score: validatedPlayer2Score,
-        game_mode: game_mode || "1v1",
-        status: status || "completed",
-        started_at: validatedStartedAt,
-        ended_at: validatedEndedAt,
-      });
-
-      return { success: true, matchId };
-    } catch (err: any) {
-      app.log.error(err);
-      const message = err?.message || "Match recording failed";
-      return sendError(reply, message, getMatchRecordingErrorStatus(message));
-    }
-  });
-
-  // --- RECORD TEAM GAME ---
-  app.post("/team-games", { preHandler: authenticate }, async (req, reply) => {
-    try {
-      const actorUserId = readAuthenticatedUserId(req);
-      const {
-        leftTeamPlayers,
-        rightTeamPlayers,
-        leftTeamScore,
-        rightTeamScore,
-        duration,
-        powerups,
-        gameMode,
-        started_at,
-        ended_at,
-      } = req.body as any;
-
-      if (
-        !leftTeamPlayers ||
-        !rightTeamPlayers ||
-        leftTeamScore === undefined ||
-        rightTeamScore === undefined
-      ) {
-        return sendError(reply, "Missing required team game fields", 400);
-      }
-
-      if (!Array.isArray(leftTeamPlayers) || !Array.isArray(rightTeamPlayers)) {
-        return sendError(reply, "Team players must be arrays", 400);
-      }
-
-      const normalizedLeftTeamPlayers = leftTeamPlayers
-        .map((player: any) => ({
-          ...player,
-          user_id: String(player?.user_id ?? "").trim(),
-        }))
-        .filter((player: any) => player.user_id);
-      const normalizedRightTeamPlayers = rightTeamPlayers
-        .map((player: any) => ({
-          ...player,
-          user_id: String(player?.user_id ?? "").trim(),
-        }))
-        .filter((player: any) => player.user_id);
-
-      if (
-        normalizedLeftTeamPlayers.length === 0 ||
-        normalizedRightTeamPlayers.length === 0
-      ) {
-        return sendError(reply, "Each team must include at least one player", 400);
-      }
-
-      const participantIds = [
-        ...normalizedLeftTeamPlayers.map((player: any) => player.user_id),
-        ...normalizedRightTeamPlayers.map((player: any) => player.user_id),
-      ];
-      if (new Set(participantIds).size !== participantIds.length) {
-        return sendError(reply, "Duplicate players are not allowed in team games", 400);
-      }
-      ensureActorIsMatchParticipant(actorUserId, participantIds);
-
-      const validatedLeftTeamScore = getValidatedScore(
-        leftTeamScore,
-        "leftTeamScore",
-      );
-      const validatedRightTeamScore = getValidatedScore(
-        rightTeamScore,
-        "rightTeamScore",
-      );
-      const validatedStartedAt = getValidatedDate(started_at, "started_at");
-      const validatedEndedAt = getValidatedDate(ended_at, "ended_at");
-      if (validatedEndedAt.getTime() < validatedStartedAt.getTime()) {
-        return sendError(reply, "ended_at must be greater than or equal to started_at", 400);
-      }
-
-      const primaryLeftPlayer = normalizedLeftTeamPlayers[0]?.user_id;
-      const primaryRightPlayer = normalizedRightTeamPlayers[0]?.user_id;
-      if (!primaryLeftPlayer || !primaryRightPlayer) {
-        return sendError(reply, "Each team must include at least one tracked player", 400);
-      }
-
-      const gameId = await recordMatch({
-        player1_id: primaryLeftPlayer,
-        player2_id: primaryRightPlayer,
-        player1_score: validatedLeftTeamScore,
-        player2_score: validatedRightTeamScore,
-        game_mode: gameMode || "1v1",
-        status: "completed",
-        started_at: validatedStartedAt,
-        ended_at: validatedEndedAt,
-        teamGameData: {
-          leftTeamPlayers: normalizedLeftTeamPlayers,
-          rightTeamPlayers: normalizedRightTeamPlayers,
-          duration: duration || "normal",
-          powerups: powerups || false,
-          gameMode: gameMode || "1v1",
-        },
-      });
-
-      return { success: true, gameId };
-    } catch (err: any) {
-      app.log.error(err);
-      const message = err?.message || "Team game recording failed";
-      return sendError(reply, message, getMatchRecordingErrorStatus(message));
-    }
-  });
+  // Match results are recorded server-side by the game engine (Game.ts);
+  // there is intentionally no client-facing endpoint to submit them.
 
   // --- GET PLAYER STATS ---
   app.get("/users/:userId/stats", async (req, reply) => {

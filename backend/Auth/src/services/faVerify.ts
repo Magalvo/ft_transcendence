@@ -3,14 +3,12 @@ import { sendSuccess, sendError} from "../utils/respond.js";
 import { User } from '../interfaces/user.js'
 import speakeasy from "speakeasy";
 import db from '../db.js';
-import authenticate from "../middleware/authenticate.js";
 
 
 
 const faVerify = async (req: FastifyRequest, reply : FastifyReply) => {
     try {
-      await authenticate(req, reply);
-      const user = (req as any).user;
+        const user = (req as any).user;
       
       if (!user || !user.id)
         return sendError(reply, "Unauthorized", 401);

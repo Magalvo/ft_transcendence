@@ -2,19 +2,17 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { User } from '../interfaces/user.js'
 import { sendSuccess, sendError  } from "../utils/respond.js";
 import db from '../db.js';
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import UserRegisterDTO from "../dto/userRegister.dto.js";
 import { validate, ValidationError } from "class-validator";
 import { plainToInstance } from "class-transformer";
+import { issueSession } from "./session.js";
 
 
 
 const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
     try {
-        const JWT_SECRET = process.env.JWT_SECRET as string;
-
         const user : UserRegisterDTO = plainToInstance(UserRegisterDTO,req.body);
 
         const erros: ValidationError[] = await validate(user);
@@ -47,14 +45,8 @@ const registerUser = async (req : FastifyRequest, reply: FastifyReply) =>{
         const last_update = new Date().toISOString();
 
         await db.raw("INSERT INTO users (id, username, passwordHash, email, online, last_request, accepted_terms) VALUES (?, ?, ?, ?, ?,?,?)", [ id, user.username, passwordHash, user.email, true, last_update, user.acceptTerms]);
-        const username = user.username
-        // JWT & Refresh token
-        const token = jwt.sign({ userId: id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
-        const refreshToken = crypto.randomBytes(64).toString("hex");
-        const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-
-        await db.raw("INSERT INTO refresh_tokens (username,userId, token, expires_at, last_update) VALUES (?, ?, ?, ?, ?)", [username, id, refreshToken, expires_at, last_update]);
+        const { token, refreshToken } = await issueSession({ id, username: user.username, email: user.email });
 
         // Return token + QR in same response
         sendSuccess(reply, { token, refreshToken, message: "User registered successfully. Scan the QR for 2FA." }, 201);

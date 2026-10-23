@@ -8,11 +8,17 @@ export interface GoogleCallbackDeps {
   loadProfile: () => Promise<unknown>;
 }
 
+// The backend sends OAuth results in the URL fragment (#token=...) so they
+// never reach server logs; a leading '?' or '#' is accepted.
+export function parseOAuthParams(raw: string): URLSearchParams {
+  return new URLSearchParams(raw.replace(/^[?#]/, ''));
+}
+
 export async function processGoogleCallback(
   search: string,
   deps: GoogleCallbackDeps,
 ): Promise<GoogleCallbackResult> {
-  const params = new URLSearchParams(search);
+  const params = parseOAuthParams(search);
   const token = params.get('token');
   const refreshToken = params.get('refreshToken');
 

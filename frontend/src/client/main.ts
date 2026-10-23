@@ -2,6 +2,7 @@ import { GameScene } from "./index.js";
 import { io, Socket } from "socket.io-client";
 import { WS_URL } from "../services/RuntimeConfig";
 
+import { escapeHtml } from "../shared/utils";
 /* --- STATE --- */
 let socket: Socket;
 let isLeader = false;
@@ -172,7 +173,7 @@ function renderTeamSlots(container: HTMLElement, slots: any[], side: string) {
         }
         else if (slot.content === 'human') {
             div.innerHTML = `
-                <span>👤 ${slot.playerName}</span>
+                <span>👤 ${escapeHtml(slot.playerName)}</span>
                 ${isLeader ? `<button class="mini" onclick="moveToBench ('${slot.socketId}')">To Bench</button>` : ''} 
             `;
         }

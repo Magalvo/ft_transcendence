@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import jwt from "jsonwebtoken";
+import { readBearerToken, verifyAccessToken } from "../utils/tokens.js";
 import { Lobby } from "../game/Lobby.js";
 import { Game, GameConfiguration, GamePlayer } from "../game/index.js";
 import { attachChatRealtime } from "./chatRealtime.js";
@@ -702,13 +702,9 @@ export function setupSocketIO(httpServer: any) {
 
     if (authTokenRaw) {
       try {
-        const token = String(authTokenRaw)
-          .replace(/^Bearer\s+/i, "")
-          .trim();
-        const JWT_SECRET = process.env.JWT_SECRET as string;
-        if (JWT_SECRET && token) {
-          const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-          authenticatedUserId = decoded?.userId;
+        const token = readBearerToken(String(authTokenRaw));
+        if (token) {
+          authenticatedUserId = verifyAccessToken(token).userId;
         }
       } catch (error) {
         console.warn(`Socket ${socket.id} failed JWT auth:`, error);

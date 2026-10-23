@@ -2159,7 +2159,7 @@ export class SpacedOutGame {
     const radarAltitude = this.getRadarAltitude(this.localServerPosition);
     this.telemetryMount.innerHTML = `
       <div><span class="spacedout-label">FPS</span><strong>${this.fps || "--"}</strong></div>
-      <div><span class="spacedout-label">Pilot</span><strong>${this.session.user.username}</strong></div>
+      <div><span class="spacedout-label">Pilot</span><strong>${this.escapeHtml(this.session.user.username)}</strong></div>
       <div><span class="spacedout-label">Team</span><strong>${this.localTeam}</strong></div>
       <div><span class="spacedout-label">Radar Alt</span><strong>${Math.round(radarAltitude)}</strong></div>
       <div><span class="spacedout-label">MSL Alt</span><strong>${Math.round(altitude)}</strong></div>
@@ -2258,7 +2258,7 @@ export class SpacedOutGame {
         (pilot) => `
           <article class="spacedout-player-card" data-team="${pilot.team}">
             <div>
-              <div class="spacedout-player-name">${pilot.username}${pilot.isLocal ? ' <span class="spacedout-player-you">YOU</span>' : ""}</div>
+              <div class="spacedout-player-name">${this.escapeHtml(pilot.username)}${pilot.isLocal ? ' <span class="spacedout-player-you">YOU</span>' : ""}</div>
               <div class="spacedout-player-meta">${pilot.team} • ${pilot.state}</div>
             </div>
             <div class="spacedout-player-id">#${pilot.id}</div>
@@ -2713,7 +2713,7 @@ export class SpacedOutGame {
     this.logsMount.innerHTML = this.logs
       .map(
         (entry) =>
-          `<li class="spacedout-log spacedout-log-${entry.level}">${entry.message}</li>`,
+          `<li class="spacedout-log spacedout-log-${entry.level}">${this.escapeHtml(entry.message)}</li>`,
       )
       .join("");
   }

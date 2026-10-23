@@ -4,13 +4,11 @@ import { User } from '../interfaces/user.js'
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import db from '../db.js';
-import authenticate from "../middleware/authenticate.js";
 
 
 const faSetup =  async (req: FastifyRequest, reply : FastifyReply) => {
     
   try {
-    await authenticate(req, reply);
     const user = (req as any).user;
     
     if (!user || !user.id) 

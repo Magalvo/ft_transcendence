@@ -23,7 +23,9 @@ export async function sendMail(to: string, subject: string, html: string) {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      tls: { rejectUnauthorized: false },
+      // Only skip certificate checks when explicitly opted in (local relays
+      // with self-signed certs).
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== "true" },
     });
 
     const info = await transporter.sendMail({

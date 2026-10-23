@@ -187,6 +187,10 @@ export class LoginPage extends AbstractComponent {
     if (!this.isRegisterMode && this.isForgotPasswordModalOpen) {
       this.element.appendChild(this.renderForgotPasswordModal());
     }
+
+    if (AuthService.getPendingOAuthTwoFactorToken()) {
+      this.render2FAModal();
+    }
   }
 
   private renderSocialLogin(card: Card): void {

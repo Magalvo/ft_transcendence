@@ -1,5 +1,6 @@
 import { AbstractComponent } from '../../core/Component';
 
+import { escapeHtml } from '../../shared/utils';
 interface ChatContact {
   id: number;
   username: string;
@@ -28,12 +29,12 @@ export class ChatList extends AbstractComponent {
       
       item.innerHTML = `
         <div class="relative mr-4">
-          <img src="${contact.avatar}" class="w-10 h-10 rounded-full object-cover">
+          <img src="${escapeHtml(contact.avatar)}" class="w-10 h-10 rounded-full object-cover">
           <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-800 
             ${contact.status === 'online' ? 'bg-green-500' : 'bg-gray-500'}"></span>
         </div>
         <div class="flex-1">
-          <h4 class="font-bold text-sm text-white">${contact.username}</h4>
+          <h4 class="font-bold text-sm text-white">${escapeHtml(contact.username)}</h4>
           <p class="text-xs text-gray-400">Click to chat</p>
         </div>
         ${contact.unread > 0 ? `<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">${contact.unread}</span>` : ''}

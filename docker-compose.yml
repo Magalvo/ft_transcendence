@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - AUTH_UPSTREAM=http://auth:3000
+      - FRONTEND_URL=https://localhost:8443
     expose:
       - "3333"
     healthcheck:

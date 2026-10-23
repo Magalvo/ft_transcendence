@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { sendSuccess, sendError  } from "../utils/respond.js";
 import { RefreshToken } from "../interfaces/token.js"
 import db from "../db.js";
-import jwt from "jsonwebtoken";
+import { hashToken, signAccessToken } from "../utils/tokens.js";
 
 const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
     
@@ -19,15 +19,14 @@ const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
 
             const stored = await db("refresh_tokens")
                 .select("userId", "token", "expires_at")
-                .where({ token: refreshTokenValue })
+                .where({ token: hashToken(String(refreshTokenValue)) })
                 .first() as (RefreshToken & { userId: string }) | undefined;
 
             if (!stored || new Date(stored.expires_at) < new Date()) {
                 return sendError(reply, "Invalid or expired token", 401);
             }
 
-            const JWT_SECRET = process.env.JWT_SECRET as string;
-            const newToken = jwt.sign({ userId: stored.userId }, JWT_SECRET, { expiresIn: "1h" });
+            const newToken = signAccessToken(stored.userId);
             sendSuccess(reply, { token: newToken });
         } catch (err: any) {
             sendError(reply, "Internal server error", 500);

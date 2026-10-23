@@ -25,18 +25,33 @@ if (!JWT_SECRET) {
 }
 process.env.JWT_SECRET = JWT_SECRET;
 
-const app = Fastify({ logger: true });
+// nginx overwrites X-Forwarded-For with the real client address, so req.ip is
+// trustworthy for rate limiting.
+const app = Fastify({ logger: true, trustProxy: true });
 app.hasMultipart = false;
 
 app.get("/ok", (_req, reply) => {
   sendSuccess(reply, { message: "It works!" });
 });
 
-app.register(cors, { origin: true });
+const allowedOrigins = String(
+  process.env.CORS_ORIGINS || process.env.FRONTEND_URL || "https://localhost:8443",
+)
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/g, ""))
+  .filter(Boolean);
+
+app.register(cors, { origin: allowedOrigins });
 app.register(fastifyCookie);
 app.register(fastifyStatic, {
   root: path.join(process.cwd(), "public"),
   prefix: "/",
+  // public/ only holds uploaded avatars: never serve anything but images.
+  allowedPath: (pathName) => /^\/avatars\/[\w.-]+\.(png|jpe?g|gif|webp)$/i.test(pathName),
+  setHeaders: (res) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+  },
 });
 
 app.register(healthRoutes);
