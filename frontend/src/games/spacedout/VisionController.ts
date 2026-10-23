@@ -1,5 +1,11 @@
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
+// The wasm runtime must match the JS bundle from package.json exactly; keep
+// both on the same pinned version (never "@latest", which would pull new
+// third-party code into the app without a review or rebuild).
+const MEDIAPIPE_VERSION = "0.10.32";
+const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
+
 export class VisionController {
   private videoElement: HTMLVideoElement;
   private faceLandmarker: FaceLandmarker | null = null;
@@ -25,9 +31,7 @@ export class VisionController {
   }
 
   public async init(onReady: () => void): Promise<void> {
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-    );
+    const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
 
     this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
