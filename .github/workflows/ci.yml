@@ -33,6 +33,23 @@ jobs:
       - name: Test
         run: npm test
 
+  gateway:
+    name: Gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/Gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/Gateway/package-lock.json
+      - run: npm ci --no-audit --progress=false
+      - name: Typecheck and build
+        run: npm run build
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest

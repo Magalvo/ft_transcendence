@@ -1,24 +1,25 @@
-FROM node:22-bookworm-slim
-
-# Install sqlite runtime and build deps if needed
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends \
-		sqlite3 \
-		libsqlite3-dev \
-		build-essential \
-		python3 \
-	&& rm -rf /var/lib/apt/lists/*
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /usr/src/gateway
 
-# Cache dependencies layer
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
+RUN npm ci --no-audit --progress=false
 
-# Copy source
-COPY . .
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build \
+	&& npm prune --omit=dev
 
-ENV NODE_ENV=development
 
+FROM node:22-bookworm-slim
+
+ENV NODE_ENV=production
+WORKDIR /usr/src/gateway
+
+COPY --from=build /usr/src/gateway/node_modules ./node_modules
+COPY --from=build /usr/src/gateway/dist ./dist
+COPY package.json ./
+
+USER node
 EXPOSE 3333
-CMD ["npm", "run", "dev"]
+CMD ["node", "dist/server.js"]
