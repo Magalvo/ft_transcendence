@@ -103,7 +103,11 @@ class ApiClientClass {
         );
 
         const newToken = response.data.data.token;
-        TokenManager.setTokens(newToken, refreshToken);
+        // The server rotates the refresh token. When another tab won the race
+        // it sends none back: keep whatever is stored now, not our stale copy.
+        const nextRefreshToken =
+          response.data.data.refreshToken ?? TokenManager.getRefreshToken() ?? refreshToken;
+        TokenManager.setTokens(newToken, nextRefreshToken);
         return newToken;
       } catch (error) {
         TokenManager.clearTokens();

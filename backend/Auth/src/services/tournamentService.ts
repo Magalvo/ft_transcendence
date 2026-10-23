@@ -1,17 +1,15 @@
 import db from "../db.js";
 import crypto from "crypto";
+import { HttpError } from "../utils/httpError.js";
 
 const RESULT_CONFIRMATION_TIMEOUT_MINUTES = Number(
   process.env.TOURNAMENT_RESULT_CONFIRM_TIMEOUT_MINUTES || "15",
 );
 
-class TournamentResultError extends Error {
-  statusCode: number;
-
+class TournamentResultError extends HttpError {
   constructor(message: string, statusCode = 400) {
-    super(message);
+    super(message, statusCode);
     this.name = "TournamentResultError";
-    this.statusCode = statusCode;
   }
 }
 
@@ -52,13 +50,13 @@ export function validateTournamentCreateInput(input: CreateTournamentInput): {
   const uniquePlayerIds = Array.from(new Set(normalizedPlayerIds));
 
   if (!normalizedName) {
-    throw new Error("Tournament name is required");
+    throw new HttpError("Tournament name is required");
   }
   if (uniquePlayerIds.length !== 4) {
-    throw new Error("Tournament requires exactly 4 unique players");
+    throw new HttpError("Tournament requires exactly 4 unique players");
   }
   if (!uniquePlayerIds.includes(input.created_by)) {
-    throw new Error("Tournament creator must be included in the player list");
+    throw new HttpError("Tournament creator must be included in the player list");
   }
 
   return {

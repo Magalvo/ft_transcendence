@@ -29,6 +29,7 @@ import {
 } from "../services/chat.js";
 import { sendError } from "../utils/respond.js";
 import db from "../db.js";
+import { sendCaughtError } from "../utils/httpError.js";
 
 const chatRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", authenticate);
@@ -71,7 +72,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       return await getGroupsForUser(userId);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch groups", 400);
+      return sendCaughtError(reply, e, "Failed to fetch groups");
     }
   });
 
@@ -83,7 +84,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       reply.code(201);
       return group;
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to create group", 400);
+      return sendCaughtError(reply, e, "Failed to create group");
     }
   });
 
@@ -97,7 +98,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "join", userId);
       return joined;
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to join group", 400);
+      return sendCaughtError(reply, e, "Failed to join group");
     }
   });
 
@@ -110,7 +111,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "leave", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to leave group", 400);
+      return sendCaughtError(reply, e, "Failed to leave group");
     }
   });
 
@@ -121,7 +122,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const limit = Number((request.query as any)?.limit ?? 50);
       return await getGroupMessages(Number(groupId), userId, limit);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch group messages", 400);
+      return sendCaughtError(reply, e, "Failed to fetch group messages");
     }
   });
 
@@ -131,7 +132,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const { groupId } = request.params as { groupId: string };
       return { role: await getGroupRole(Number(groupId), userId) };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch role", 400);
+      return sendCaughtError(reply, e, "Failed to fetch role");
     }
   });
 
@@ -141,7 +142,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const { groupId } = request.params as { groupId: string };
       return await getGroupMembers(Number(groupId), userId);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch members", 400);
+      return sendCaughtError(reply, e, "Failed to fetch members");
     }
   });
 
@@ -157,7 +158,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "invite", userId);
       return invited;
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to invite member", 400);
+      return sendCaughtError(reply, e, "Failed to invite member");
     }
   });
 
@@ -170,7 +171,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       reply.code(201);
       return msg;
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to send group message", 400);
+      return sendCaughtError(reply, e, "Failed to send group message");
     }
   });
 
@@ -184,7 +185,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "set_admin", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to update admin role", 400);
+      return sendCaughtError(reply, e, "Failed to update admin role");
     }
   });
 
@@ -198,7 +199,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupRemovedForUser(numericGroupId, targetId, "ban", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to ban user", 400);
+      return sendCaughtError(reply, e, "Failed to ban user");
     }
   });
 
@@ -211,7 +212,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "unban", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to unban user", 400);
+      return sendCaughtError(reply, e, "Failed to unban user");
     }
   });
 
@@ -225,7 +226,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "unban", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to unban user", 400);
+      return sendCaughtError(reply, e, "Failed to unban user");
     }
   });
 
@@ -239,7 +240,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupRemovedForUser(numericGroupId, targetId, "kick", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to kick user", 400);
+      return sendCaughtError(reply, e, "Failed to kick user");
     }
   });
 
@@ -253,7 +254,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "mute", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to mute user", 400);
+      return sendCaughtError(reply, e, "Failed to mute user");
     }
   });
 
@@ -266,7 +267,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       emitGroupMembersUpdated(numericGroupId, "unmute", userId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to unmute user", 400);
+      return sendCaughtError(reply, e, "Failed to unmute user");
     }
   });
 
@@ -278,7 +279,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       await setGroupPassword(Number(groupId), userId, visibility, password);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to update channel settings", 400);
+      return sendCaughtError(reply, e, "Failed to update channel settings");
     }
   });
 
@@ -291,7 +292,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       await setGroupPassword(Number(groupId), userId, visibility, password);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to update channel settings", 400);
+      return sendCaughtError(reply, e, "Failed to update channel settings");
     }
   });
 
@@ -300,7 +301,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       return await getPrivateChatsForUser(userId);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch private chats", 400);
+      return sendCaughtError(reply, e, "Failed to fetch private chats");
     }
   });
 
@@ -310,7 +311,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const { targetId } = request.body as any;
       return await getOrCreatePrivateChat(userId, String(targetId));
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to create private chat", 400);
+      return sendCaughtError(reply, e, "Failed to create private chat");
     }
   });
 
@@ -321,7 +322,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const limit = Number((request.query as any)?.limit ?? 50);
       return await getPrivateMessages(Number(chatId), userId, limit);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch private messages", 400);
+      return sendCaughtError(reply, e, "Failed to fetch private messages");
     }
   });
 
@@ -334,7 +335,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       reply.code(201);
       return msg;
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to send private message", 400);
+      return sendCaughtError(reply, e, "Failed to send private message");
     }
   });
 
@@ -343,7 +344,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       return await getBlockedUsers(userId);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch block list", 400);
+      return sendCaughtError(reply, e, "Failed to fetch block list");
     }
   });
 
@@ -354,7 +355,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       await blockUser(userId, targetId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to block user", 400);
+      return sendCaughtError(reply, e, "Failed to block user");
     }
   });
 
@@ -365,7 +366,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       await unblockUser(userId, targetId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to unblock user", 400);
+      return sendCaughtError(reply, e, "Failed to unblock user");
     }
   });
 
@@ -377,7 +378,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       await unblockUser(userId, targetId);
       return { ok: true };
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to unblock user", 400);
+      return sendCaughtError(reply, e, "Failed to unblock user");
     }
   });
 
@@ -386,7 +387,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const { userId } = request.params as { userId: string };
       return await getChatProfileByUserId(userId);
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch profile", 400);
+      return sendCaughtError(reply, e, "Failed to fetch profile");
     }
   });
 
@@ -406,7 +407,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
         Number(offset),
       );
     } catch (e: any) {
-      return sendError(reply, e.message || "Failed to fetch users", 400);
+      return sendCaughtError(reply, e, "Failed to fetch users");
     }
   });
 };

@@ -40,6 +40,7 @@ import {
   rateLimitByIp,
   rejectIfLimited,
 } from "../utils/rateLimit.js";
+import { getFrontendBaseUrl } from "../utils/frontendUrl.js";
 
 const AVATARS_PATH =
   process.env.AVATARS_PATH || join(process.cwd(), "public/avatars");
@@ -53,33 +54,6 @@ function verifyTotp(secret: string, code: unknown): boolean {
     token: String(code ?? "").trim(),
     window: 1,
   });
-}
-
-function getFrontendBaseUrl(headers: Record<string, unknown>): string {
-  const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
-  if (configuredFrontendUrl) {
-    return configuredFrontendUrl.replace(/\/+$/g, "");
-  }
-
-  const forwardedProto = String(headers["x-forwarded-proto"] || "").trim();
-  const forwardedHost = String(headers["x-forwarded-host"] || "").trim();
-  const forwardedPort = String(headers["x-forwarded-port"] || "").trim();
-  const origin = String(headers.origin || "").trim();
-
-  if (forwardedProto && forwardedHost) {
-    if (forwardedPort && !forwardedHost.includes(":")) {
-      return `${forwardedProto}://${forwardedHost}:${forwardedPort}`;
-    }
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-  if (origin) {
-    return origin.replace(/\/+$/g, "");
-  }
-
-  return (process.env.FRONTEND_URL || "https://localhost:8443").replace(
-    /\/+$/g,
-    "",
-  );
 }
 
 function normalizeGoogleUsername(profile: any): string {
@@ -236,9 +210,7 @@ export default async function authRoutes(app: FastifyInstance) {
                 }
               }
 
-              const frontendBaseUrl = getFrontendBaseUrl(
-                req.headers as Record<string, unknown>,
-              );
+              const frontendBaseUrl = getFrontendBaseUrl();
               // Tokens travel in the URL fragment so they never reach server
               // logs or Referer headers.
               const fragment = new URLSearchParams({ provider: "google" });
@@ -692,7 +664,7 @@ export default async function authRoutes(app: FastifyInstance) {
       }
       return sendError(
         reply,
-        err.message || "Failed to send friend request",
+        "Failed to send friend request",
         500,
       );
     }
@@ -725,7 +697,7 @@ export default async function authRoutes(app: FastifyInstance) {
       }
       return sendError(
         reply,
-        err.message || "Failed to fetch incoming requests",
+        "Failed to fetch incoming requests",
         500,
       );
     }
@@ -764,7 +736,7 @@ export default async function authRoutes(app: FastifyInstance) {
       if (err.message === "Missing or invalid Authorization header") {
         return sendError(reply, err.message, 401);
       }
-      return sendError(reply, err.message || "Failed to accept request", 500);
+      return sendError(reply, "Failed to accept request", 500);
     }
   });
 
@@ -787,7 +759,7 @@ export default async function authRoutes(app: FastifyInstance) {
       if (err.message === "Missing or invalid Authorization header") {
         return sendError(reply, err.message, 401);
       }
-      return sendError(reply, err.message || "Failed to decline request", 500);
+      return sendError(reply, "Failed to decline request", 500);
     }
   });
 
@@ -828,7 +800,7 @@ export default async function authRoutes(app: FastifyInstance) {
       }));
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Failed to fetch friends", 500);
+      return sendError(reply, "Failed to fetch friends", 500);
     }
   });
 
@@ -855,7 +827,7 @@ export default async function authRoutes(app: FastifyInstance) {
       if (err.message === "Missing or invalid Authorization header") {
         return sendError(reply, err.message, 401);
       }
-      return sendError(reply, err.message || "Failed to remove friend", 500);
+      return sendError(reply, "Failed to remove friend", 500);
     }
   });
 
@@ -889,7 +861,7 @@ export default async function authRoutes(app: FastifyInstance) {
       return statsResponse;
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Failed to fetch stats", 500);
+      return sendError(reply, "Failed to fetch stats", 500);
     }
   });
 
@@ -910,7 +882,7 @@ export default async function authRoutes(app: FastifyInstance) {
       return matches;
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Failed to fetch matches", 500);
+      return sendError(reply, "Failed to fetch matches", 500);
     }
   });
 
@@ -931,7 +903,7 @@ export default async function authRoutes(app: FastifyInstance) {
       return match;
     } catch (err: any) {
       app.log.error(err);
-      return sendError(reply, err.message || "Failed to fetch match", 500);
+      return sendError(reply, "Failed to fetch match", 500);
     }
   });
 }

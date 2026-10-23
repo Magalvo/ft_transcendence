@@ -62,7 +62,7 @@ export default async function gameRoutes(app: FastifyInstance) {
         };
       } catch (err: any) {
         app.log.error(err);
-        return sendError(reply, err.message || "Failed to create SpacedOut session", 500);
+        return sendError(reply, "Failed to create SpacedOut session", 500);
       }
     },
   );

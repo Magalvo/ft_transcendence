@@ -53,3 +53,10 @@ export function escapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// Unguessable identifier for invite links. crypto.getRandomValues also works
+// outside secure contexts, unlike crypto.randomUUID.
+export function randomId(bytes = 16): string {
+  const values = crypto.getRandomValues(new Uint8Array(bytes));
+  return Array.from(values, (value) => value.toString(16).padStart(2, '0')).join('');
+}

@@ -8,6 +8,7 @@ import {
   isGroupMember,
   joinGroup,
 } from "../services/chat.js";
+import { clientErrorMessage } from "../utils/httpError.js";
 
 const socketUsers = new Map<string, string>();
 
@@ -59,7 +60,7 @@ export function attachChatRealtime(io: Server, socket: Socket) {
       socket.join(`group:${data.groupId}`);
       socket.emit("chat_joined_group", { groupId: Number(data.groupId) });
     } catch (e: any) {
-      socket.emit("chat_error", { message: e.message || "Failed to join group" });
+      socket.emit("chat_error", { message: clientErrorMessage(e, "Failed to join group") });
     }
   });
 
@@ -83,7 +84,7 @@ export function attachChatRealtime(io: Server, socket: Socket) {
         io.to(sid).emit("chat_group_message", msg);
       }
     } catch (e: any) {
-      socket.emit("chat_error", { message: e.message || "Failed to send group message" });
+      socket.emit("chat_error", { message: clientErrorMessage(e, "Failed to send group message") });
     }
   });
 
@@ -106,7 +107,7 @@ export function attachChatRealtime(io: Server, socket: Socket) {
         io.to(sid).emit("chat_private_message", msg);
       }
     } catch (e: any) {
-      socket.emit("chat_error", { message: e.message || "Failed to send private message" });
+      socket.emit("chat_error", { message: clientErrorMessage(e, "Failed to send private message") });
     }
   });
 
@@ -132,7 +133,7 @@ export function attachChatRealtime(io: Server, socket: Socket) {
         io.to(sid).emit("chat_private_message", msg);
       }
     } catch (e: any) {
-      socket.emit("chat_error", { message: e.message || "Failed to send game invite" });
+      socket.emit("chat_error", { message: clientErrorMessage(e, "Failed to send game invite") });
     }
   });
 
