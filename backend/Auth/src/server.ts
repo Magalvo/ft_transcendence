@@ -15,6 +15,7 @@ import gameRoutes from "./routes/games.js";
 import chatRoutes from "./routes/chat.js";
 import tournamentRoutes from "./routes/tournament.js";
 import { CONFIG } from "./game/config.js";
+import { getAllowedOrigins } from "./utils/frontendUrl.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -34,14 +35,7 @@ app.get("/ok", (_req, reply) => {
   sendSuccess(reply, { message: "It works!" });
 });
 
-const allowedOrigins = String(
-  process.env.CORS_ORIGINS || process.env.FRONTEND_URL || "https://localhost:8443",
-)
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/+$/g, ""))
-  .filter(Boolean);
-
-app.register(cors, { origin: allowedOrigins });
+app.register(cors, { origin: getAllowedOrigins() });
 app.register(fastifyCookie);
 app.register(fastifyStatic, {
   root: path.join(process.cwd(), "public"),

@@ -5,33 +5,7 @@ import crypto from "crypto";
 import { sendMail } from "../utils/email.js";
 import db from '../db.js';
 import { hashToken } from "../utils/tokens.js";
-
-function getFrontendBaseUrl(headers: Record<string, unknown>): string {
-  const configuredFrontendUrl = String(process.env.FRONTEND_URL || "").trim();
-  if (configuredFrontendUrl) {
-    return configuredFrontendUrl.replace(/\/+$/g, "");
-  }
-
-  const forwardedProto = String(headers["x-forwarded-proto"] || "").trim();
-  const forwardedHost = String(headers["x-forwarded-host"] || "").trim();
-  const forwardedPort = String(headers["x-forwarded-port"] || "").trim();
-  const origin = String(headers.origin || "").trim();
-
-  if (forwardedProto && forwardedHost) {
-    if (forwardedPort && !forwardedHost.includes(":")) {
-      return `${forwardedProto}://${forwardedHost}:${forwardedPort}`;
-    }
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-  if (origin) {
-    return origin.replace(/\/+$/g, "");
-  }
-
-  return (process.env.FRONTEND_URL || "https://localhost:8443").replace(
-    /\/+$/g,
-    "",
-  );
-}
+import { getFrontendBaseUrl } from "../utils/frontendUrl.js";
 
 const forgotPass = async (req: FastifyRequest, reply : FastifyReply) => {
 
@@ -58,9 +32,7 @@ const forgotPass = async (req: FastifyRequest, reply : FastifyReply) => {
 
       await db.raw("UPDATE users SET resetToken = ?, resetExpires = ? WHERE id = ?", [hashToken(token), expires, user.id]);
       
-      const frontendBaseUrl = getFrontendBaseUrl(
-        req.headers as Record<string, unknown>,
-      );
+      const frontendBaseUrl = getFrontendBaseUrl();
       const link = `${frontendBaseUrl}/reset-password?token=${token}`;
       try {
         const recipientEmail = String((user as any).email || normalizedEmail).trim();

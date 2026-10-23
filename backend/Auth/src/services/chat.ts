@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import db from "../db.js";
+import { HttpError } from "../utils/httpError.js";
 
 export type GroupVisibility = "public" | "private" | "protected";
 export type GroupRole = "owner" | "admin" | "member";
@@ -17,14 +18,10 @@ function isUserOnlineByLastRequest(lastRequest?: string | number | null): boolea
   return Date.now() - ts <= ONLINE_WINDOW_MS;
 }
 
-function sanitizeMessage(input: string): string {
-  const trimmed = (input || "").trim().slice(0, MAX_MESSAGE_LENGTH);
-  return trimmed
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+// Messages are stored as plain text; the frontend renders them with
+// textContent, so escaping here would only corrupt what users typed.
+function normalizeMessage(input: string): string {
+  return String(input ?? "").trim().slice(0, MAX_MESSAGE_LENGTH);
 }
 
 function normalizePair(a: string, b: string): [string, string] {
@@ -42,7 +39,7 @@ async function getGroup(groupId: number) {
 
 async function ensureGroupRole(groupId: number, userId: string): Promise<GroupRole> {
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
+  if (!group) throw new HttpError("Group not found");
 
   if (group.owner_id === userId) return "owner";
   const admin = await db("chat_group_admins").where({ id_group: groupId, user_id: userId }).first();
@@ -50,19 +47,19 @@ async function ensureGroupRole(groupId: number, userId: string): Promise<GroupRo
 }
 
 export async function getGroupRole(groupId: number, userId: string): Promise<GroupRole> {
-  if (!(await isGroupMember(groupId, userId))) throw new Error("Not a group member");
+  if (!(await isGroupMember(groupId, userId))) throw new HttpError("Not a group member");
   return ensureGroupRole(groupId, userId);
 }
 
 async function assertNotBanned(groupId: number, userId: string): Promise<void> {
   const ban = await db("chat_group_bans").where({ id_group: groupId, user_id: userId }).first();
-  if (ban) throw new Error("User is banned from this channel");
+  if (ban) throw new HttpError("User is banned from this channel");
 }
 
 async function assertNotMuted(groupId: number, userId: string): Promise<void> {
   const mute = await db("chat_group_mutes").where({ id_group: groupId, user_id: userId }).first();
   if (!mute) return;
-  if (mute.expires_at > Date.now()) throw new Error("User is muted in this channel");
+  if (mute.expires_at > Date.now()) throw new HttpError("User is muted in this channel");
   await db("chat_group_mutes").where({ id_group: groupId, user_id: userId }).del();
 }
 
@@ -103,13 +100,13 @@ export async function createGroup(
 ) {
   const now = Date.now();
   const channelName = (name || "").trim().slice(0, 120);
-  if (!channelName) throw new Error("Channel name is required");
+  if (!channelName) throw new HttpError("Channel name is required");
 
   const existing = await db("chat_groups")
     .select("id_group")
     .whereRaw("LOWER(name) = LOWER(?)", [channelName])
     .first();
-  if (existing) throw new Error("Channel with this name already exists");
+  if (existing) throw new HttpError("Channel with this name already exists");
 
   const passHash =
     visibility === "protected" && password ? await bcrypt.hash(password, 10) : null;
@@ -132,18 +129,18 @@ export async function createGroup(
 
 export async function joinGroup(groupId: number, userId: string, password?: string) {
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
+  if (!group) throw new HttpError("Group not found");
   await assertNotBanned(groupId, userId);
 
   const exists = await isGroupMember(groupId, userId);
   if (exists) return { id_group: groupId, user_id: userId };
 
   if (group.visibility === "private") {
-    throw new Error("Private channel requires an invitation");
+    throw new HttpError("Private channel requires an invitation");
   }
   if (group.visibility === "protected") {
     const ok = !!password && !!group.password_hash && (await bcrypt.compare(password, group.password_hash));
-    if (!ok) throw new Error("Invalid channel password");
+    if (!ok) throw new HttpError("Invalid channel password");
   }
 
   await db("chat_group_members").insert({ id_group: groupId, user_id: userId });
@@ -152,14 +149,14 @@ export async function joinGroup(groupId: number, userId: string, password?: stri
 
 export async function leaveGroup(groupId: number, userId: string) {
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
-  if (group.owner_id === userId) throw new Error("Owner cannot leave channel. Transfer ownership first.");
+  if (!group) throw new HttpError("Group not found");
+  if (group.owner_id === userId) throw new HttpError("Owner cannot leave channel. Transfer ownership first.");
   await db("chat_group_members").where({ id_group: groupId, user_id: userId }).del();
   await db("chat_group_admins").where({ id_group: groupId, user_id: userId }).del();
 }
 
 export async function getGroupMembers(groupId: number, requesterId: string) {
-  if (!(await isGroupMember(groupId, requesterId))) throw new Error("Not a group member");
+  if (!(await isGroupMember(groupId, requesterId))) throw new HttpError("Not a group member");
 
   const activeMembers = await db("chat_group_members as m")
     .join("users as u", "u.id", "m.user_id")
@@ -217,10 +214,10 @@ export async function getGroupMembers(groupId: number, requesterId: string) {
 
 export async function inviteMember(groupId: number, actorId: string, targetId: string) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can invite");
+  if (role === "member") throw new HttpError("Only owner/admin can invite");
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
-  if (group.visibility !== "private") throw new Error("Invites are available only for private channels");
+  if (!group) throw new HttpError("Group not found");
+  if (group.visibility !== "private") throw new HttpError("Invites are available only for private channels");
   const byId = await db("users").select("id").where({ id: targetId }).first();
   const byUsername = byId
     ? null
@@ -229,7 +226,7 @@ export async function inviteMember(groupId: number, actorId: string, targetId: s
         .whereRaw("LOWER(username) = LOWER(?)", [targetId])
         .first();
   const resolvedUserId = String(byId?.id || byUsername?.id || "");
-  if (!resolvedUserId) throw new Error("Target user not found");
+  if (!resolvedUserId) throw new HttpError("Target user not found");
 
   await assertNotBanned(groupId, resolvedUserId);
 
@@ -239,7 +236,7 @@ export async function inviteMember(groupId: number, actorId: string, targetId: s
 }
 
 export async function getGroupMessages(groupId: number, viewerId: string, limit = 50) {
-  if (!(await isGroupMember(groupId, viewerId))) throw new Error("Not a group member");
+  if (!(await isGroupMember(groupId, viewerId))) throw new HttpError("Not a group member");
 
   const query = db("chat_group_messages as m")
     .join("users as u", "u.id", "m.id_usersender")
@@ -263,12 +260,12 @@ export async function getGroupMessages(groupId: number, viewerId: string, limit 
 }
 
 export async function createGroupMessage(groupId: number, userId: string, content: string) {
-  if (!(await isGroupMember(groupId, userId))) throw new Error("Not a group member");
+  if (!(await isGroupMember(groupId, userId))) throw new HttpError("Not a group member");
   await assertNotBanned(groupId, userId);
   await assertNotMuted(groupId, userId);
 
-  const msg = sanitizeMessage(content);
-  if (!msg) throw new Error("Message is empty");
+  const msg = normalizeMessage(content);
+  if (!msg) throw new HttpError("Message is empty");
   const timestamp = Date.now();
 
   const inserted = await db("chat_group_messages").insert({
@@ -292,9 +289,9 @@ export async function createGroupMessage(groupId: number, userId: string, conten
 
 export async function setGroupAdmin(groupId: number, ownerId: string, targetId: string, enabled: boolean) {
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
-  if (group.owner_id !== ownerId) throw new Error("Only owner can assign admins");
-  if (!(await isGroupMember(groupId, targetId))) throw new Error("Target user is not in channel");
+  if (!group) throw new HttpError("Group not found");
+  if (group.owner_id !== ownerId) throw new HttpError("Only owner can assign admins");
+  if (!(await isGroupMember(groupId, targetId))) throw new HttpError("Target user is not in channel");
 
   if (enabled) {
     await db("chat_group_admins")
@@ -302,15 +299,15 @@ export async function setGroupAdmin(groupId: number, ownerId: string, targetId: 
       .onConflict(["id_group", "user_id"])
       .ignore();
   } else {
-    if (targetId === ownerId) throw new Error("Owner admin role cannot be removed");
+    if (targetId === ownerId) throw new HttpError("Owner admin role cannot be removed");
     await db("chat_group_admins").where({ id_group: groupId, user_id: targetId }).del();
   }
 }
 
 export async function banMember(groupId: number, actorId: string, targetId: string) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can ban");
-  if (actorId === targetId) throw new Error("Cannot ban yourself");
+  if (role === "member") throw new HttpError("Only owner/admin can ban");
+  if (actorId === targetId) throw new HttpError("Cannot ban yourself");
 
   await db("chat_group_bans")
     .insert({ id_group: groupId, user_id: targetId, banned_by: actorId, created_at: Date.now() })
@@ -323,26 +320,26 @@ export async function banMember(groupId: number, actorId: string, targetId: stri
 
 export async function unbanMember(groupId: number, actorId: string, targetId: string) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can unban");
+  if (role === "member") throw new HttpError("Only owner/admin can unban");
   await db("chat_group_bans").where({ id_group: groupId, user_id: targetId }).del();
 }
 
 export async function kickMember(groupId: number, actorId: string, targetId: string) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can kick");
-  if (actorId === targetId) throw new Error("Cannot kick yourself");
+  if (role === "member") throw new HttpError("Only owner/admin can kick");
+  if (actorId === targetId) throw new HttpError("Cannot kick yourself");
 
   const group = await getGroup(groupId);
-  if (group?.owner_id === targetId) throw new Error("Cannot kick channel owner");
+  if (group?.owner_id === targetId) throw new HttpError("Cannot kick channel owner");
   await db("chat_group_members").where({ id_group: groupId, user_id: targetId }).del();
   await db("chat_group_admins").where({ id_group: groupId, user_id: targetId }).del();
 }
 
 export async function muteMember(groupId: number, actorId: string, targetId: string, seconds: number) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can mute");
-  if (seconds <= 0) throw new Error("Mute duration must be positive");
-  if (!(await isGroupMember(groupId, targetId))) throw new Error("Target user is not in channel");
+  if (role === "member") throw new HttpError("Only owner/admin can mute");
+  if (seconds <= 0) throw new HttpError("Mute duration must be positive");
+  if (!(await isGroupMember(groupId, targetId))) throw new HttpError("Target user is not in channel");
 
   const now = Date.now();
   await db("chat_group_mutes")
@@ -363,7 +360,7 @@ export async function muteMember(groupId: number, actorId: string, targetId: str
 
 export async function unmuteMember(groupId: number, actorId: string, targetId: string) {
   const role = await ensureGroupRole(groupId, actorId);
-  if (role === "member") throw new Error("Only owner/admin can unmute");
+  if (role === "member") throw new HttpError("Only owner/admin can unmute");
   await db("chat_group_mutes").where({ id_group: groupId, user_id: targetId }).del();
 }
 
@@ -374,8 +371,8 @@ export async function setGroupPassword(
   password?: string
 ) {
   const group = await getGroup(groupId);
-  if (!group) throw new Error("Group not found");
-  if (group.owner_id !== ownerId) throw new Error("Only owner can change channel password");
+  if (!group) throw new HttpError("Group not found");
+  if (group.owner_id !== ownerId) throw new HttpError("Only owner can change channel password");
 
   const passHash =
     visibility === "protected" && password ? await bcrypt.hash(password, 10) : null;
@@ -387,7 +384,7 @@ export async function setGroupPassword(
 }
 
 export async function getOrCreatePrivateChat(userA: string, userB: string) {
-  if (userA === userB) throw new Error("Cannot create chat with yourself");
+  if (userA === userB) throw new HttpError("Cannot create chat with yourself");
   const [id_user1, id_user2] = normalizePair(userA, userB);
 
   let row = await db("private_chats").where({ id_user1, id_user2 }).first();
@@ -408,8 +405,8 @@ export async function getPrivateChatsForUser(userId: string) {
 
 async function assertPrivateChatAccess(chatId: number, userId: string) {
   const chat = await db("private_chats").where({ id_privatechat: chatId }).first();
-  if (!chat) throw new Error("Private chat not found");
-  if (chat.id_user1 !== userId && chat.id_user2 !== userId) throw new Error("No access to private chat");
+  if (!chat) throw new HttpError("Private chat not found");
+  if (chat.id_user1 !== userId && chat.id_user2 !== userId) throw new HttpError("No access to private chat");
   return chat;
 }
 
@@ -440,8 +437,8 @@ export async function getPrivateMessages(chatId: number, viewerId: string, limit
 export async function createPrivateMessage(chatId: number, userId: string, content: string) {
   await assertPrivateChatAccess(chatId, userId);
 
-  const msg = sanitizeMessage(content);
-  if (!msg) throw new Error("Message is empty");
+  const msg = normalizeMessage(content);
+  if (!msg) throw new HttpError("Message is empty");
   const timestamp = Date.now();
   const inserted = await db("private_messages").insert({
     id_privatechat: chatId,
@@ -462,7 +459,7 @@ export async function createPrivateMessage(chatId: number, userId: string, conte
 }
 
 export async function blockUser(blockerId: string, blockedId: string) {
-  if (blockerId === blockedId) throw new Error("Cannot block yourself");
+  if (blockerId === blockedId) throw new HttpError("Cannot block yourself");
   await db("blocked_users")
     .insert({ blocker_id: blockerId, blocked_id: blockedId, created_at: Date.now() })
     .onConflict(["blocker_id", "blocked_id"])
@@ -485,7 +482,7 @@ export async function getChatProfileByUserId(userId: string) {
     .select("id", "username", "email", "avatarUrl", "online", "last_request")
     .where({ id: userId })
     .first();
-  if (!user) throw new Error("User not found");
+  if (!user) throw new HttpError("User not found");
   return {
     id: user.id,
     username: user.username,

@@ -1,12 +1,9 @@
-
 import { FastifyReply, FastifyRequest } from "fastify";
 import { sendSuccess, sendError  } from "../utils/respond.js";
-import { RefreshToken } from "../interfaces/token.js"
-import db from "../db.js";
-import { hashToken, signAccessToken } from "../utils/tokens.js";
+import { rotateSession } from "./session.js";
 
 const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
-    
+
     try {
             const body = (req.body as any) || {};
             const refreshTokenFromBody: string | undefined = body.refreshToken;
@@ -17,17 +14,17 @@ const refreshToken = async (req: FastifyRequest, reply : FastifyReply) =>{
                 return sendError(reply,'Invalid or expired token',401);
             }
 
-            const stored = await db("refresh_tokens")
-                .select("userId", "token", "expires_at")
-                .where({ token: hashToken(String(refreshTokenValue)) })
-                .first() as (RefreshToken & { userId: string }) | undefined;
+            const result = await rotateSession(String(refreshTokenValue));
 
-            if (!stored || new Date(stored.expires_at) < new Date()) {
+            if (result.status === "invalid") {
                 return sendError(reply, "Invalid or expired token", 401);
             }
 
-            const newToken = signAccessToken(stored.userId);
-            sendSuccess(reply, { token: newToken });
+            // In the grace case no new refresh token is returned: the client
+            // keeps the one another tab already stored.
+            sendSuccess(reply, result.status === "rotated"
+                ? { token: result.token, refreshToken: result.refreshToken }
+                : { token: result.token });
         } catch (err: any) {
             sendError(reply, "Internal server error", 500);
         }

@@ -9,6 +9,7 @@ import {
   submitTournamentMatchResult,
 } from "../services/tournamentService.js";
 import { acceptTournamentInvite } from "../services/tournamentInviteService.js";
+import { sendCaughtError } from "../utils/httpError.js";
 
 export default async function tournamentRoutes(app: FastifyInstance) {
   /**
@@ -60,7 +61,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         return sendSuccess(reply, result);
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to create tournament", 500);
+        return sendCaughtError(reply, error, "Failed to create tournament");
       }
     }
   );
@@ -84,7 +85,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         return sendSuccess(reply, tournament);
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to fetch tournament", 500);
+        return sendCaughtError(reply, error, "Failed to fetch tournament");
       }
     }
   );
@@ -108,7 +109,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         return sendSuccess(reply, bracket);
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to fetch tournament bracket", 500);
+        return sendCaughtError(reply, error, "Failed to fetch tournament bracket");
       }
     }
   );
@@ -161,11 +162,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         });
       } catch (error: any) {
         app.log.error(error);
-        const statusCode =
-          Number.isInteger(error?.statusCode) && error.statusCode >= 400
-            ? error.statusCode
-            : 500;
-        return sendError(reply, error.message || "Failed to record match result", statusCode);
+        return sendCaughtError(reply, error, "Failed to record match result");
       }
     }
   );
@@ -193,7 +190,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         return sendSuccess(reply, result);
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to accept invite", 400);
+        return sendCaughtError(reply, error, "Failed to accept invite");
       }
     }
   );
@@ -216,7 +213,7 @@ export default async function tournamentRoutes(app: FastifyInstance) {
         return sendSuccess(reply, tournaments);
       } catch (error: any) {
         app.log.error(error);
-        return sendError(reply, error.message || "Failed to fetch tournaments", 500);
+        return sendCaughtError(reply, error, "Failed to fetch tournaments");
       }
     }
   );

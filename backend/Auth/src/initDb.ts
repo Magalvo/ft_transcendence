@@ -50,11 +50,22 @@ async function main() {
       table.string("token").notNullable();
       table.dateTime("expires_at").notNullable();
       table.dateTime("last_update").notNullable();
+      table.string("previous_token").nullable();
+      table.dateTime("rotated_at").nullable();
     });
     console.log("Table 'refresh_tokens' created!");
   }
   else {
     console.log("Table 'refresh_tokens' already exists");
+  }
+
+  // Refresh token rotation keeps the previous token valid for a short grace.
+  if (!(await db.schema.hasColumn("refresh_tokens", "previous_token"))) {
+    await db.schema.alterTable("refresh_tokens", (table) => {
+      table.string("previous_token").nullable();
+      table.dateTime("rotated_at").nullable();
+    });
+    console.log("Added rotation columns to refresh_tokens table");
   }
 
   const chatGroupsExists = await db.schema.hasTable("chat_groups");
@@ -641,6 +652,30 @@ if (!tournamentMatchInvitesExists) {
 } else {
   console.log("Table 'tournament_match_invites' already exists");
 }
+
+  // One-off data migrations, each recorded in schema_meta so it runs once.
+  if (!(await db.schema.hasTable("schema_meta"))) {
+    await db.schema.createTable("schema_meta", (table) => {
+      table.string("key").primary();
+      table.string("applied_at").notNullable();
+    });
+  }
+
+  // Chat messages used to be HTML-escaped on write, but the frontend renders
+  // them as plain text, so the entities showed up literally. Restore the
+  // original text; escaping now happens only where HTML is generated.
+  const unescapeKey = "chat_messages_unescaped";
+  if (!(await db("schema_meta").where({ key: unescapeKey }).first())) {
+    await db.transaction(async (trx) => {
+      for (const tableName of ["chat_group_messages", "private_messages"]) {
+        await trx.raw(
+          `UPDATE ${tableName} SET messagem = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(messagem, '&lt;', '<'), '&gt;', '>'), '&quot;', '"'), '&#39;', ''''), '&amp;', '&') WHERE messagem LIKE '%&%'`,
+        );
+      }
+      await trx("schema_meta").insert({ key: unescapeKey, applied_at: new Date().toISOString() });
+    });
+    console.log("Migrated chat messages to unescaped text");
+  }
 
   await db.raw("PRAGMA foreign_keys = ON;");
   console.log("Foreign keys enabled!");

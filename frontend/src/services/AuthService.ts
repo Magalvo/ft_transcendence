@@ -363,9 +363,11 @@ export class AuthService {
       });
 
       if (response.status === 200 && response.data.success) {
-        const { token } = response.data.data;
-        if (refreshToken) {
-          TokenManager.setTokens(token, refreshToken, 1);
+        const { token, refreshToken: rotatedRefreshToken } = response.data.data;
+        const nextRefreshToken =
+          rotatedRefreshToken ?? TokenManager.getRefreshToken() ?? refreshToken;
+        if (nextRefreshToken) {
+          TokenManager.setTokens(token, nextRefreshToken, 1);
         }
         return response.data.data;
       }

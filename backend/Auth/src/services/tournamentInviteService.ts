@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../db.js";
+import { HttpError } from "../utils/httpError.js";
 
 const INVITE_TTL_MS = 15 * 60 * 1000;
 
@@ -39,21 +40,21 @@ async function getMatchWithTournament(tournamentId: string, matchId: string) {
     .where({ id: matchId, tournament_id: tournamentId })
     .first();
 
-  if (!match) throw new Error("Tournament match not found");
+  if (!match) throw new HttpError("Tournament match not found");
 
   const tournament = await db("tournaments")
     .where({ id: tournamentId })
     .first();
 
-  if (!tournament) throw new Error("Tournament not found");
-  if (tournament.status !== "active") throw new Error("Tournament is not active");
+  if (!tournament) throw new HttpError("Tournament not found");
+  if (tournament.status !== "active") throw new HttpError("Tournament is not active");
 
   if (match.status === "completed") {
-    throw new Error("Tournament match is already completed");
+    throw new HttpError("Tournament match is already completed");
   }
 
   if (!match.player1_id || !match.player2_id) {
-    throw new Error("Tournament match is not ready yet");
+    throw new HttpError("Tournament match is not ready yet");
   }
 
   return { match, tournament };
@@ -63,7 +64,7 @@ async function ensureUserCanTriggerInvite(tournamentId: string, userId: string):
   const participant = await db("tournament_participants")
     .where({ tournament_id: tournamentId, user_id: userId })
     .first();
-  if (!participant) throw new Error("Only tournament participants can send invites");
+  if (!participant) throw new HttpError("Only tournament participants can send invites");
 }
 
 async function getPlayerNames(player1Id: string, player2Id: string) {
@@ -93,7 +94,7 @@ export async function createTournamentMatchInvites(
 
   const players = [String(match.player1_id), String(match.player2_id)];
   if (!players.includes(requestedBy)) {
-    throw new Error("Only match participants can send invites");
+    throw new HttpError("Only match participants can send invites");
   }
   const expiresAt = now + INVITE_TTL_MS;
 
@@ -162,25 +163,25 @@ export async function createTournamentMatchInvites(
 }
 
 export async function acceptTournamentInvite(token: string, userId: string): Promise<AcceptedTournamentInvite> {
-  if (!token) throw new Error("Invite token is required");
+  if (!token) throw new HttpError("Invite token is required");
 
   const invite = await db("tournament_match_invites")
     .where({ invite_token: token })
     .first();
 
-  if (!invite) throw new Error("Invite not found");
-  if (String(invite.to_user_id) !== userId) throw new Error("Invite does not belong to this user");
+  if (!invite) throw new HttpError("Invite not found");
+  if (String(invite.to_user_id) !== userId) throw new HttpError("Invite does not belong to this user");
 
   const now = Date.now();
   if (invite.status === "superseded") {
-    throw new Error("Invite has been superseded by a newer token");
+    throw new HttpError("Invite has been superseded by a newer token");
   }
-  if (invite.status !== "pending") throw new Error("Invite is no longer valid");
+  if (invite.status !== "pending") throw new HttpError("Invite is no longer valid");
   if (Number(invite.expires_at) <= now) {
     await db("tournament_match_invites")
       .where({ id: invite.id, status: "pending" })
       .update({ status: "expired" });
-    throw new Error("Invite has expired");
+    throw new HttpError("Invite has expired");
   }
 
   const { match } = await getMatchWithTournament(String(invite.tournament_id), String(invite.match_id));

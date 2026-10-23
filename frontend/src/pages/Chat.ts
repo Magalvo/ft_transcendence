@@ -16,7 +16,7 @@ import { TokenManager } from "../services/TokenManager";
 import { WS_URL } from "../services/RuntimeConfig";
 import { TournamentInviteState } from "../services/TournamentInviteState";
 
-import { escapeHtml } from "../shared/utils";
+import { escapeHtml, randomId } from "../shared/utils";
 export class ChatPage extends AbstractComponent {
   private static readonly PONG_INVITE_PREFIX = "__PONG_INVITE__|";
   private static readonly CHAT_REFRESH_INTERVAL_MS = 12_000;
@@ -238,7 +238,7 @@ export class ChatPage extends AbstractComponent {
         return;
       }
 
-      const inviteSession = `chat_${Date.now()}`;
+      const inviteSession = `chat_${randomId()}`;
       const inviteUrl = this.buildLobbyInviteUrl(inviteSession);
       const inviteMessage = this.buildInviteMessage(inviteUrl, inviteSession);
 

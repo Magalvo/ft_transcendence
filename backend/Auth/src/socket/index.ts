@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Server } from "socket.io";
 import { readBearerToken, verifyAccessToken } from "../utils/tokens.js";
 import { Lobby } from "../game/Lobby.js";
@@ -7,6 +8,8 @@ import { getOrCreatePrivateChat, createPrivateMessage } from "../services/chat.j
 import db from "../db.js";
 import { createTournamentMatchInvites } from "../services/tournamentInviteService.js";
 import { tryRegisterGameUsers } from "../game/ActiveGameRegistry.js";
+import { clientErrorMessage } from "../utils/httpError.js";
+import { getAllowedOrigins } from "../utils/frontendUrl.js";
 
 const socketToUserMap = new Map<string, string>();
 const userToSocketsMap = new Map<string, Set<string>>();
@@ -60,30 +63,18 @@ async function setUserOnlineStatus(userId: string, online: boolean): Promise<voi
   }
 }
 
-function getSocketCorsOrigin() {
-  const configuredOrigin = String(
-    process.env.SOCKET_CORS_ORIGIN || process.env.FRONTEND_URL || "",
-  ).trim();
-
-  if (!configuredOrigin || configuredOrigin === "*") {
-    return true;
-  }
-
-  const origins = configuredOrigin
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  if (origins.length === 0) return true;
-  if (origins.length === 1) return origins[0];
-  return origins;
+function getSocketCorsOrigin(): true | string[] {
+  const override = String(process.env.SOCKET_CORS_ORIGIN || "").trim();
+  // "*" stays available as an explicit opt-in for local debugging.
+  if (override === "*") return true;
+  return getAllowedOrigins(override);
 }
 function normalizeLobbyCode(raw?: string): string {
   return (raw || "").trim().toUpperCase();
 }
 
 function generateLobbyId(): string {
-  return Math.random().toString(36).substring(2, 15);
+  return randomBytes(9).toString("base64url");
 }
 
 function isLocalTournamentSnapshot(value: unknown): value is LocalTournamentSnapshot {
@@ -187,7 +178,7 @@ async function startTournamentGame(
     for (const slot of pendingMatch.slots) {
       const socket = io.sockets.sockets.get(slot.socketId);
       if (socket) {
-        socket.emit("error", { message: error.message || "Failed to start tournament match" });
+        socket.emit("error", { message: clientErrorMessage(error, "Failed to start tournament match") });
       }
     }
     pendingTournamentMatches.delete(matchKey);
@@ -1268,7 +1259,7 @@ export function setupSocketIO(httpServer: any) {
       } catch (error: any) {
         cleanupPendingLocalMatch();
         console.error("❌ Error starting local tournament match:", error);
-        socket.emit("error", { message: error.message || "Failed to start local tournament match" });
+        socket.emit("error", { message: clientErrorMessage(error, "Failed to start local tournament match") });
       }
     });
 
@@ -1360,7 +1351,7 @@ export function setupSocketIO(httpServer: any) {
         }
       } catch (error: any) {
         console.error("❌ Error setting up tournament match:", error);
-        socket.emit("error", { message: error.message || "Failed to setup tournament match" });
+        socket.emit("error", { message: clientErrorMessage(error, "Failed to setup tournament match") });
       }
     });
 
@@ -1385,7 +1376,7 @@ export function setupSocketIO(httpServer: any) {
         }
       } catch (error: any) {
         console.error("❌ Error joining tournament match:", error);
-        socket.emit("error", { message: error.message || "Failed to join tournament match" });
+        socket.emit("error", { message: clientErrorMessage(error, "Failed to join tournament match") });
       }
     });
 
