@@ -68,10 +68,10 @@ services:
 
   mailpit:
     container_name: Mailpit
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.29.3
+    # Web UI only, and only on this machine; SMTP stays on the internal network.
     ports:
-      - "8025:8025"
-      - "1025:1025"
+      - "127.0.0.1:8025:8025"
     networks:
       - transcendencenet
     restart: unless-stopped
@@ -87,7 +87,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -q --spider http://127.0.0.1 || exit 1
+        - wget -q --spider http://127.0.0.1/healthz || exit 1
       interval: 10s
       timeout: 3s
       retries: 10

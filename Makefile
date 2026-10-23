@@ -67,14 +67,11 @@ else
 	rm -f "$(ENV_FILE)"
 endif
 
-# Fully clean the environment: stop containers, remove volumes, images, networks
-# - Removes all Docker volumes, images, containers, and networks
+# Fully clean this project: stop containers and remove its volumes, images
+# and networks. Scoped to the compose project, so other Docker projects on
+# the machine are left alone.
 fclean:
-	$(COMPOSE) down -v --rmi all
-	docker container prune -f
-	docker image prune -f
-	docker volume prune -f
-	docker network prune -f
+	$(COMPOSE) down -v --rmi all --remove-orphans
 
 # Reset database: remove database volume and rebuild the application
 # - Removes the auth_database volume

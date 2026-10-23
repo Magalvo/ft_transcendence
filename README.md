@@ -30,7 +30,8 @@ Make sure you have the following installed on your machine:
     ```
 
 3.  **Access the application:**
-    * **Frontend (App):** [http://localhost:8080](http://localhost:8080)
+    * **Frontend (App):** [https://localhost:8443](https://localhost:8443) (self-signed certificate; `http://localhost:8080` redirects there)
+    * **Mailpit (dev inbox for password-reset emails):** [http://localhost:8025](http://localhost:8025), reachable from this machine only
 
 ## Stopping the Application
 
