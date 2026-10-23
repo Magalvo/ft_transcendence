@@ -1,24 +1,54 @@
-# ft_transcendence
+# ft_transcendence 🏓
 
-Fresh-clone bootstrap is centered on the root `Makefile`.
+A real-time multiplayer Pong game featuring a microservices architecture, user authentication, live chat, and competitive matchmaking. 
 
-Run:
+## Tech Stack
 
+* **Frontend:** Vanilla TypeScript, Vite, Tailwind CSS (Custom SPA Router)
+* **Backend:** Node.js, Fastify, Socket.IO
+* **Database:** SQLite
+* **Infrastructure:** Docker & Docker Compose
+
+## Prerequisites
+
+Make sure you have the following installed on your machine:
+* [Docker](https://docs.docker.com/get-docker/)
+* [Make](https://www.gnu.org/software/make/)
+
+## Quick Start
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd ft_transcendence
+    ```
+
+2.  **Start the application:**
+    The provided `Makefile` will automatically generate the required `.env` files and build the Docker containers.
+    ```bash
+    make
+    ```
+
+3.  **Access the application:**
+    * **Frontend (App):** [http://localhost:8080](http://localhost:8080)
+
+## Stopping the Application
+
+To safely stop and remove the containers, run:
 ```bash
-make
+make down
 ```
 
-That single command will:
+To completely clean up (including volumes and database resets), run:
+```bash
+make fclean
+```
 
-- create `backend/Auth/.env` if it does not exist
-- create `.secrets/google_client_secret.txt` as an empty placeholder if it does not exist
-- generate `.secrets/jwt_secret.txt` automatically if it is missing or empty
-- build the Docker images
-- install dependencies during the image builds
-- start the full Docker Compose stack
+## Project Structure
 
-Notes:
-
-- `GOOGLE_CLIENT_SECRET` is intentionally allowed to stay empty after a fresh clone. Google OAuth remains disabled until `.secrets/google_client_secret.txt` is filled with the real secret and the stack is restarted.
-- The `.secrets` directory is kept in the repo only as an empty placeholder. Sensitive values should be added locally after cloning.
-- Prerequisites are Docker Desktop (or Docker Engine with Compose) and `make`.
+The project is divided into specialized microservices:
+* `/frontend` - The Single Page Application (UI, Game Engine, Router).
+* `/backend/Gateway` - API Gateway to route requests.
+* `/backend/Auth` - Handles user registration, login, JWTs, and 2FA.
+* `/backend/Game` - Dedicated Socket.IO server for real-time physics and game state.
+* `/backend/Chat` - Dedicated server for real-time messaging.
