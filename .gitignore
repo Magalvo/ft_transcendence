@@ -1,18 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 # Prerequisites
 *.d
+*.env
+*.md
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+node_modules
+dist
+dist-ssr
+*.local
 
-# Precompiled Headers
-*.gch
-*.pch
+node_modules/
+dist
+dist-ssr
+*.local
 
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 # Linker files
 *.ilk
+.secrets/*
+!.secrets/.gitkeep
 
 # Debugger Files
 *.pdb
@@ -39,3 +61,6 @@
 
 # debug information files
 *.dwo
+
+# Node modules
+**/node_modules/

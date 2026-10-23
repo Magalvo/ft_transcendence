@@ -1,0 +1,597 @@
+import { AbstractComponent } from '../core/Component';
+import { Navbar } from '../components/layout/Navbar';
+import { socketService } from '../client/SocketService';
+import { navigateTo } from '../core/AppRouter';
+import { UserStore } from '../core/UserStore';
+import type { Socket } from 'socket.io-client';
+import { TokenManager } from '../services/TokenManager';
+import { t } from '../services/I18nService';
+
+type SlotContent = 'empty' | 'human' | 'bot';
+
+interface LobbySlot {
+  index: number;
+  content: SlotContent;
+  playerName?: string;
+  socketId?: string;
+  botLevel?: number;
+}
+
+interface BenchPlayer {
+  socketId: string;
+  username: string;
+  userId?: string;
+}
+
+interface LobbyState {
+  leader: string;
+  isReadyToStart: boolean;
+  config: {
+    players_per_side?: number;
+    paddles_per_side?: number;
+    duration_label: string;
+    power_ups: boolean;
+  };
+  slots: {
+    left: LobbySlot[];
+    right: LobbySlot[];
+  };
+  bench: BenchPlayer[];
+  playerData?: Record<string, { userId: string; username: string }>;
+}
+
+export class LobbyPage extends AbstractComponent {
+  private navbar: Navbar | null = null;
+  private socket: Socket | null = null;
+  private isLeader = false;
+  private myId = '';
+  private selectedBenchPlayer: string | null = null;
+  private currentPowerUpsState = true;
+  private isTransitioningToGame = false;
+  private selectedLobbyId: string | null = null;
+  private isAutoCreatingLobby = false;
+
+  private slotsLeftEl: HTMLElement | null = null;
+  private slotsRightEl: HTMLElement | null = null;
+  private benchListEl: HTMLElement | null = null;
+  private leaderControls: HTMLElement | null = null;
+  private btnStart: HTMLButtonElement | null = null;
+  private leaderMsg: HTMLElement | null = null;
+  private powerUpsButton: HTMLButtonElement | null = null;
+  private btnLeave: HTMLButtonElement | null = null;
+
+  private btnMode1: HTMLButtonElement | null = null;
+  private btnMode2: HTMLButtonElement | null = null;
+  private btnMode3: HTMLButtonElement | null = null;
+  private btnDurFast: HTMLButtonElement | null = null;
+  private btnDurNormal: HTMLButtonElement | null = null;
+  private btnDurLong: HTMLButtonElement | null = null;
+
+  private onSocketConnect = (): void => {
+    this.myId = this.socket?.id ?? '';
+    this.joinRequestedLobby();
+  };
+
+  private onLobbyState = (state: LobbyState): void => {
+    this.renderLobby(state);
+  };
+
+  private onGameStarted = (): void => {
+    this.isTransitioningToGame = true;
+    navigateTo('/game');
+  };
+
+  private onKicked = (data: { message: string }): void => {
+    alert(data.message);
+    navigateTo('/');
+  };
+
+  private onJoinLobbyError = (data: { message: string }): void => {
+    alert(t('lobby.error.join', { message: data.message }));
+    navigateTo('/find-game');
+  };
+
+  private onJoinLobbySuccess = (data: {
+    lobbyId: string;
+    inviteSession?: string;
+  }): void => {
+    this.selectedLobbyId = data.lobbyId;
+    this.isAutoCreatingLobby = false;
+
+    const url = new URL(window.location.href);
+    if (data.lobbyId && data.lobbyId !== 'main') {
+      url.searchParams.set('id', data.lobbyId);
+      url.searchParams.delete('create');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    }
+
+    this.socket?.emit('requestLobbyState');
+  };
+
+  private onLobbyStartError = (data: {
+    message: string;
+    conflicts?: string[];
+  }): void => {
+    if (!this.isLeader) return;
+
+    const conflictInfo =
+      Array.isArray(data.conflicts) && data.conflicts.length > 0
+        ? `\nConflicting players: ${data.conflicts.join(', ')}`
+        : '';
+
+    alert(`${data.message}${conflictInfo}`);
+  };
+
+  constructor() {
+    super('div', 'flex flex-col h-screen bg-black overflow-auto');
+  }
+
+  public render(): void {
+    this.destroyOwnedUi();
+    this.element.innerHTML = '';
+
+    this.navbar = new Navbar();
+    this.navbar.render();
+    this.element.appendChild(this.navbar.getElement());
+
+    const container = document.createElement('div');
+    container.className = 'flex-1 w-full h-full p-5 bg-neutral-900 text-white';
+    container.innerHTML = `
+      <div id="lobby-view" class="flex flex-col items-center gap-5">
+        <div class="text-center">
+          <h1 class="text-3xl font-bold">${t('lobby.title')}</h1>
+          <div id="leader-msg" class="hidden text-yellow-400 mt-2">${t('lobby.leaderBadge')}</div>
+        </div>
+
+        <div class="flex gap-3" id="leader-controls">
+          <button id="btn-mode-1" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">1 vs 1</button>
+          <button id="btn-mode-2" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">2 vs 2</button>
+          <button id="btn-mode-3" class="rounded bg-neutral-700 px-4 py-2 transition ring-offset-2">3 vs 3</button>
+        </div>
+
+        <div class="w-full max-w-5xl rounded bg-neutral-800 p-4">
+          <h3 class="text-center text-neutral-300 mb-3">${t('lobby.settings')}</h3>
+          <div class="flex flex-wrap justify-center gap-4" id="settings-controls">
+            <div class="flex items-center gap-2">
+              <span>${t('lobby.duration')}</span>
+              <button id="btn-dur-fast" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">${t('lobby.duration.fast')}</button>
+              <button id="btn-dur-normal" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">${t('lobby.duration.normal')}</button>
+              <button id="btn-dur-long" class="rounded bg-neutral-700 px-3 py-2 transition ring-offset-2">${t('lobby.duration.long')}</button>
+            </div>
+            <button id="btn-powerups" class="rounded bg-green-700 px-4 py-2 transition ring-offset-2">${this.getPowerUpsLabel(true)}</button>
+          </div>
+        </div>
+
+        <div class="flex w-full max-w-5xl flex-col gap-4 lg:flex-row">
+          <div class="flex-1 rounded bg-neutral-800 p-3">
+            <h3 class="mb-3 text-center text-neutral-300">${t('lobby.team.left')}</h3>
+            <div id="slots-left" class="flex flex-col gap-2"></div>
+          </div>
+
+          <div class="w-full rounded border border-dashed border-neutral-600 bg-neutral-900 p-3 lg:w-64">
+            <h3 class="mb-3 text-center text-neutral-300">${t('lobby.bench')}</h3>
+            <div id="bench-list" class="flex flex-col gap-2"></div>
+          </div>
+
+          <div class="flex-1 rounded bg-neutral-800 p-3">
+            <h3 class="mb-3 text-center text-neutral-300">${t('lobby.team.right')}</h3>
+            <div id="slots-right" class="flex flex-col gap-2"></div>
+          </div>
+        </div>
+
+        <button id="btn-start" class="rounded bg-green-700 px-6 py-3 text-lg font-bold" disabled>
+          ${t('lobby.start')}
+        </button>
+
+        <button id="btn-leave" class="rounded bg-red-700 px-6 py-3 text-lg font-bold hover:bg-red-800 transition">
+          ${t('lobby.leave')}
+        </button>
+      </div>
+    `;
+
+    this.slotsLeftEl = container.querySelector('#slots-left');
+    this.slotsRightEl = container.querySelector('#slots-right');
+    this.benchListEl = container.querySelector('#bench-list');
+    this.leaderControls = container.querySelector('#leader-controls');
+    this.btnStart = container.querySelector('#btn-start');
+    this.leaderMsg = container.querySelector('#leader-msg');
+    this.powerUpsButton = container.querySelector('#btn-powerups');
+    this.btnMode1 = container.querySelector('#btn-mode-1');
+    this.btnMode2 = container.querySelector('#btn-mode-2');
+    this.btnMode3 = container.querySelector('#btn-mode-3');
+    this.btnDurFast = container.querySelector('#btn-dur-fast');
+    this.btnDurNormal = container.querySelector('#btn-dur-normal');
+    this.btnDurLong = container.querySelector('#btn-dur-long');
+    this.btnLeave = container.querySelector('#btn-leave');
+
+    const params = new URLSearchParams(window.location.search);
+    this.selectedLobbyId = params.get('id');
+
+    this.bindUiActions();
+    this.element.appendChild(container);
+    this.initSocket();
+  }
+
+  private bindUiActions(): void {
+    this.btnMode1?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setMode', 'one_for_one');
+    });
+
+    this.btnMode2?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setMode', 'two_for_two');
+    });
+
+    this.btnMode3?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setMode', 'three_for_three');
+    });
+
+    this.btnDurFast?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setDuration', 'fast');
+    });
+
+    this.btnDurNormal?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setDuration', 'normal');
+    });
+
+    this.btnDurLong?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setDuration', 'long');
+    });
+
+    this.powerUpsButton?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_setPowerUps', !this.currentPowerUpsState);
+    });
+
+    this.btnStart?.addEventListener('click', () => {
+      if (!this.isLeader) return;
+      this.socket?.emit('lobby_start');
+    });
+
+    this.btnLeave?.addEventListener('click', () => {
+      if (!window.confirm(t('lobby.confirmLeave'))) return;
+      this.leaveCurrentLobby();
+      navigateTo('/');
+    });
+  }
+
+  private joinRequestedLobby(): void {
+    if (!this.socket) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const inviteSession = params.get('inviteSession');
+    const lobbyId = params.get('id');
+    const shouldCreate = params.get('create') === '1';
+    const requestedMode = params.get('mode');
+
+    if (lobbyId) {
+      this.selectedLobbyId = lobbyId;
+      this.isAutoCreatingLobby = false;
+      this.socket.emit('joinLobbyById', { lobbyId });
+      return;
+    }
+
+    if (inviteSession) {
+      this.isAutoCreatingLobby = false;
+      this.socket.emit('joinLobby', { inviteSession });
+      return;
+    }
+
+    if (shouldCreate) {
+      const mode =
+        requestedMode === '2v2' || requestedMode === '3v3'
+          ? requestedMode
+          : '1v1';
+      this.isAutoCreatingLobby = true;
+      this.socket.emit('createLobby', {
+        mode,
+        isPrivate: false,
+      });
+      return;
+    }
+
+    this.isAutoCreatingLobby = false;
+    navigateTo('/find-game');
+  }
+
+  private leaveCurrentLobby(): void {
+    if (!this.socket) return;
+
+    if (this.selectedLobbyId) {
+      this.socket.emit('leaveLobbyById', { lobbyId: this.selectedLobbyId });
+      return;
+    }
+
+    this.socket.emit('lobby_leave');
+  }
+
+  private initSocket(): void {
+    const currentUser = UserStore.getUser() || TokenManager.getUser();
+    this.socket = socketService.init(undefined, currentUser?.id);
+
+    this.socket.on('connect', this.onSocketConnect);
+    this.socket.on('lobbyState', this.onLobbyState);
+    this.socket.on('gameStarted', this.onGameStarted);
+    this.socket.on('kicked', this.onKicked);
+    this.socket.on('joinLobbySuccess', this.onJoinLobbySuccess);
+    this.socket.on('joinLobbyError', this.onJoinLobbyError);
+    this.socket.on('lobby_start_error', this.onLobbyStartError);
+
+    if (this.socket.connected) {
+      this.onSocketConnect();
+    }
+  }
+
+  private renderLobby(state: LobbyState): void {
+    if (
+      !this.slotsLeftEl ||
+      !this.slotsRightEl ||
+      !this.benchListEl ||
+      !this.btnStart ||
+      !this.leaderControls ||
+      !this.leaderMsg
+    ) {
+      return;
+    }
+
+    if (this.isAutoCreatingLobby && !this.selectedLobbyId) {
+      return;
+    }
+
+    this.isLeader = state.leader === this.myId;
+    this.currentPowerUpsState = state.config.power_ups;
+
+    this.leaderControls.classList.toggle('hidden', !this.isLeader);
+    this.leaderMsg.classList.toggle('hidden', !this.isLeader);
+
+    const ready = this.isLeader && state.isReadyToStart;
+    this.btnStart.disabled = !ready;
+    this.btnStart.textContent = this.isLeader
+      ? ready
+        ? t('lobby.start')
+        : t('lobby.start.fillSlots')
+      : t('lobby.start.waitingLeader');
+    this.btnStart.classList.toggle('opacity-50', !ready);
+    this.btnStart.classList.toggle('cursor-not-allowed', !ready);
+
+    const settingsBtns = [
+      this.btnMode1,
+      this.btnMode2,
+      this.btnMode3,
+      this.btnDurFast,
+      this.btnDurNormal,
+      this.btnDurLong,
+      this.powerUpsButton,
+    ];
+
+    settingsBtns.forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = !this.isLeader;
+      btn.classList.toggle('opacity-50', !this.isLeader);
+      btn.classList.toggle('cursor-not-allowed', !this.isLeader);
+    });
+
+    const players = state.config.players_per_side || state.config.paddles_per_side;
+    this.btnMode1?.classList.toggle('ring-2', players === 1);
+    this.btnMode1?.classList.toggle('ring-yellow-400', players === 1);
+    this.btnMode2?.classList.toggle('ring-2', players === 2);
+    this.btnMode2?.classList.toggle('ring-yellow-400', players === 2);
+    this.btnMode3?.classList.toggle('ring-2', players === 3);
+    this.btnMode3?.classList.toggle('ring-yellow-400', players === 3);
+
+    const duration = state.config.duration_label;
+    this.btnDurFast?.classList.toggle('ring-2', duration === 'fast');
+    this.btnDurFast?.classList.toggle('ring-yellow-400', duration === 'fast');
+    this.btnDurNormal?.classList.toggle('ring-2', duration === 'normal');
+    this.btnDurNormal?.classList.toggle('ring-yellow-400', duration === 'normal');
+    this.btnDurLong?.classList.toggle('ring-2', duration === 'long');
+    this.btnDurLong?.classList.toggle('ring-yellow-400', duration === 'long');
+
+    if (this.powerUpsButton) {
+      this.powerUpsButton.textContent = this.getPowerUpsLabel(this.currentPowerUpsState);
+      this.powerUpsButton.classList.toggle('bg-green-700', this.currentPowerUpsState);
+      this.powerUpsButton.classList.toggle('bg-red-700', !this.currentPowerUpsState);
+    }
+
+    this.renderTeamSlots(this.slotsLeftEl, state.slots.left, 'left', state.playerData);
+    this.renderTeamSlots(this.slotsRightEl, state.slots.right, 'right', state.playerData);
+    this.renderBench(state.bench);
+  }
+
+  private renderBench(bench: BenchPlayer[]): void {
+    if (!this.benchListEl) return;
+    const benchListEl = this.benchListEl;
+    benchListEl.innerHTML = '';
+
+    bench.forEach((player) => {
+      const playerEl = document.createElement('button');
+      playerEl.type = 'button';
+      playerEl.className =
+        'w-full rounded border border-transparent bg-neutral-700 px-3 py-2 text-left transition';
+      playerEl.textContent = player.username;
+
+      if (player.socketId === this.myId) {
+        playerEl.classList.add('ring-1', 'ring-yellow-400');
+      }
+
+      if (this.selectedBenchPlayer === player.socketId) {
+        playerEl.classList.remove('border-transparent');
+        playerEl.classList.add('border-cyan-400', 'bg-neutral-600');
+      }
+
+      if (this.isLeader) {
+        playerEl.addEventListener('click', () => {
+          this.selectedBenchPlayer = player.socketId;
+          this.renderBench(bench);
+        });
+      } else {
+        playerEl.disabled = true;
+        playerEl.classList.add('opacity-80', 'cursor-default');
+      }
+
+      benchListEl.appendChild(playerEl);
+    });
+  }
+
+  private renderTeamSlots(
+    container: HTMLElement,
+    slots: LobbySlot[],
+    side: 'left' | 'right',
+    playerData?: Record<string, { userId: string; username: string }>
+  ): void {
+    container.innerHTML = '';
+
+    slots.forEach((slot) => {
+      const row = document.createElement('div');
+      row.className =
+        'flex items-center justify-between rounded border-2 border-neutral-600 bg-neutral-700 px-3 py-3 h-[52px]';
+
+      if (slot.content === 'empty') {
+        row.classList.add('border-dashed', 'opacity-70');
+        row.textContent = t('lobby.emptySlot');
+
+        if (this.isLeader) {
+          row.classList.add('cursor-pointer', 'hover:bg-neutral-600');
+          row.addEventListener('click', () => {
+            if (!this.socket) return;
+
+            if (!this.selectedBenchPlayer) {
+              this.socket.emit('lobby_addBot', { side, slotIndex: slot.index });
+              return;
+            }
+
+            this.socket.emit('lobby_movePlayer', {
+              targetId: this.selectedBenchPlayer,
+              side,
+              slotIndex: slot.index,
+            });
+            this.selectedBenchPlayer = null;
+          });
+        }
+      } else if (slot.content === 'human') {
+        const label = document.createElement('span');
+        const displayName =
+          slot.playerName ||
+          (slot.socketId ? playerData?.[slot.socketId]?.username : '') ||
+          t('lobby.playerFallback');
+        label.textContent = displayName;
+        row.appendChild(label);
+
+        if (this.isLeader && slot.socketId) {
+          const actions = document.createElement('div');
+          actions.className = 'flex gap-1';
+
+          const toBenchBtn = document.createElement('button');
+          toBenchBtn.type = 'button';
+          toBenchBtn.className =
+            'rounded bg-neutral-800 hover:bg-neutral-600 px-2 py-1 text-xs transition';
+          toBenchBtn.textContent = t('lobby.action.toBench');
+          toBenchBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.socket?.emit('lobby_moveToBench', slot.socketId);
+          });
+
+          const kickBtn = document.createElement('button');
+          kickBtn.type = 'button';
+          kickBtn.className =
+            'rounded bg-red-700 hover:bg-red-600 px-2 py-1 text-xs transition';
+          kickBtn.textContent = t('lobby.action.kick');
+          kickBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (window.confirm(t('lobby.confirmKick', { name: displayName }))) {
+              this.socket?.emit('lobby_kick', { socketId: slot.socketId });
+            }
+          });
+
+          actions.append(toBenchBtn, kickBtn);
+          row.appendChild(actions);
+        }
+      } else {
+        row.classList.replace('bg-neutral-700', 'bg-blue-900');
+        row.classList.replace('border-neutral-600', 'border-blue-500');
+
+        const label = document.createElement('span');
+        label.textContent = t('lobby.botLevel', { level: slot.botLevel ?? 1 });
+        row.appendChild(label);
+
+        if (this.isLeader) {
+          const actions = document.createElement('div');
+          actions.className = 'flex gap-1';
+
+          const createBtn = (text: string, colorClass: string, onClick: () => void) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `rounded ${colorClass} hover:opacity-80 px-2 py-1 text-xs transition`;
+            btn.textContent = text;
+            btn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              onClick();
+            });
+            return btn;
+          };
+
+          actions.append(
+            createBtn('-', 'bg-neutral-800', () =>
+              this.socket?.emit('lobby_botLevel', {
+                side,
+                slotIndex: slot.index,
+                delta: -1,
+              })
+            ),
+            createBtn('+', 'bg-neutral-800', () =>
+              this.socket?.emit('lobby_botLevel', {
+                side,
+                slotIndex: slot.index,
+                delta: 1,
+              })
+            ),
+            createBtn('X', 'bg-red-700', () =>
+              this.socket?.emit('lobby_removeBot', {
+                side,
+                slotIndex: slot.index,
+              })
+            )
+          );
+
+          row.appendChild(actions);
+        }
+      }
+
+      container.appendChild(row);
+    });
+  }
+
+  private getPowerUpsLabel(enabled: boolean): string {
+    return t('lobby.powerUps', {
+      state: enabled ? t('lobby.powerUps.on') : t('lobby.powerUps.off'),
+    });
+  }
+
+  public onDestroy(): void {
+    this.destroyOwnedUi();
+
+    if (!this.socket) return;
+
+    if (!this.isTransitioningToGame) {
+      this.leaveCurrentLobby();
+    }
+
+    this.socket.off('connect', this.onSocketConnect);
+    this.socket.off('lobbyState', this.onLobbyState);
+    this.socket.off('gameStarted', this.onGameStarted);
+    this.socket.off('kicked', this.onKicked);
+    this.socket.off('joinLobbySuccess', this.onJoinLobbySuccess);
+    this.socket.off('joinLobbyError', this.onJoinLobbyError);
+    this.socket.off('lobby_start_error', this.onLobbyStartError);
+  }
+
+  private destroyOwnedUi(): void {
+    this.navbar?.onDestroy();
+    this.navbar = null;
+  }
+}

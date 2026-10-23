@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision Parallax Game</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050510; 
+            font-family: sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        /* Style for the mini webcam feed in the corner */
+        #video {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 240px;
+            height: 180px;
+            transform: scaleX(-1); /* Mirrors the video to feel natural */
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #ui-layer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            z-index: 20;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        <h2 id="loading-text">Loading AI Model...</h2>
+        <p>Please allow webcam access when prompted.</p>
+    </div>
+    
+    <video id="video" autoplay playsinline></video>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script type="module">
+        import {
+            FaceLandmarker,
+            FilesetResolver
+        } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+        // ==========================================
+        // 1. THREE.JS SCENE SETUP
+        // ==========================================
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const cameraBaseZ = 10;
+        camera.position.z = cameraBaseZ;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Helper function to create floating debris at different depths to emphasize parallax
+        const createDebrisLayer = (color, baseZ, count, size) => {
+            const geometry = new THREE.IcosahedronGeometry(size, 0);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: color, 
+                wireframe: true 
+            });
+            
+            for (let i = 0; i < count; i++) {
+                const mesh = new THREE.Mesh(geometry, material);
+                // Spread objects out widely across X and Y
+                mesh.position.x = (Math.random() - 0.5) * 60;
+                mesh.position.y = (Math.random() - 0.5) * 60;
+                // Position them around the specific Z depth
+                mesh.position.z = baseZ + (Math.random() - 0.5) * 10;
+                
+                mesh.rotation.x = Math.random() * Math.PI;
+                mesh.rotation.y = Math.random() * Math.PI;
+                scene.add(mesh);
+            }
+        };
+
+        // Create Background, Midground, and Foreground layers
+        createDebrisLayer(0x0055ff, -20, 100, 2); // Deep Blue (Background)
+        createDebrisLayer(0x00ffaa, -5, 50, 1);   // Teal (Midground)
+        createDebrisLayer(0xff0055, 5, 20, 0.5);  // Pink (Foreground)
+
+        // Add lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(0, 0, 15);
+        scene.add(pointLight);
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ==========================================
+        // 2. MEDIAPIPE AI TRACKING SETUP
+        // ==========================================
+        let faceLandmarker;
+        const video = document.getElementById("video");
+        const uiLayer = document.getElementById("ui-layer");
+        
+        // This vector holds the calculated X/Y destination for the camera
+        let targetCameraPos = new THREE.Vector2(0, 0);
+
+        async function initVisionAI() {
+            // Load the WebAssembly files needed for MediaPipe
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+            );
+            
+            // Initialize the Face Landmarker
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO",
+                numFaces: 1
+            });
+
+            // Request webcam access
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                video.srcObject = stream;
+                video.addEventListener("loadeddata", predictWebcam);
+                uiLayer.style.display = "none"; // Hide loading text
+            } catch (err) {
+                document.getElementById("loading-text").innerText = "Webcam access denied.";
+                console.error("Camera error:", err);
+            }
+        }
+
+        let lastVideoTime = -1;
+
+        // The AI processing loop
+        function predictWebcam() {
+            let startTimeMs = performance.now();
+            
+            // Only run detection if the video frame has actually updated
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                
+                const results = faceLandmarker.detectForVideo(video, startTimeMs);
+                
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                    const landmarks = results.faceLandmarks[0];
+                    
+                    // Landmark 1 is roughly the tip of the nose
+                    const nose = landmarks[1]; 
+                    
+                    // Convert AI coords (0.0 to 1.0) to Screen coords (-1.0 to 1.0)
+                    // We multiply by -1.0 because the video is mirrored!
+                    const normalizedX = (nose.x - 0.5) * -2.0; 
+                    const normalizedY = (nose.y - 0.5) * -2.0;
+                    
+                    // Sensitivity multiplier: How far should the camera move?
+                    const sensitivity = 10.0; 
+                    
+                    targetCameraPos.x = normalizedX * sensitivity;
+                    // Invert Y so moving your head up moves the camera up
+                    targetCameraPos.y = -(normalizedY * sensitivity); 
+                }
+            }
+            
+            // Keep the loop running
+            requestAnimationFrame(predictWebcam);
+        }
+
+        // Boot up the AI
+        initVisionAI();
+
+        // ==========================================
+        // 3. GAME RENDER LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // MAGIC: Linear Interpolation (Lerp)
+            // Instead of snapping the camera to the AI data instantly (which looks jittery),
+            // we move it 10% of the way there every frame. This creates smooth gliding.
+            camera.position.x += (targetCameraPos.x - camera.position.x) * 0.1;
+            camera.position.y += (targetCameraPos.y - camera.position.y) * 0.1;
+            
+            // For a better parallax effect, force the camera to look at the center of the scene
+            camera.lookAt(0, 0, 0);
+
+            // Gently rotate all the debris objects for ambience
+            scene.children.forEach(child => {
+                if (child.isMesh) {
+                    child.rotation.x += 0.002;
+                    child.rotation.y += 0.003;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

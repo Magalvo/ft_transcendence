@@ -1,0 +1,4 @@
+*.env
+
+# Native addon build output (generated, platform-specific)
+backend/build/

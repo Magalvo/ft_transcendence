@@ -1,0 +1,4001 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Vision - FdF Flight Simulator</title>
+    <style>
+      /* Retro dark theme */
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #050508;
+        font-family: "Courier New", Courier, monospace;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      #video {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 240px;
+        height: 180px;
+        transform: scaleX(-1);
+        border: 2px solid rgba(0, 255, 204, 0.5);
+        border-radius: 8px;
+        z-index: 10;
+        box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+      }
+
+      #ui-layer {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #00ffcc;
+        text-align: center;
+        z-index: 20;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 20px;
+        border: 1px solid #00ffcc;
+        border-radius: 10px;
+        box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+      }
+
+      #controls-hint {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: #00ffcc;
+        text-shadow: 0 0 5px #00ffcc;
+        z-index: 20;
+        font-size: 14px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border: 1px solid #00ffcc;
+        border-radius: 5px;
+        display: none;
+      }
+
+      #speed-readout {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        color: #ff0055;
+        text-shadow: 0 0 8px #ff0055;
+        z-index: 20;
+        font-size: 28px;
+        font-weight: bold;
+        display: none;
+      }
+
+      #target-hp {
+        position: absolute;
+        bottom: 68px;
+        left: 20px;
+        color: #00ffcc;
+        text-shadow: 0 0 6px #00ffcc;
+        font-weight: 16px;
+        font-family: "Courier New";
+        z-index: 20;
+        font-size: 16px;
+        display: none;
+      }
+
+      #pause-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #00ffcc;
+        text-shadow: 0 0 10px #00ffcc;
+        z-index: 40;
+        font-size: 42px;
+        font-weight: bold;
+        letter-spacing: 2px;
+        background: rgba(0, 0, 0, 0.65);
+        padding: 16px 24px;
+        border: 1px solid #00ffcc;
+        border-radius: 8px;
+        display: none;
+      }
+
+      #death-actions {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        z-index: 35;
+        display: none;
+        gap: 10px;
+      }
+
+      #death-actions button {
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        background: rgba(0, 0, 0, 0.75);
+        color: #00ffcc;
+        border: 1px solid #00ffcc;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      #death-actions button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      #calibration-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(5, 5, 8, 0.95);
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #00ffcc;
+        text-align: center;
+        display: none;
+      }
+
+      #calibrate-btn {
+        margin-top: 20px;
+        padding: 15px 30px;
+        font-size: 18px;
+        font-weight: bold;
+        text-transform: uppercase;
+        background-color: transparent;
+        color: #00ffcc;
+        border: 2px solid #00ffcc;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      #calibrate-btn:hover:not(:disabled) {
+        background-color: #00ffcc;
+        color: #000;
+        box-shadow: 0 0 15px #00ffcc;
+      }
+
+      #calibrate-btn:disabled {
+        border-color: #333;
+        color: #555;
+        cursor: not-allowed;
+      }
+      #lobby-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(5, 5, 8, 0.95);
+        z-index: 25;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .team-btn {
+        margin: 10px;
+        padding: 20px 40px;
+        font-size: 24px;
+        font-weight: bold;
+        font-family: "Courier New";
+        cursor: pointer;
+        background: transparent;
+        border: 2px solid;
+        border-radius: 4px;
+        transition: 0.2s;
+      }
+      #btn-red {
+        color: #ff2222;
+        border-color: #ff2222;
+      }
+      #btn-red:hover {
+        background: #ff2222;
+        color: #000;
+        box-shadow: 0 0 20px #ff2222;
+      }
+      #btn-blue {
+        color: #0088ff;
+        border-color: #0088ff;
+      }
+      #btn-blue:hover {
+        background: #0088ff;
+        color: #000;
+        box-shadow: 0 0 20px #0088ff;
+      }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="ui-layer">
+      <h2 id="loading-text">INITIALIZING FDF MATRIX...</h2>
+    </div>
+    <canvas
+      id="hud-canvas"
+      style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 15;
+      "
+    ></canvas>
+    <div
+      id="labels-container"
+      style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 15;
+      "
+    ></div>
+
+    <div id="calibration-screen">
+      <h2>SYSTEM CALIBRATION</h2>
+      <p>1. Sit in your neutral flying posture.</p>
+      <p>2. Look directly at the center of the screen.</p>
+      <button id="calibrate-btn" disabled>Awaiting Visual Link...</button>
+    </div>
+
+    <div id="lobby-screen">
+      <h1 style="color: #fff; text-shadow: 0 0 10px #fff; letter-spacing: 4px">
+        CHOOSE FACTION
+      </h1>
+      <div style="display: flex; gap: 20px">
+        <button id="btn-red" class="team-btn">OMEGA SQUADRON (RED)</button>
+        <button id="btn-blue" class="team-btn">ALPHA VANGUARD (BLUE)</button>
+      </div>
+    </div>
+
+    <div id="controls-hint">
+      <b>[ FLIGHT OVERRIDE ]</b><br /><br />
+      W: Throttle Up<br />
+      S: Throttle Down<br />
+      P: Pause / Resume<br />
+      K: Kill Player (Dev)<br />
+      R: Respawn (When Ready)<br />
+      V: Spectate Now<br />
+      [: Prev Spectate Target<br />
+      ]: Next Spectate Target<br />
+      FACE YAW: Steer Vector<br />
+      FACE X/Y: Cockpit Parallax
+    </div>
+
+    <div
+      id="speed-readout"
+      style="
+        position: absolute;
+        bottom: 15px;
+        left: 20px;
+        color: #ff0055;
+        text-shadow: 0 0 8px #ff0055;
+        z-index: 20;
+        font-size: 28px;
+        font-weight: bold;
+        display: none;
+      "
+    >
+      SPD: 0
+    </div>
+    <div
+      id="mode-readout"
+      style="
+        position: absolute;
+        bottom: 85px;
+        left: 20px;
+        color: #ffcc00;
+        text-shadow: 0 0 8px #ffcc00;
+        z-index: 20;
+        font-size: 18px;
+        font-weight: bold;
+        display: none;
+      "
+    >
+      MODE: FACE
+    </div>
+    <div id="target-hp">TARGET HP: --</div>
+    <div id="pause-overlay">PAUSED</div>
+    <div id="death-actions">
+      <button id="respawn-btn" disabled>Respawn</button>
+      <button id="spectate-btn">Spectate</button>
+    </div>
+    <video id="video" autoplay playsinline></video>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { mergeGeometries } from "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/utils/BufferGeometryUtils.js";
+      import {
+        FaceLandmarker,
+        FilesetResolver,
+      } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+      // ==========================================
+      // MULTIPLAYER NETWORKING
+      // ==========================================
+
+      /**
+       * Dictionary to store 3D meshes of all remote players
+       * Key: player ID (string), Value: THREE.Group containing enemy ship
+       */
+      const remotePilots = {};
+
+      /**
+       * Queue for telemetry that arrives before the world is initialized
+       * Prevents race condition where player positions arrive before earthAnchor exists
+       */
+      const pendingRemoteContacts = [];
+
+      // Reference to UI element displaying target health
+      const targetHpUI = document.getElementById("target-hp");
+      const labelsContainer = document.getElementById("labels-container");
+      const modeReadoutUI = document.getElementById("mode-readout");
+      const deathActionsUI = document.getElementById("death-actions");
+      const respawnBtnUI = document.getElementById("respawn-btn");
+      const spectateBtnUI = document.getElementById("spectate-btn");
+
+      const CAMERA_MODE_PLAYER = "PLAYER";
+      const CAMERA_MODE_DEATH = "DEATH";
+      const CAMERA_MODE_SPECTATE = "SPECTATE";
+
+      let cameraMode = CAMERA_MODE_PLAYER;
+      let deathCamFuselage = null;
+      let respawnAvailable = false;
+      let respawnRequested = false;
+      let spectatorTargetId = null;
+
+      function dropRadarContact(id) {
+        const contact = remotePilots[id];
+        if (!contact) return;
+
+        if (contact.userData && contact.userData.label) {
+          contact.userData.label.remove();
+        }
+        if (earthAnchor) {
+          earthAnchor.remove(contact);
+        }
+        delete remotePilots[id];
+
+        for (let i = pendingRemoteContacts.length - 1; i >= 0; i--) {
+          if (pendingRemoteContacts[i].id === id) {
+            pendingRemoteContacts.splice(i, 1);
+          }
+        }
+
+        if (lockedEnemyId === id) {
+          lockedEnemyId = null;
+          lockTimer = 0;
+          hasMissileLock = false;
+        }
+
+        if (spectatorTargetId === id) {
+          spectatorTargetId = null;
+          cycleSpectatorTarget(1);
+        }
+      }
+
+      function updateRemotePilotTargetPose(ship, pos) {
+        if (!ship || !ship.userData || !ship.userData.targetQuat || !pos)
+          return;
+
+        const targetPos = ship.userData.targetPos;
+        if (
+          targetPos &&
+          Number.isFinite(pos.x) &&
+          Number.isFinite(pos.y) &&
+          Number.isFinite(pos.z)
+        ) {
+          targetPos.set(pos.x, pos.y, pos.z);
+        }
+
+        const safeX = Number.isFinite(pos.x) ? pos.x : 0;
+        const safeY = Number.isFinite(pos.y) ? pos.y : 0;
+        const safeZ = Number.isFinite(pos.z) ? pos.z : 0;
+        const up = new THREE.Vector3(safeX, safeY, safeZ);
+        if (up.lengthSq() < 1e-8) {
+          up.set(0, 1, 0);
+        } else {
+          up.normalize();
+        }
+
+        const forward = new THREE.Vector3(
+          Number.isFinite(pos.dx) ? pos.dx : 0,
+          Number.isFinite(pos.dy) ? pos.dy : 1,
+          Number.isFinite(pos.dz) ? pos.dz : 0,
+        );
+        if (forward.lengthSq() < 1e-8) {
+          forward.set(0, 1, 0);
+        } else {
+          forward.normalize();
+        }
+
+        let right = new THREE.Vector3().crossVectors(forward, up);
+        if (right.lengthSq() < 1e-8) {
+          const fallbackAxis =
+            Math.abs(up.y) < 0.99
+              ? new THREE.Vector3(0, 1, 0)
+              : new THREE.Vector3(1, 0, 0);
+          right = new THREE.Vector3().crossVectors(fallbackAxis, up);
+        }
+        right.normalize();
+        const trueUp = new THREE.Vector3()
+          .crossVectors(right, forward)
+          .normalize();
+
+        const m = new THREE.Matrix4();
+        m.makeBasis(right, trueUp, forward.clone().negate());
+        ship.userData.targetQuat.setFromRotationMatrix(m);
+      }
+
+      /**
+       * Ensures a remote player ship exists in the scene
+       * Creates new ship if player doesn't exist, updates position if they do
+       * @param {string} id - Unique player identifier
+       * @param {Object} pos - Position object with x, y, z, dx, dy, dz, hp properties
+       * @returns {THREE.Group|null} The enemy ship group or null if world not ready
+       */
+      function ensureRemotePilot(id, pos) {
+        // Queue contact if world isn't initialized yet
+        if (!earthAnchor) {
+          pendingRemoteContacts.push({ id, pos });
+          return null;
+        }
+
+        // Update existing pilot position
+        if (remotePilots[id]) {
+          const enemy = remotePilots[id];
+          updateRemotePilotTargetPose(enemy, pos);
+
+          if (typeof pos.dead === "boolean") {
+            enemy.visible = !pos.dead;
+            if (enemy.userData.label) {
+              enemy.userData.label.style.display = pos.dead ? "none" : "block";
+            }
+          }
+          return enemy;
+        }
+
+        console.log("NEW RADAR CONTACT:", id);
+
+        // Create new enemy ship using the same geometry as player
+        const shipTeam = pos.team || "RED";
+        const newEnemyShip = createPlayerShip(shipTeam);
+
+        // Create floating name label for the pilot
+        const label = document.createElement("div");
+        label.style.position = "absolute";
+        label.style.color = "#00ffcc";
+        label.style.fontFamily = "Courier New";
+        label.style.fontWeight = "bold";
+        label.style.textShadow = "0 0 5px #00ffcc";
+        label.innerText = `PILOT-${id.substring(0, 4)}`;
+        labelsContainer.appendChild(label);
+
+        // Initialize ship position and scale (3x larger than player for visibility)
+        const spawnX = Number.isFinite(pos.x) ? pos.x : 0;
+        const spawnY = Number.isFinite(pos.y) ? pos.y : 0;
+        const spawnZ = Number.isFinite(pos.z) ? pos.z : 0;
+        newEnemyShip.position.set(spawnX, spawnY, spawnZ);
+        newEnemyShip.scale.set(3.0, 3.0, 3.0);
+
+        // Store ship metadata for interpolation and UI
+        newEnemyShip.userData = {
+          targetPos: new THREE.Vector3(spawnX, spawnY, spawnZ),
+          targetQuat: new THREE.Quaternion(),
+          label,
+          hp: Number.isFinite(pos.hp) ? pos.hp : 100,
+          team: shipTeam,
+        };
+        updateRemotePilotTargetPose(newEnemyShip, pos);
+        newEnemyShip.quaternion.copy(newEnemyShip.userData.targetQuat);
+
+        if (pos.dead) {
+          newEnemyShip.visible = false;
+          label.style.display = "none";
+        }
+
+        earthAnchor.add(newEnemyShip);
+        remotePilots[id] = newEnemyShip;
+
+        return newEnemyShip;
+      }
+
+      /**
+       * Handles high-speed binary radar updates from server
+       * Format: [4 bytes: pilot ID][24 bytes: 6 floats (x,y,z,dx,dy,dz)]
+       * @param {ArrayBuffer} buffer - Raw binary telemetry data
+       */
+      function handleBinaryRadar(buffer) {
+        const dataView = new DataView(buffer);
+
+        // Extract pilot ID from first 4 bytes (unsigned 32-bit integer, little-endian)
+        const enemyId = dataView.getUint32(0, true);
+
+        // Extract 6 floats: position (x,y,z) and forward vector (dx,dy,dz)
+        const floats = new Float32Array(buffer, 4);
+        const pos = {
+          x: floats[0],
+          y: floats[1],
+          z: floats[2],
+          dx: floats[3],
+          dy: floats[4],
+          dz: floats[5],
+        };
+
+        // Update or create the enemy pilot (convert ID to string for dictionary)
+        ensureRemotePilot(String(enemyId), pos);
+      }
+
+      // ==========================================
+      // WEBSOCKET CONNECTION SETUP
+      // ==========================================
+
+      /**
+       * WebSocket connection to multiplayer server
+       * Handles both JSON events and binary telemetry data
+       */
+      const ws = new WebSocket("ws://localhost:3000");
+      ws.binaryType = "arraybuffer"; // Receive binary data as ArrayBuffers
+
+      ws.onopen = () => {
+        console.log("🟢 LINK ESTABLISHED WITH TOWER.");
+      };
+
+      ws.onclose = () => {
+        console.log("🔴 LINK LOST. TOWER UNREACHABLE.");
+      };
+
+      /**
+       * Main message router for WebSocket events
+       * Handles both binary telemetry and JSON events
+       */
+      ws.onmessage = (event) => {
+        // Route binary data to high-speed handler
+        if (event.data instanceof ArrayBuffer) {
+          handleBinaryRadar(event.data);
+          return;
+        }
+
+        // Parse and route JSON events
+        try {
+          const msg = JSON.parse(event.data);
+
+          switch (msg.type) {
+            case "handshake":
+              window.myPilotId = String(msg.id); // Save our own ID!
+              break;
+            // Server heartbeat - respond immediately
+            case "svPing":
+              ws.send(JSON.stringify({ type: "svPong", nonce: msg.nonce }));
+              break;
+
+            // Initial world state when joining server
+            case "worldSnapshot":
+              if (Array.isArray(msg.data)) {
+                for (const pilot of msg.data) {
+                  ensureRemotePilot(pilot.id, pilot.pos);
+                }
+              }
+              break;
+
+            // Individual radar contact update
+            case "radarUpdate":
+              ensureRemotePilot(msg.data.id, msg.data.pos);
+              if (
+                remotePilots[msg.data.id] &&
+                Number.isFinite(msg.data.pos.hp)
+              ) {
+                remotePilots[msg.data.id].userData.hp = msg.data.pos.hp;
+              }
+              break;
+
+            // Health update for specific enemy
+            case "hpUpdate": {
+              const enemyStrId = String(msg.id);
+              const hp = msg.hp;
+
+              if (remotePilots[enemyStrId] && Number.isFinite(hp)) {
+                remotePilots[enemyStrId].userData.hp = hp;
+
+                // Display enemy HP on HUD with padded ID
+                const displayId = enemyStrId.padStart(4, "0");
+                targetHpUI.innerText = `TARGET HP [${displayId}]: ${hp}`;
+                targetHpUI.style.display = "block";
+              }
+              break;
+            }
+
+            // Enemy ship destroyed - show explosion effect
+            case "shipDestroyed": {
+              const deadStrId = String(msg.id);
+              const isMe = deadStrId === window.myPilotId;
+              const deadShip = isMe ? playerShip : remotePilots[deadStrId];
+              if (!deadShip) break;
+              if (isMe) {
+                window.isDead = true;
+              }
+
+              console.log(
+                isMe ? "💀 YOU WERE DESTROYED!" : "💥 TARGET DESTROYED:",
+                deadStrId,
+              );
+
+              playExplosionSound();
+
+              if (deadShip) {
+                const deathNow = Date.now();
+                const deadShipPos = new THREE.Vector3();
+                deadShip.getWorldPosition(deadShipPos);
+                earthAnchor.worldToLocal(deadShipPos);
+
+                // Create wireframe explosion effect
+                const expGeo = new THREE.IcosahedronGeometry(1, 5);
+                const expMat = new THREE.MeshBasicMaterial({
+                  color: 0xffd580,
+                  wireframe: false,
+                  transparent: false,
+                  opacity: 1,
+                });
+                const explosion = new THREE.Mesh(expGeo, expMat);
+                explosion.position.copy(deadShipPos);
+                earthAnchor.add(explosion);
+                explosions.push(explosion);
+                let localFuselageDebris = null;
+                let localFallbackDebris = null;
+
+                deadShip.children.forEach((part) => {
+                  if (part.type !== "Mesh" && part.type !== "Group") return;
+
+                  const debris = part.clone();
+
+                  // Calculate exact absolute position/rotation/scale of the part
+                  const worldPos = new THREE.Vector3();
+                  const worldQuat = new THREE.Quaternion();
+                  const worldScale = new THREE.Vector3();
+
+                  part.getWorldPosition(worldPos);
+                  part.getWorldQuaternion(worldQuat);
+                  part.getWorldScale(worldScale);
+
+                  // Convert back to earthAnchor's local space
+                  earthAnchor.worldToLocal(worldPos);
+
+                  debris.position.copy(worldPos);
+                  debris.quaternion.copy(worldQuat);
+                  debris.scale.copy(worldScale);
+
+                  // Clone materials so we can fade out the debris without turning the respawning ship invisible
+                  debris.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                      child.material = child.material.clone();
+                      child.material.transparent = true;
+                    }
+                  });
+
+                  // Calculate an explosive burst outward from the center of the ship
+                  const burstDir = new THREE.Vector3()
+                    .subVectors(debris.position, deadShipPos)
+                    .normalize();
+
+                  // Give it random explosive force
+                  const burstSpeed = 8 + Math.random() * 12;
+                  const velocity = burstDir.multiplyScalar(burstSpeed);
+
+                  // Add the ship's forward momentum to the debris so it flies forward as it blows up
+                  const forward = new THREE.Vector3(0, 0, -20);
+                  forward.applyQuaternion(deadShip.quaternion);
+                  velocity.add(forward);
+                  // Always bias debris inward so the fuselage actually falls.
+                  velocity.add(
+                    deadShipPos.clone().normalize().multiplyScalar(-8),
+                  );
+
+                  // Assign physics properties
+                  debris.userData = {
+                    velocity: velocity,
+                    rotSpeed: new THREE.Vector3(
+                      (Math.random() - 0.5) * 0.12, // Tumbling speed
+                      (Math.random() - 0.5) * 0.12,
+                      (Math.random() - 0.5) * 0.12,
+                    ),
+                    opacity: 1.0,
+                    // Preserve source part identity so smoke/fire can spawn from the fuselage core.
+                    isFuselage: !!(part.userData && part.userData.isFuselage),
+                    isMe,
+                    originalId: deadStrId,
+                    burnUntil: deathNow + 14000,
+                    expiresAt: deathNow + 18000,
+                  };
+
+                  earthAnchor.add(debris);
+                  debrisParticles.push(debris);
+                  if (isMe && !localFallbackDebris) {
+                    localFallbackDebris = debris;
+                  }
+
+                  if (
+                    isMe &&
+                    debris.userData.isFuselage &&
+                    !localFuselageDebris
+                  ) {
+                    localFuselageDebris = debris;
+                  }
+                });
+                if (isMe && !localFuselageDebris) {
+                  localFuselageDebris = localFallbackDebris;
+                }
+
+                deadShip.visible = false;
+                if (deadShip.userData.label) {
+                  deadShip.userData.label.style.display = "none";
+                }
+
+                // Reset HP display
+                const displayId = deadStrId.padStart(4, "0");
+                targetHpUI.innerText = `TARGET HP [${displayId}]: 100`;
+
+                if (isMe) {
+                  respawnAvailable = false;
+                  respawnRequested = false;
+                  startDeathCam(localFuselageDebris);
+                }
+              }
+              break;
+            }
+
+            case "respawnReady": {
+              const readyId = String(msg.id);
+              if (readyId === window.myPilotId) {
+                respawnAvailable = true;
+                respawnRequested = false;
+              }
+
+              const waitingShip = remotePilots[readyId];
+              if (waitingShip) {
+                waitingShip.visible = false;
+                if (waitingShip.userData && waitingShip.userData.label) {
+                  waitingShip.userData.label.style.display = "none";
+                }
+              }
+              break;
+            }
+
+            case "shipRespawned": {
+              const respawnId = String(msg.id);
+              if (respawnId === window.myPilotId) {
+                respawnAvailable = false;
+                respawnRequested = false;
+                completeLocalRespawn(msg.pos);
+                break;
+              }
+
+              const respawnedShip = remotePilots[respawnId];
+              if (respawnedShip) {
+                respawnedShip.visible = true;
+                if (
+                  remotePilots[respawnId] &&
+                  remotePilots[respawnId].userData.label
+                ) {
+                  remotePilots[respawnId].userData.label.style.display =
+                    "block";
+                }
+              }
+
+              if (
+                msg.pos &&
+                remotePilots[respawnId] &&
+                Number.isFinite(msg.pos.x) &&
+                Number.isFinite(msg.pos.y) &&
+                Number.isFinite(msg.pos.z)
+              ) {
+                remotePilots[respawnId].position.set(
+                  msg.pos.x,
+                  msg.pos.y,
+                  msg.pos.z,
+                );
+                updateRemotePilotTargetPose(remotePilots[respawnId], msg.pos);
+                remotePilots[respawnId].quaternion.copy(
+                  remotePilots[respawnId].userData.targetQuat,
+                );
+              }
+
+              if (remotePilots[respawnId] && Number.isFinite(msg.hp)) {
+                remotePilots[respawnId].userData.hp = msg.hp;
+              }
+              break;
+            }
+
+            // Render remote gunfire for both bots and human players.
+            case "shotFired":
+            case "botFired": {
+              const shooterId = String(msg.id);
+              if (shooterId === window.myPilotId) break;
+
+              playLaserSound();
+
+              const shooter = remotePilots[shooterId];
+              if (shooter && shooter.visible) {
+                spawnLaserPairFromShooter(shooter, true);
+              } else if (
+                msg.pos &&
+                msg.dir &&
+                Number.isFinite(msg.pos.x) &&
+                Number.isFinite(msg.pos.y) &&
+                Number.isFinite(msg.pos.z) &&
+                Number.isFinite(msg.dir.x) &&
+                Number.isFinite(msg.dir.y) &&
+                Number.isFinite(msg.dir.z)
+              ) {
+                const origin = new THREE.Vector3(
+                  msg.pos.x,
+                  msg.pos.y,
+                  msg.pos.z,
+                );
+                const forward = new THREE.Vector3(
+                  msg.dir.x,
+                  msg.dir.y,
+                  msg.dir.z,
+                );
+                if (forward.lengthSq() > 1e-8) {
+                  spawnLaserPairFromPose(
+                    origin,
+                    forward.normalize(),
+                    origin.clone().normalize(),
+                    true,
+                  );
+                }
+              }
+              break;
+            }
+
+            case "missileLaunched": {
+              const ownerId = String(msg.ownerId);
+              if (!ownerId || ownerId === window.myPilotId) break;
+
+              const missileGeo = new THREE.CylinderGeometry(0.8, 0.8, 8, 8);
+              missileGeo.rotateX(Math.PI / 2);
+              const missileMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+              });
+              const missile = new THREE.Mesh(missileGeo, missileMat);
+
+              const ownerShip = remotePilots[ownerId];
+              const hasServerPos =
+                msg.pos &&
+                Number.isFinite(msg.pos.x) &&
+                Number.isFinite(msg.pos.y) &&
+                Number.isFinite(msg.pos.z);
+
+              if (hasServerPos) {
+                missile.position.set(msg.pos.x, msg.pos.y, msg.pos.z);
+              } else if (ownerShip) {
+                const spawnPos = new THREE.Vector3(0, -2, 0);
+                ownerShip.localToWorld(spawnPos);
+                earthAnchor.worldToLocal(spawnPos);
+                missile.position.copy(spawnPos);
+              } else {
+                break;
+              }
+
+              const dirX =
+                msg.dir && Number.isFinite(msg.dir.x) ? msg.dir.x : 0;
+              const dirY =
+                msg.dir && Number.isFinite(msg.dir.y) ? msg.dir.y : 0;
+              const dirZ =
+                msg.dir && Number.isFinite(msg.dir.z) ? msg.dir.z : 0;
+              const launchDir = new THREE.Vector3(dirX, dirY, dirZ);
+
+              if (launchDir.lengthSq() > 1e-8) {
+                missile.quaternion.setFromUnitVectors(
+                  new THREE.Vector3(0, 0, -1),
+                  launchDir.normalize(),
+                );
+              } else if (ownerShip) {
+                missile.quaternion.copy(ownerShip.quaternion);
+              }
+
+              missile.userData = {
+                ownerId,
+                targetId: String(msg.targetId),
+                speed: Number.isFinite(msg.speed) ? msg.speed : 80,
+                distanceTraveled: 0,
+              };
+
+              earthAnchor.add(missile);
+              missiles.push(missile);
+              playMissileLaunchSound();
+              break;
+            }
+
+            case "flaresDeployed": {
+              const flareId = String(msg.id);
+              // If an enemy dropped flares, show it visually and give them immunity!
+              if (remotePilots[flareId]) {
+                deployFlares(remotePilots[flareId]);
+                if (Number.isFinite(msg.until)) {
+                  remotePilots[flareId].userData.flareActiveUntil = msg.until;
+                }
+              }
+              break;
+            }
+
+            // Player disconnected from server
+            case "pilotDropped":
+              dropRadarContact(String(msg.id));
+              break;
+          }
+        } catch (err) {
+          console.error("Telemetry parsing error:", err);
+        }
+      };
+
+      // ==========================================
+      // THREE.JS SCENE INITIALIZATION
+      // ==========================================
+
+      // ==========================================
+      // PROCEDURAL AUDIO ENGINE (Web Audio API)
+      // ==========================================
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      let audioInitialized = false;
+
+      // Engine sound nodes
+      let engineOsc = null;
+      let engineGain = null;
+
+      // Targeting computer state
+      let nextBeepTime = 0;
+
+      function initAudio() {
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        audioInitialized = true;
+
+        // 1. Create the continuous engine drone (Sawtooth wave through a lowpass filter)
+        engineOsc = audioCtx.createOscillator();
+        engineOsc.type = "sawtooth";
+        engineOsc.frequency.value = 40; // Deep low rumble
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 200; // Muffle the harsh highs
+
+        engineGain = audioCtx.createGain();
+        engineGain.gain.value = 0.0; // Start silent until calibrated
+
+        engineOsc.connect(filter);
+        filter.connect(engineGain);
+        engineGain.connect(audioCtx.destination);
+        engineOsc.start();
+      }
+
+      
+
+      function playLaserSound() {
+        if (!audioInitialized) return;
+        const now = audioCtx.currentTime;
+
+        // Classic Arcade "Pew": High frequency dropping rapidly
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "square";
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.15);
+
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
+
+      function playMissileLaunchSound() {
+        if (!audioInitialized) return;
+        const now = audioCtx.currentTime;
+
+        // The "Whoosh/Whistle" of a firework rocket
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        // Start at a mid pitch and rapidly sweep upwards
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(1500, now + 0.6); 
+
+        // Envelope: Attack quickly, sustain, then fade out
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      }
+
+      function playExplosionSound() {
+        if (!audioInitialized) return;
+        const now = audioCtx.currentTime;
+
+        // 1. The deep "BOOM" (low sine wave rapidly pitching down)
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+        
+        oscGain.gain.setValueAtTime(0.6, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        
+        osc.connect(oscGain);
+        oscGain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.5);
+
+        // 2. The "Crackle/Hiss" (Generated White Noise)
+        const bufferSize = audioCtx.sampleRate * 1.0; // 1 second of noise
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1; // Generate static
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        // Filter the noise so it sounds like a muffled explosion instead of TV static
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = "lowpass";
+        noiseFilter.frequency.value = 800; 
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.5, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+      }
+
+      function updateEngineSound(speed, isDead) {
+        if (!audioInitialized || !engineOsc) return;
+        const now = audioCtx.currentTime;
+
+        if (isDead) {
+          engineGain.gain.setTargetAtTime(0, now, 0.1);
+          return;
+        }
+
+        // Speed ranges from BRAKE_SPEED (5) to BOOST_SPEED (15)
+        const normalizedSpeed = (speed - 5) / 10;
+
+        // Pitch goes up as speed goes up
+        engineOsc.frequency.setTargetAtTime(
+          40 + normalizedSpeed * 40,
+          now,
+          0.1,
+        );
+        // Volume gets slightly louder as speed goes up
+        engineGain.gain.setTargetAtTime(0.1 + normalizedSpeed * 0.15, now, 0.1);
+      }
+
+      function manageLockOnSound(isLockedOn, lockProgress) {
+        if (!audioInitialized || !isLockedOn) return;
+
+        const now = audioCtx.currentTime;
+        if (now < nextBeepTime) return;
+
+        // If fully locked, solid/fast tone. If acquiring, slow beeps.
+        const beepRate = lockProgress >= 1.0 ? 0.1 : 0.4 - lockProgress * 0.25;
+        nextBeepTime = now + beepRate;
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.value = lockProgress >= 1.0 ? 1200 : 800; // Higher pitch when locked
+
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.05); // Short, sharp beep
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+
+      const scene = new THREE.Scene();
+
+      // World terrain data storage
+      let worldGrid = null;
+      let mapRows = 0;
+      let mapCols = 0;
+
+      // Visual atmosphere settings
+      scene.background = new THREE.Color(0x000000); // Pure black space
+      scene.fog = new THREE.Fog(0x1e488f, 15000, 80000); // Blue atmospheric fog
+
+      // WebGL renderer configuration
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+
+      // Perspective camera with wide FOV for immersive flight
+      const camera = new THREE.PerspectiveCamera(
+        75, // Field of view
+        window.innerWidth / window.innerHeight, // Aspect ratio
+        1, // Near clipping plane
+        100000, // Far clipping plane (100km view distance)
+      );
+
+      // ==========================================
+      // FDF MAP PARSER & TERRAIN GENERATION
+      // ==========================================
+
+      /**
+       * Generates procedural terrain when FDF file is missing
+       * Creates 200x200 grid with mathematical hills
+       * @returns {Array<Array<number>>} 2D array of elevation values
+       */
+      function generateProceduralFDF() {
+        const grid = [];
+        for (let i = 0; i < 200; i++) {
+          const row = [];
+          for (let j = 0; j < 200; j++) {
+            // Combine sine waves to create rolling hills
+            row.push(
+              Math.sin(i / 10) * 15 +
+                Math.cos(j / 10) * 15 +
+                Math.sin((i + j) / 5) * 5,
+            );
+          }
+          grid.push(row);
+        }
+        return grid;
+      }
+
+      /**
+       * Loads and parses FDF terrain file
+       * @param {string} url - Path to .fdf file
+       * @returns {Promise<Array<Array<number>>>} 2D grid of elevation values (upsampled 2x)
+       */
+      async function loadFDFData(url) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("File missing");
+          const text = await response.text();
+
+          const lines = text.trim().split("\n");
+          const grid = [];
+
+          // Parse each line into elevation values
+          for (let line of lines) {
+            const vals = line
+              .trim()
+              .split(/\s+/)
+              .map((v) => {
+                const zStr = v.split(",")[0]; // Extract Z value (ignore color)
+                let z = parseInt(zStr, 10);
+                if (isNaN(z)) z = 0;
+                if (z < -9000) z = -10; // Clamp extreme depths
+                return z;
+              });
+            if (vals.length > 0) grid.push(vals);
+          }
+
+          // Double resolution for smoother terrain
+          return upsampleGrid(grid);
+        } catch (err) {
+          console.warn(
+            "map.fdf not found! Loading procedural training simulator instead.",
+          );
+          document.getElementById("loading-text").innerText =
+            "FDF NOT FOUND. LOADING PROCEDURAL MATRIX...";
+          return generateProceduralFDF();
+        }
+      }
+
+      // ==========================================
+      // SPHERICAL WORLD CONFIGURATION
+      // ==========================================
+
+      /**
+       * Terrain chunk size for LOD (Level of Detail) system
+       * Each chunk is rendered at multiple detail levels based on distance
+       */
+      const CHUNK_SIZE = 64;
+
+      /**
+       * Radius of the spherical world (50km)
+       * Determines the scale of the planet
+       */
+      const GLOBE_RADIUS = 50000;
+
+      /**
+       * Vertical scale multiplier for elevation data
+       * Smaller values create flatter terrain, larger creates mountains
+       */
+      const SCALE_Z = 0.25;
+
+      /**
+       * Shared material for all terrain chunks
+       * Uses vertex colors from elevation data
+       */
+      const globalWireframeMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        wireframe: true,
+        transparent: true,
+        opacity: 1,
+      });
+
+      /**
+       * Converts FDF grid coordinates to 3D spherical position
+       * @param {number} row - Grid row index
+       * @param {number} col - Grid column index
+       * @param {number} totalRows - Total rows in grid
+       * @param {number} totalCols - Total columns in grid
+       * @param {number} rawZ - Elevation value at this point
+       * @returns {THREE.Vector3} 3D position on sphere surface
+       */
+      function getSphericalXYZ(row, col, totalRows, totalCols, rawZ) {
+        // Convert row to latitude angle (0 to PI)
+        const phi = Math.PI * (row / (totalRows - 1));
+
+        // Convert column to longitude angle (0 to 2*PI), mirrored for correct orientation
+        const theta = Math.PI - 2 * Math.PI * (col / (totalCols - 1));
+
+        // Calculate radius including elevation
+        const r = GLOBE_RADIUS + rawZ * SCALE_Z;
+
+        // Convert spherical to Cartesian coordinates
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.cos(phi);
+        const z = r * Math.sin(phi) * Math.sin(theta);
+
+        return new THREE.Vector3(x, y, z);
+      }
+
+      /**
+       * Doubles terrain resolution using bilinear interpolation
+       * Smooths terrain by interpolating between original data points
+       * @param {Array<Array<number>>} grid - Original elevation grid
+       * @returns {Array<Array<number>>} Upsampled grid (2x resolution)
+       */
+      function upsampleGrid(grid) {
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const newGrid = [];
+
+        // Generate 2x the rows and columns
+        for (let r = 0; r < rows * 2 - 1; r++) {
+          const newRow = [];
+          const origR = r / 2;
+          const floorR = Math.floor(origR);
+          const ceilR = Math.min(floorR + 1, rows - 1);
+          const fr = origR - floorR; // Fractional part for interpolation
+
+          for (let c = 0; c < cols * 2 - 1; c++) {
+            const origC = c / 2;
+            const floorC = Math.floor(origC);
+            const ceilC = Math.min(floorC + 1, cols - 1);
+            const fc = origC - floorC; // Fractional part for interpolation
+
+            // Sample 4 nearest original points
+            const z00 = grid[floorR][floorC];
+            const z01 = grid[floorR][ceilC];
+            const z10 = grid[ceilR][floorC];
+            const z11 = grid[ceilR][ceilC];
+
+            // Bilinear interpolation formula
+            const z =
+              (1 - fr) * (1 - fc) * z00 +
+              (1 - fr) * fc * z01 +
+              fr * (1 - fc) * z10 +
+              fr * fc * z11;
+
+            newRow.push(z);
+          }
+          newGrid.push(newRow);
+        }
+        return newGrid;
+      }
+
+      /**
+       * Creates a single terrain chunk mesh with LOD support
+       * @param {Array} grid - Full terrain elevation grid
+       * @param {number} startRow - Starting row index for this chunk
+       * @param {number} startCol - Starting column index for this chunk
+       * @param {number} step - Vertex resolution (1=full detail, 2=half, 4=quarter, etc.)
+       * @param {number} totalRows - Total rows in full grid
+       * @param {number} totalCols - Total columns in full grid
+       * @param {THREE.Vector3} centerXYZ - Center position of chunk for relative positioning
+       * @returns {THREE.Mesh} Terrain chunk mesh
+       */
+      function createChunk(
+        grid,
+        startRow,
+        startCol,
+        step,
+        totalRows,
+        totalCols,
+        centerXYZ,
+      ) {
+        const geometry = new THREE.BufferGeometry();
+        const vertices = [];
+        const indices = [];
+        const colors = [];
+        const tempColor = new THREE.Color();
+
+        const endRow = Math.min(startRow + CHUNK_SIZE, totalRows - 1);
+        const endCol = Math.min(startCol + CHUNK_SIZE, totalCols - 1);
+
+        const chunkRows = Math.floor((endRow - startRow) / step) + 1;
+        const chunkCols = Math.floor((endCol - startCol) / step) + 1;
+
+        // Generate vertices with elevation-based colors
+        for (let r = startRow; r <= endRow; r += step) {
+          for (let c = startCol; c <= endCol; c += step) {
+            const rawZ = grid[r][c];
+
+            // Assign color based on elevation (deep ocean to mountain peaks)
+            if (rawZ <= -500)
+              tempColor.setHex(0x0a1e3f); // Deep ocean
+            else if (rawZ < 0)
+              tempColor.setHex(0x00469e); // Shallow water
+            else if (rawZ >= 0 && rawZ < 200)
+              tempColor.setHex(0x387c44); // Lowlands/grass
+            else if (rawZ >= 200 && rawZ < 1000)
+              tempColor.setHex(0x8a9a5b); // Hills
+            else if (rawZ >= 1000 && rawZ < 3000)
+              tempColor.setHex(0x8b7355); // Mountains
+            else tempColor.setHex(0xffffff); // Snow peaks
+
+            colors.push(tempColor.r, tempColor.g, tempColor.b);
+
+            // Convert to spherical coordinates relative to chunk center
+            const globalPos = getSphericalXYZ(r, c, totalRows, totalCols, rawZ);
+            vertices.push(
+              globalPos.x - centerXYZ.x,
+              globalPos.y - centerXYZ.y,
+              globalPos.z - centerXYZ.z,
+            );
+          }
+        }
+
+        // Generate triangle indices for terrain mesh
+        for (let i = 0; i < chunkRows - 1; i++) {
+          for (let j = 0; j < chunkCols - 1; j++) {
+            const a = i * chunkCols + j;
+            const b = i * chunkCols + (j + 1);
+            const c = (i + 1) * chunkCols + j;
+            const d = (i + 1) * chunkCols + (j + 1);
+
+            // Two triangles per quad
+            indices.push(a, c, b);
+            indices.push(b, c, d);
+          }
+        }
+
+        geometry.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(vertices, 3),
+        );
+        geometry.setAttribute(
+          "color",
+          new THREE.Float32BufferAttribute(colors, 3),
+        );
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+
+        return new THREE.Mesh(geometry, globalWireframeMaterial);
+      }
+
+      // ==========================================
+      // PROCEDURAL AIRPLANE MODEL
+      // ==========================================
+
+      /**
+       * Creates a complete WWII-style aircraft model
+       * All geometry is procedurally generated using custom buffer geometry
+       * @returns {THREE.Group} Complete aircraft with fuselage, wings, tail, landing gear, and propeller
+       */
+      function createPlayerShip(team = "RED") {
+        /**
+         * Creates aircraft fuselage with varying radius profile
+         * @returns {THREE.BufferGeometry} Fuselage geometry
+         */
+        function createFuselage() {
+          const radialSegments = 32;
+          const lengthSegments = 40;
+          const length = 10;
+
+          const positions = [];
+          const indices = [];
+
+          // Define fuselage radius profile (nose to tail)
+          function radiusAt(t) {
+            if (t < 0.15) return 0.1 + t * 2.5; // Nose cone
+            if (t < 0.35) return 0.5 + Math.sin((t - 0.15) * 10) * 0.15; // Engine cowling
+            if (t < 0.7) return 0.65 - (t - 0.35) * 0.3; // Main body
+            return 0.45 - (t - 0.7) * 1.2; // Tail taper
+          }
+
+          // Generate cylindrical fuselage vertices
+          for (let y = 0; y <= lengthSegments; y++) {
+            const t = y / lengthSegments;
+            const z = t * length;
+            const r = Math.max(radiusAt(t), 0.05);
+
+            for (let i = 0; i <= radialSegments; i++) {
+              const theta = (i / radialSegments) * Math.PI * 2;
+              const x = Math.cos(theta) * r;
+              const yPos = Math.sin(theta) * r;
+              positions.push(x, yPos, z);
+            }
+          }
+
+          const ring = radialSegments + 1;
+
+          // Generate triangle indices
+          for (let y = 0; y < lengthSegments; y++) {
+            for (let i = 0; i < radialSegments; i++) {
+              const a = y * ring + i;
+              const b = a + ring;
+              const c = b + 1;
+              const d = a + 1;
+
+              indices.push(a, b, d);
+              indices.push(b, c, d);
+            }
+          }
+
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3),
+          );
+          geometry.setIndex(indices);
+          geometry.computeVertexNormals();
+
+          return geometry;
+        }
+
+        /**
+         * Creates cockpit canopy
+         * @returns {THREE.BufferGeometry} Canopy geometry
+         */
+        function createCanopy() {
+          const canopy = new THREE.SphereGeometry(0.5, 24, 24);
+          canopy.scale(1.2, 0.6, 1.0);
+          canopy.translate(0, 0.6, 3.0);
+          return canopy;
+        }
+
+        /**
+         * Creates main wing with airfoil cross-section
+         * @returns {THREE.BufferGeometry} Wing geometry
+         */
+        function createWing() {
+          const spanSegments = 24;
+          const chordSegments = 16;
+
+          const span = 6; // Full wingspan
+          const rootChord = 2.0; // Wing width at fuselage
+          const tipChord = 1.2; // Wing width at tip
+
+          const positions = [];
+          const indices = [];
+
+          // Simple airfoil curve generator
+          function airfoilY(x, thickness) {
+            return thickness * Math.sin(Math.PI * x);
+          }
+
+          // Generate wing surface vertices
+          for (let s = 0; s <= spanSegments; s++) {
+            const tSpan = s / spanSegments;
+            const halfSpan = tSpan * span;
+
+            const chord = rootChord - tSpan * (rootChord - tipChord); // Taper
+            const thickness = 0.25 * (1 - tSpan) + 0.08; // Thickness variation
+
+            const dihedral = 0.2 * tSpan; // Slight upward angle
+
+            for (let c = 0; c <= chordSegments; c++) {
+              const tChord = c / chordSegments;
+              const x = tChord * chord;
+
+              const y = airfoilY(tChord, thickness) - thickness / 2;
+              const z = halfSpan;
+
+              positions.push(x, y + dihedral, z);
+            }
+          }
+
+          const ring = chordSegments + 1;
+
+          // Generate triangle indices
+          for (let s = 0; s < spanSegments; s++) {
+            for (let c = 0; c < chordSegments; c++) {
+              const a = s * ring + c;
+              const b = a + ring;
+              const c1 = b + 1;
+              const d = a + 1;
+
+              indices.push(a, b, d);
+              indices.push(b, c1, d);
+            }
+          }
+
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3),
+          );
+          geo.setIndex(indices);
+          geo.computeVertexNormals();
+
+          // Rotate and position
+          geo.rotateY(Math.PI / 2);
+          geo.translate(0.5, -0.2, 3.2);
+
+          return geo;
+        }
+
+        /**
+         * Creates wing root fairing (smooth blend between wing and fuselage)
+         * @returns {THREE.BufferGeometry} Wing root blend geometry
+         */
+        function createWingRootBlend() {
+          const geo = new THREE.SphereGeometry(0.9, 24, 24);
+          geo.scale(1.6, 0.5, 1.0);
+          geo.translate(0, -0.15, 3.2);
+          return geo;
+        }
+
+        /**
+         * Creates horizontal stabilizer (tail wing)
+         * @returns {THREE.BufferGeometry} Horizontal tail geometry
+         */
+        function createHorizontalTail() {
+          const spanSegments = 18;
+          const chordSegments = 12;
+
+          const span = 3.2;
+          const rootChord = 1.4;
+          const tipChord = 0.8;
+
+          const positions = [];
+          const indices = [];
+
+          function airfoilY(x, thickness) {
+            return thickness * Math.sin(Math.PI * x);
+          }
+
+          for (let s = 0; s <= spanSegments; s++) {
+            const tSpan = s / spanSegments;
+            const halfSpan = tSpan * span;
+
+            const chord = rootChord - tSpan * (rootChord - tipChord);
+            const thickness = 0.18 * (1 - tSpan) + 0.05;
+
+            const dihedral = 0.08 * tSpan; // Subtle upward tilt
+
+            for (let c = 0; c <= chordSegments; c++) {
+              const tChord = c / chordSegments;
+              const x = tChord * chord;
+
+              const y = airfoilY(tChord, thickness) - thickness / 2;
+              const z = halfSpan;
+
+              positions.push(x, y + dihedral, z);
+            }
+          }
+
+          const ring = chordSegments + 1;
+
+          for (let s = 0; s < spanSegments; s++) {
+            for (let c = 0; c < chordSegments; c++) {
+              const a = s * ring + c;
+              const b = a + ring;
+              const c1 = b + 1;
+              const d = a + 1;
+
+              indices.push(a, b, d);
+              indices.push(b, c1, d);
+            }
+          }
+
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3),
+          );
+          geo.setIndex(indices);
+          geo.computeVertexNormals();
+
+          geo.rotateY(Math.PI / 2);
+          geo.translate(-0.4, -0.05, 8.8);
+
+          return geo;
+        }
+
+        /**
+         * Creates vertical stabilizer (tail fin)
+         * @returns {THREE.BufferGeometry} Vertical tail geometry
+         */
+        function createVerticalTail() {
+          const radialSegments = 16;
+          const heightSegments = 20;
+          const height = 2.6;
+
+          const positions = [];
+          const indices = [];
+
+          function thicknessAt(t) {
+            return 0.25 * (1 - t) + 0.05; // Thicker at base, thinner at tip
+          }
+
+          function chordAt(t) {
+            return 1.6 - t * 0.8; // Front-to-back taper
+          }
+
+          for (let y = 0; y <= heightSegments; y++) {
+            const t = y / heightSegments;
+            const finHeight = t * height;
+            const thickness = thicknessAt(t);
+            const chord = chordAt(t);
+
+            for (let i = 0; i <= radialSegments; i++) {
+              const theta = (i / radialSegments) * Math.PI;
+              const x = Math.cos(theta) * thickness;
+              const z = Math.sin(theta) * chord;
+
+              positions.push(x, finHeight, z);
+            }
+          }
+
+          const ring = radialSegments + 1;
+
+          for (let y = 0; y < heightSegments; y++) {
+            for (let i = 0; i < radialSegments; i++) {
+              const a = y * ring + i;
+              const b = a + ring;
+              const c = b + 1;
+              const d = a + 1;
+
+              indices.push(a, b, d);
+              indices.push(b, c, d);
+            }
+          }
+
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3),
+          );
+          geo.setIndex(indices);
+          geo.computeVertexNormals();
+
+          geo.rotateY(Math.PI);
+          geo.rotateZ(-0.08); // Slight forward lean (WWII style)
+          geo.translate(0, 0.2, 8.6);
+
+          return geo;
+        }
+
+        /**
+         * Creates landing gear with wheel and strut
+         * @returns {THREE.BufferGeometry} Landing gear geometry
+         */
+        function createLandingGear() {
+          const wheel = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
+          wheel.rotateZ(Math.PI / 2);
+          wheel.translate(0, -0.5, 0);
+
+          const strut = new THREE.CylinderGeometry(0.05, 0.05, 1);
+          strut.translate(0, -0.2, 0);
+
+          return mergeGeometries([wheel, strut]);
+        }
+
+        /**
+         * Creates 2-blade propeller (animated separately)
+         * @returns {THREE.Mesh} Propeller mesh
+         */
+        function createPropeller() {
+          const bladeGeo = new THREE.BoxGeometry(0.15, 2, 0.3);
+          bladeGeo.translate(0, 0.5, 1.5);
+
+          const blade2 = bladeGeo.clone();
+          blade2.rotateZ(Math.PI / 2);
+
+          const merged = mergeGeometries([bladeGeo, blade2]);
+
+          const material = new THREE.MeshBasicMaterial({
+            color: 0x8d8d8d,
+            wireframe: true,
+          });
+
+          const mesh = new THREE.Mesh(merged, material);
+          mesh.position.set(0, 0, -1.4);
+
+          return mesh;
+        }
+
+        /**
+         * AIRCRAFT ASSEMBLY
+         * Combines all aircraft parts with appropriate materials and colors
+         */
+        const shipGroup = new THREE.Group();
+
+        const factionColor = team === "BLUE" ? 0x0088ff : 0xff2222;
+
+        // Fuselage - metallic gray
+        const fuselageGeom = createFuselage();
+        const fuselageMat = new THREE.MeshBasicMaterial({
+          color: 0x616161,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+        const fuselageMesh = new THREE.Mesh(fuselageGeom, fuselageMat);
+        fuselageMesh.userData.isFuselage = true;
+        shipGroup.add(fuselageMesh);
+
+        // Canopy - dark black
+        const canopyGeom = createCanopy();
+        const canopyMat = new THREE.MeshBasicMaterial({
+          color: 0x1a1a1a,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+        shipGroup.add(new THREE.Mesh(canopyGeom, canopyMat));
+
+        // Wing root blend - light gray
+        const wingRootGeom = createWingRootBlend();
+        const wingRootMat = new THREE.MeshBasicMaterial({
+          color: 0x8b8b8b,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+        shipGroup.add(new THREE.Mesh(wingRootGeom, wingRootMat));
+
+        // Wings - red accent color
+        const wingMaterial = new THREE.MeshBasicMaterial({
+          color: factionColor,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+
+        const wingRight = createWing();
+        wingRight.translate(0, 0, 2.2);
+        shipGroup.add(new THREE.Mesh(wingRight, wingMaterial));
+
+        const wingLeft = createWing();
+        wingLeft.scale(-1, 1, 1); // Mirror for left wing
+        wingLeft.translate(0, 0, 2.2);
+        shipGroup.add(new THREE.Mesh(wingLeft, wingMaterial));
+
+        // Tail surfaces - red accent color
+        const tailMaterial = new THREE.MeshBasicMaterial({
+          color: 0xff2222,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+
+        const hTailRight = createHorizontalTail();
+        shipGroup.add(new THREE.Mesh(hTailRight, tailMaterial));
+
+        const hTailLeft = createHorizontalTail();
+        hTailLeft.scale(-1, 1, 1); // Mirror for left stabilizer
+        shipGroup.add(new THREE.Mesh(hTailLeft, tailMaterial));
+
+        const vTailGeom = createVerticalTail();
+        shipGroup.add(new THREE.Mesh(vTailGeom, tailMaterial));
+
+        // Landing gear - metallic gray
+        const gearMaterial = new THREE.MeshBasicMaterial({
+          color: 0x8b8b8b,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.9,
+        });
+
+        const gearRight = createLandingGear();
+        gearRight.translate(0.8, -0.5, 2.5);
+        shipGroup.add(new THREE.Mesh(gearRight, gearMaterial));
+
+        const gearLeft = createLandingGear();
+        gearLeft.translate(-0.8, -0.5, 2.5);
+        shipGroup.add(new THREE.Mesh(gearLeft, gearMaterial));
+
+        // Propeller (stored in userData for animation)
+        const propeller = createPropeller();
+        shipGroup.add(propeller);
+        shipGroup.userData.propeller = propeller;
+
+        // Scale entire ship down
+        shipGroup.scale.set(0.5, 0.5, 0.5);
+
+        return shipGroup;
+      }
+
+      // ==========================================
+      // WORLD & PLAYER INITIALIZATION
+      // ==========================================
+
+      /**
+       * Earth anchor - root object for the spherical world
+       * All terrain and enemy ships are children of this
+       */
+      let earthAnchor = null;
+
+      /**
+       * Player rig - contains camera and player ship
+       * Rotates to steer, translates to move forward
+       */
+      const playerRig = new THREE.Group();
+      playerRig.rotation.order = "YXZ"; // Yaw-Pitch-Roll order
+
+      // Initialize earth anchor
+      earthAnchor = new THREE.Group();
+      scene.add(earthAnchor);
+      earthAnchor.add(playerRig);
+
+      // Process any queued multiplayer contacts
+      if (pendingRemoteContacts.length > 0) {
+        for (const p of pendingRemoteContacts) {
+          try {
+            ensureRemotePilot(p.id, p.pos);
+          } catch (err) {
+            console.warn("Failed to process pending contact", p, err);
+          }
+        }
+        pendingRemoteContacts.length = 0;
+      }
+
+      // Add camera to player rig
+      playerRig.add(camera);
+
+      // Create and position player ship in front of camera
+      const playerShip = createPlayerShip();
+      playerShip.position.set(0, -2, -8);
+      playerRig.add(playerShip);
+
+      const spectateTargetPos = new THREE.Vector3();
+      const spectateForward = new THREE.Vector3();
+      const spectateUp = new THREE.Vector3();
+      const spectateCamPos = new THREE.Vector3();
+      const spectateQuat = new THREE.Quaternion();
+
+      function setCameraMode(nextMode) {
+        if (cameraMode === nextMode) return;
+        cameraMode = nextMode;
+
+        if (nextMode === CAMERA_MODE_PLAYER) {
+          if (camera.parent !== playerRig) {
+            playerRig.attach(camera);
+          }
+          camera.position.set(0, 0, 0);
+          camera.rotation.set(0, 0, 0);
+          return;
+        }
+
+        if (camera.parent !== scene) {
+          scene.attach(camera);
+        }
+      }
+
+      function getSpectatorTargetIds() {
+        return Object.keys(remotePilots).filter((id) => {
+          const p = remotePilots[id];
+          return p && p.visible;
+        });
+      }
+
+      function cycleSpectatorTarget(step) {
+        const ids = getSpectatorTargetIds().sort(
+          (a, b) => Number(a) - Number(b),
+        );
+        if (ids.length === 0) {
+          spectatorTargetId = null;
+          return;
+        }
+
+        if (!spectatorTargetId || !ids.includes(spectatorTargetId)) {
+          spectatorTargetId = ids[0];
+          return;
+        }
+
+        const currentIndex = ids.indexOf(spectatorTargetId);
+        const nextIndex = (currentIndex + step + ids.length) % ids.length;
+        spectatorTargetId = ids[nextIndex];
+      }
+
+      function enterSpectatorMode(pickNewTarget = false) {
+        setCameraMode(CAMERA_MODE_SPECTATE);
+        if (pickNewTarget || !spectatorTargetId) {
+          cycleSpectatorTarget(1);
+        }
+      }
+
+      function startDeathCam(fuselageDebris) {
+        if (!fuselageDebris) {
+          enterSpectatorMode(true);
+          return;
+        }
+        deathCamFuselage = fuselageDebris;
+        setCameraMode(CAMERA_MODE_DEATH);
+      }
+
+      function clearOwnDebris() {
+        for (let i = debrisParticles.length - 1; i >= 0; i--) {
+          const d = debrisParticles[i];
+          if (!d.userData || !d.userData.isMe) continue;
+          earthAnchor.remove(d);
+          debrisParticles.splice(i, 1);
+        }
+      }
+
+      function completeLocalRespawn(respawnPos) {
+        respawnAvailable = false;
+        respawnRequested = false;
+        deathCamFuselage = null;
+        spectatorTargetId = null;
+        lockTimer = 0;
+        lockedEnemyId = null;
+        hasMissileLock = false;
+        clearOwnDebris();
+
+        setCameraMode(CAMERA_MODE_PLAYER);
+        window.isDead = false;
+        playerShip.visible = true;
+
+        if (
+          respawnPos &&
+          Number.isFinite(respawnPos.x) &&
+          Number.isFinite(respawnPos.y) &&
+          Number.isFinite(respawnPos.z)
+        ) {
+          playerRig.position.set(respawnPos.x, respawnPos.y, respawnPos.z);
+        } else {
+          playerRig.position.set(0, 0, GLOBE_RADIUS + 8000);
+        }
+        playerRig.rotation.set(Math.PI / 2, 0, 0);
+        currentSpeed = BASE_SPEED;
+        targetSpeed = BASE_SPEED;
+      }
+
+      function activateLocalRespawn() {
+        if (!respawnAvailable || respawnRequested) return;
+        if (ws.readyState !== WebSocket.OPEN) return;
+
+        respawnAvailable = false;
+        respawnRequested = true;
+        ws.send(JSON.stringify({ type: "requestRespawn" }));
+      }
+
+      function activateLocalSpectate(pickNewTarget = true) {
+        if (!window.isDead) return;
+        deathCamFuselage = null;
+        enterSpectatorMode(pickNewTarget);
+      }
+
+      respawnBtnUI.addEventListener("click", () => {
+        if (!window.isDead) return;
+        activateLocalRespawn();
+      });
+
+      spectateBtnUI.addEventListener("click", () => {
+        if (!window.isDead) return;
+        activateLocalSpectate(true);
+      });
+
+      function updateDeathCamera(frameScale) {
+        if (!deathCamFuselage || !deathCamFuselage.parent) {
+          enterSpectatorMode(true);
+          return;
+        }
+
+        const v = deathCamFuselage.userData.velocity;
+        const speed = v ? v.length() : 0;
+        spectateUp.copy(deathCamFuselage.position).normalize();
+
+        if (v && speed > 0.001) {
+          spectateForward.copy(v).normalize();
+        } else {
+          spectateForward
+            .set(0, 0, -1)
+            .applyQuaternion(deathCamFuselage.quaternion);
+        }
+
+        const followDistance = 220 + Math.min(speed * 2.0, 240);
+        const verticalOffset = 60 + Math.min(speed * 0.4, 70);
+        spectateCamPos
+          .copy(deathCamFuselage.position)
+          .addScaledVector(spectateUp, verticalOffset)
+          .addScaledVector(spectateForward, -followDistance);
+
+        camera.position.lerp(spectateCamPos, Math.min(1, 0.08 * frameScale));
+        camera.lookAt(deathCamFuselage.position);
+      }
+
+      function updateSpectatorCamera(frameScale) {
+        const target = spectatorTargetId
+          ? remotePilots[spectatorTargetId]
+          : null;
+        if (!target || !target.visible) {
+          cycleSpectatorTarget(1);
+        }
+
+        const nextTarget = spectatorTargetId
+          ? remotePilots[spectatorTargetId]
+          : null;
+        if (!nextTarget || !nextTarget.visible) {
+          spectateCamPos.set(0, GLOBE_RADIUS + 1800, GLOBE_RADIUS + 1200);
+          camera.position.lerp(spectateCamPos, Math.min(1, 0.06 * frameScale));
+          camera.lookAt(0, 0, 0);
+          return;
+        }
+
+        nextTarget.getWorldPosition(spectateTargetPos);
+        nextTarget.getWorldQuaternion(spectateQuat);
+        spectateForward.set(0, 0, 1).applyQuaternion(spectateQuat).normalize();
+        spectateUp.copy(spectateTargetPos).normalize();
+
+        spectateCamPos
+          .copy(spectateTargetPos)
+          .addScaledVector(spectateUp, 35)
+          .addScaledVector(spectateForward, 130);
+
+        camera.position.lerp(spectateCamPos, Math.min(1, 0.08 * frameScale));
+        camera.lookAt(spectateTargetPos);
+      }
+
+      /**
+       * Load terrain data and generate spherical world
+       */
+      loadFDFData("worldMap.fdf").then((grid) => {
+        worldGrid = grid;
+        mapRows = grid.length;
+        mapCols = grid[0].length;
+        const totalRows = grid.length;
+        const totalCols = grid[0].length;
+
+        // Find lowest point in terrain for ocean floor generation
+        let minZ = Infinity;
+        for (let r = 0; r < totalRows; r++) {
+          for (let c = 0; c < totalCols; c++) {
+            if (grid[r][c] < minZ) minZ = grid[r][c];
+          }
+        }
+
+        // Create solid seabed core below ocean floor
+        const seabedRadius = GLOBE_RADIUS + minZ * SCALE_Z - 500;
+        const seabedGeometry = new THREE.SphereGeometry(seabedRadius, 64, 64);
+        const seabedMaterial = new THREE.MeshBasicMaterial({ color: 0x000b18 });
+        const seabedCore = new THREE.Mesh(seabedGeometry, seabedMaterial);
+        earthAnchor.add(seabedCore);
+
+        // Create translucent ocean surface at sea level (z=0)
+        const oceanSurfaceGeometry = new THREE.SphereGeometry(
+          GLOBE_RADIUS,
+          64,
+          64,
+        );
+        const oceanSurfaceMaterial = new THREE.MeshBasicMaterial({
+          color: 0x071f67,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+        });
+        const oceanSurface = new THREE.Mesh(
+          oceanSurfaceGeometry,
+          oceanSurfaceMaterial,
+        );
+        oceanSurface.renderOrder = 1;
+        earthAnchor.add(oceanSurface);
+
+        // Generate terrain chunks with LOD (Level of Detail) system
+        for (let i = 0; i < totalRows - 1; i += CHUNK_SIZE) {
+          for (let j = 0; j < totalCols - 1; j += CHUNK_SIZE) {
+            const centerRow = Math.min(i + CHUNK_SIZE / 2, totalRows - 1);
+            const centerCol = Math.min(j + CHUNK_SIZE / 2, totalCols - 1);
+            const centerXYZ = getSphericalXYZ(
+              centerRow,
+              centerCol,
+              totalRows,
+              totalCols,
+              0,
+            );
+
+            // Create LOD object with 3 detail levels
+            const lod = new THREE.LOD();
+            lod.position.copy(centerXYZ);
+
+            // High detail (close range)
+            lod.addLevel(
+              createChunk(grid, i, j, 1, totalRows, totalCols, centerXYZ),
+              0,
+            );
+            // Medium detail (mid range)
+            lod.addLevel(
+              createChunk(grid, i, j, 2, totalRows, totalCols, centerXYZ),
+              1500,
+            );
+            // Low detail (far range)
+            lod.addLevel(
+              createChunk(grid, i, j, 4, totalRows, totalCols, centerXYZ),
+              3000,
+            );
+
+            earthAnchor.add(lod);
+          }
+        }
+
+        // Set player spawn position (8km above surface)
+        playerRig.position.set(0, 0, GLOBE_RADIUS + 8000);
+        playerRig.rotation.x = Math.PI / 2; // Looking North
+
+        // GPS teleporter - rotate globe to spawn location (Ericeira, Portugal)
+        const spawnLat = 38.96; // Latitude
+        const spawnLon = -9.41; // Longitude
+
+        earthAnchor.rotation.y = Math.PI / 2 + spawnLon * (Math.PI / 180);
+        earthAnchor.rotation.x = spawnLat * (Math.PI / 180);
+
+        initVisionAI();
+      });
+
+      // ==========================================
+      // MEDIAPIPE FACE TRACKING & CALIBRATION
+      // ==========================================
+
+      let faceLandmarker;
+      const video = document.getElementById("video");
+
+      // Calibration state
+      let isCalibrated = false;
+      let targetCamPos = new THREE.Vector2(0, 0);
+      let turnVelocityYaw = 0;
+      let turnVelocityPitch = 0;
+
+      // Calibration reference values (neutral pose)
+      let calNoseX = 0.5;
+      let calNoseY = 0.5;
+      let calYaw = 0;
+      let calPitch = 0;
+
+      // Live face tracking values
+      let liveRawNoseX = 0.5,
+        liveRawNoseY = 0.5,
+        liveRawYaw = 0,
+        liveRawPitch = 0;
+      let faceDetected = false;
+
+      /**
+       * Initialize MediaPipe Face Landmarker for head tracking
+       */
+      async function initVisionAI() {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+        );
+        faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+        });
+
+        // Start webcam stream
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        video.srcObject = stream;
+        video.addEventListener("loadeddata", predictWebcam);
+
+        // Show calibration screen
+        document.getElementById("ui-layer").style.display = "none";
+        document.getElementById("calibration-screen").style.display = "flex";
+      }
+
+      /**
+       * Calibration button handler - saves neutral head position
+       */
+      document.getElementById("calibrate-btn").addEventListener("click", () => {
+        if (!faceDetected) return;
+
+        // Initialize audio
+        if (!audioInitialized) {
+          initAudio();
+        }
+
+        // Store current position as calibration reference
+        calNoseX = liveRawNoseX;
+        calNoseY = liveRawNoseY;
+        calYaw = liveRawYaw;
+        calPitch = liveRawPitch;
+        isCalibrated = true;
+
+        // Hide calibration screen, SHOW LOBBY ONLY
+        document.getElementById("calibration-screen").style.display = "none";
+        document.getElementById("lobby-screen").style.display = "flex";
+
+        // REMOVED: Do not show the flight UI here! Wait until they pick a team.
+
+        // Put the player in spectate mode behind the lobby menu
+        window.isDead = true;
+        activateLocalSpectate(true);
+      });
+
+      // Team selection buttons
+      document
+        .getElementById("btn-red")
+        .addEventListener("click", () => joinGame("RED"));
+      document
+        .getElementById("btn-blue")
+        .addEventListener("click", () => joinGame("BLUE"));
+
+      function joinGame(team) {
+        window.myTeam = team;
+
+        // Hide Lobby, SHOW FLIGHT UI
+        document.getElementById("lobby-screen").style.display = "none";
+        document.getElementById("controls-hint").style.display = "block";
+        document.getElementById("speed-readout").style.display = "block";
+        document.getElementById("target-hp").style.display = "block";
+        document.getElementById("mode-readout").style.display = "block";
+
+        // Tell the server to spawn us!
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "joinTeam", team: team }));
+        }
+      }
+
+      let lastVideoTime = -1;
+
+      /**
+       * Main face tracking loop - runs every video frame
+       */
+      function predictWebcam() {
+        if (video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          const results = faceLandmarker.detectForVideo(
+            video,
+            performance.now(),
+          );
+
+          if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+            const landmarks = results.faceLandmarks[0];
+            faceDetected = true;
+
+            // Enable calibration button
+            const btn = document.getElementById("calibrate-btn");
+            if (btn.disabled) {
+              btn.disabled = false;
+              btn.innerText = "LINK ESTABLISHED - BEGIN";
+            }
+
+            // Extract key facial landmarks
+            const nose = landmarks[1];
+            const leftEar = landmarks[234];
+            const rightEar = landmarks[454];
+            const topHead = landmarks[10];
+            const chin = landmarks[152];
+
+            // Calculate head position and rotation
+            liveRawNoseX = nose.x;
+            liveRawNoseY = nose.y;
+            liveRawYaw = Math.atan2(
+              rightEar.z - leftEar.z,
+              rightEar.x - leftEar.x,
+            );
+            liveRawPitch = -Math.atan2(chin.z - topHead.z, chin.y - topHead.y);
+
+            // Convert head movement to flight controls (if calibrated)
+            if (isCalibrated) {
+              // Parallax camera movement based on nose position
+              targetCamPos.x = (liveRawNoseX - calNoseX) * -2.0 * 8.0;
+              targetCamPos.y = -((liveRawNoseY - calNoseY) * -2.0 * 8.0);
+
+              // Calculate relative head rotation from calibrated position
+              const adjustedYaw = liveRawYaw - calYaw;
+              const adjustedPitch = liveRawPitch - calPitch;
+
+              const DEADZONE = 0.08; // Ignore tiny movements
+              const STEERING_SENSITIVITY = 0.05;
+
+              // Yaw (left/right steering) with exponential curve for precision
+              if (Math.abs(adjustedYaw) > DEADZONE) {
+                const rawInput = Math.abs(adjustedYaw) - DEADZONE;
+                turnVelocityYaw =
+                  rawInput *
+                  rawInput *
+                  Math.sign(adjustedYaw) *
+                  STEERING_SENSITIVITY;
+              } else {
+                turnVelocityYaw = 0;
+              }
+
+              // Pitch (up/down steering) with exponential curve
+              if (Math.abs(adjustedPitch) > DEADZONE) {
+                const rawInput = Math.abs(adjustedPitch) - DEADZONE;
+                turnVelocityPitch =
+                  rawInput *
+                  rawInput *
+                  Math.sign(adjustedPitch) *
+                  STEERING_SENSITIVITY;
+              } else {
+                turnVelocityPitch = 0;
+              }
+            }
+          } else {
+            // No face detected
+            faceDetected = false;
+            turnVelocityYaw = 0;
+            turnVelocityPitch = 0;
+
+            if (!isCalibrated) {
+              const btn = document.getElementById("calibrate-btn");
+              btn.disabled = true;
+              btn.innerText = "Awaiting Visual Link...";
+            }
+          }
+        }
+        requestAnimationFrame(predictWebcam);
+      }
+
+      // ==========================================
+      // FLIGHT CONTROLS & INPUT HANDLING
+      // ==========================================
+
+      /**
+       * Keyboard input state
+       * Tracks which keys are currently pressed
+       */
+      const keys = {
+        w: false, // Pitch up (keyboard mode)
+        s: false, // Pitch down (keyboard mode)
+        a: false, // Yaw left (keyboard mode)
+        d: false, // Yaw right (keyboard mode)
+      };
+
+      // Flight speed constants
+      const BASE_SPEED = 10; // Normal cruising speed
+      const BOOST_SPEED = 15; // Maximum throttle
+      const BRAKE_SPEED = 5; // Minimum speed
+
+      let currentSpeed = BASE_SPEED;
+      let targetSpeed = BASE_SPEED;
+      const speedUI = document.getElementById("speed-readout");
+
+      // Pause and control mode state
+      let isPaused = false;
+      let controlMode = "FACE"; // "FACE" or "KEYBOARD"
+      const pauseOverlay = document.getElementById("pause-overlay");
+
+      /**
+       * Sets pause state and updates UI
+       */
+      function setPaused(paused) {
+        isPaused = paused;
+        pauseOverlay.style.display = isPaused ? "block" : "none";
+
+        // Release all keys when pausing
+        if (isPaused) {
+          keys.w = false;
+          keys.s = false;
+          keys.a = false;
+          keys.d = false;
+        }
+      }
+
+      function deployFlares(ship) {
+        // Spawn a cluster of 6 incredibly bright, hot particles
+        for (let i = 0; i < 6; i++) {
+          const flareGeo = new THREE.IcosahedronGeometry(4, 0);
+          const flareMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1,
+          });
+          const flare = new THREE.Mesh(flareGeo, flareMat);
+
+          // Start at the ship's absolute position
+          const worldPos = new THREE.Vector3();
+          ship.getWorldPosition(worldPos);
+          earthAnchor.worldToLocal(worldPos);
+          flare.position.copy(worldPos);
+
+          // Toss the flares randomly out the back, bottom, and sides
+          const shipQuat = new THREE.Quaternion();
+          ship.getWorldQuaternion(shipQuat);
+          const backward = new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            -1,
+            1.5,
+          ).normalize();
+          backward.applyQuaternion(shipQuat);
+
+          flare.userData = {
+            velocity: backward.multiplyScalar(8 + Math.random() * 5),
+            life: 120, // Lives for 120 frames (2 seconds)
+          };
+
+          earthAnchor.add(flare);
+          activeFlares.push(flare);
+        }
+
+        // THE MAGIC: Grant this specific ship 3 seconds of homing immunity!
+        ship.userData.flareActiveUntil = Date.now() + 3000;
+      }
+
+      /**
+       * Keyboard input handlers
+       * P: Pause/Resume
+       * M: Toggle control mode (Face/Keyboard)
+       * W/S/A/D: Flight controls (keyboard mode)
+       * K: Kill player (dev/testing)
+       */
+      window.addEventListener("keydown", (e) => {
+        const key = e.key.toLowerCase();
+
+        // Pause toggle
+        if (key === "p") {
+          setPaused(!isPaused);
+          return;
+        }
+
+        if (window.isDead) {
+          if (key === "r") {
+            e.preventDefault();
+            activateLocalRespawn();
+            return;
+          }
+          if (key === "v") {
+            e.preventDefault();
+            activateLocalSpectate(true);
+            return;
+          }
+          if (key === "[" || key === "]") {
+            e.preventDefault();
+            if (cameraMode !== CAMERA_MODE_SPECTATE) {
+              activateLocalSpectate(false);
+            }
+            cycleSpectatorTarget(key === "]" ? 1 : -1);
+            return;
+          }
+        }
+
+        // Control mode toggle
+        if (key === "m") {
+          controlMode = controlMode === "FACE" ? "KEYBOARD" : "FACE";
+
+          // Reset camera when switching modes
+          if (controlMode === "KEYBOARD") {
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0);
+          }
+          return;
+        }
+
+        // DEV: Kill player for testing
+        if (key === "k" && isCalibrated && !window.isDead) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "suicide" }));
+          }
+
+          window.isDead = true;
+          respawnAvailable = false;
+          respawnRequested = false;
+
+          // Create explosion at player position
+          const expGeo = new THREE.IcosahedronGeometry(5, 5);
+          const expMat = new THREE.MeshBasicMaterial({
+            color: 0xffd580,
+            wireframe: false,
+            transparent: true,
+            opacity: 1,
+          });
+          const explosion = new THREE.Mesh(expGeo, expMat);
+          explosion.position.copy(playerRig.position);
+          earthAnchor.add(explosion);
+          explosions.push(explosion);
+
+          // Create debris from player ship
+          let localFuselageDebris = null;
+          let localFallbackDebris = null;
+          playerShip.children.forEach((child) => {
+            if (child.geometry) {
+              const debrisMat = new THREE.MeshBasicMaterial({
+                color: child.material.color || 0x616161,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.9,
+              });
+              const debris = new THREE.Mesh(child.geometry.clone(), debrisMat);
+              debris.position.copy(playerRig.position);
+              debris.rotation.copy(playerRig.rotation);
+
+              const randomVel = new THREE.Vector3(
+                (Math.random() - 0.5) * 14,
+                (Math.random() - 0.5) * 14,
+                (Math.random() - 0.5) * 14,
+              );
+              randomVel.add(
+                debris.position.clone().normalize().multiplyScalar(-8),
+              );
+              const deathNow = Date.now();
+              debris.userData = {
+                velocity: randomVel,
+                rotSpeed: new THREE.Vector3(
+                  (Math.random() - 0.5) * 0.08,
+                  (Math.random() - 0.5) * 0.08,
+                  (Math.random() - 0.5) * 0.08,
+                ),
+                isFuselage: child.userData.isFuselage || false,
+                isMe: true,
+                burnUntil: deathNow + 14000,
+                expiresAt: deathNow + 18000,
+              };
+              earthAnchor.add(debris);
+              debrisParticles.push(debris);
+              if (!localFallbackDebris) {
+                localFallbackDebris = debris;
+              }
+              if (debris.userData.isFuselage && !localFuselageDebris) {
+                localFuselageDebris = debris;
+              }
+            }
+          });
+          if (!localFuselageDebris) {
+            localFuselageDebris = localFallbackDebris;
+          }
+
+          // Hide player ship
+          playerShip.visible = false;
+          startDeathCam(localFuselageDebris);
+
+          console.log("💀 PLAYER KILLED (DEV MODE)");
+          return;
+        }
+
+        // --- NEW: FIRE MISSILE ---
+        if (key === "shift" && isCalibrated && !isPaused && !window.isDead) {
+          e.preventDefault();
+          if (hasMissileLock && lockedEnemyId) {
+            // 1. Create the missile mesh
+            const missileGeo = new THREE.CylinderGeometry(1, 1, 10, 10);
+            //const missileGeo = new THREE.CylinderGeometry(0.8, 0.8, 8, 8);
+            missileGeo.rotateX(Math.PI / 2);
+            const missileMat = new THREE.MeshBasicMaterial({ color: 0xf27d0c });
+            //const missileMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const missile = new THREE.Mesh(missileGeo, missileMat);
+
+            // 2. Spawn it under the player's ship
+            const spawnPos = new THREE.Vector3(0, -2, 0);
+            playerShip.localToWorld(spawnPos);
+            missile.position.copy(spawnPos);
+
+            // 3. Point it in the exact direction the ship is currently facing
+            missile.quaternion.copy(
+              playerShip.getWorldQuaternion(new THREE.Quaternion()),
+            );
+
+            // 4. Attach to the world and give it its orders!
+            earthAnchor.attach(missile);
+            missile.userData = {
+              targetId: lockedEnemyId,
+              speed: currentSpeed + 5, // Starts slightly faster than the plane
+              distanceTraveled: 0,
+            };
+
+            missiles.push(missile);
+
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: "missileFired",
+                  targetId: lockedEnemyId,
+                }),
+              );
+            }
+
+            playMissileLaunchSound();
+
+            // Optional: Reset lock timer so you can't spam them instantly
+            lockTimer = 0;
+            hasMissileLock = false;
+          }
+        }
+
+        // --- NEW: DEPLOY FLARES ---
+        if (key === "f" && isCalibrated && !isPaused && !window.isDead) {
+          if (flareCooldown <= 0) {
+            flareCooldown = 300; // 5-second cooldown (at 60fps)
+            deployFlares(playerShip);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "deployFlares" }));
+            }
+          }
+        }
+
+        // Update key state
+        if (!isPaused && keys.hasOwnProperty(key)) keys[key] = true;
+      });
+
+      window.addEventListener("keyup", (e) => {
+        const key = e.key.toLowerCase();
+        if (keys.hasOwnProperty(key)) keys[key] = false;
+      });
+
+      /**
+       * Mouse wheel throttle control
+       * Scroll Up: Increase speed
+       * Scroll Down: Decrease speed
+       */
+      window.addEventListener("wheel", (e) => {
+        if (isPaused || !isCalibrated) return;
+
+        if (e.deltaY < 0) {
+          // Scroll UP - Throttle up
+          targetSpeed = Math.min(targetSpeed + 1.0, BOOST_SPEED);
+        } else if (e.deltaY > 0) {
+          // Scroll DOWN - Throttle down
+          targetSpeed = Math.max(targetSpeed - 1.0, BRAKE_SPEED);
+        }
+      });
+
+      // ==========================================
+      // WEAPONS & COMBAT SYSTEM
+      // ==========================================
+
+      const lasers = [];
+      const laserTraces = [];
+      const explosions = [];
+      const debrisParticles = [];
+      const fireParticles = [];
+      const missiles = [];
+      const activeFlares = [];
+      let flareCooldown = 0;
+
+      // Debris physics tuning (calibrated around 60fps with frame-time scaling)
+      const DEBRIS_GRAVITY_FRAGMENT = 0.12;
+      const DEBRIS_GRAVITY_FUSELAGE = 0.07;
+      const DEBRIS_DRAG_FRAGMENT = 0.0018;
+      const DEBRIS_DRAG_FUSELAGE = 0.0012;
+      const DEBRIS_ROT_DAMP = 0.015;
+      const DEBRIS_MAX_SPEED_FRAGMENT = 85;
+      const DEBRIS_MAX_SPEED_FUSELAGE = 65;
+      const DEBRIS_FUSELAGE_LIFT = 0.08;
+      const DEBRIS_FUSELAGE_MIN_DESCENT = 1.4;
+      const DEBRIS_FUSELAGE_LIFT_MIN_SPEED = 10;
+
+      const frameClock = new THREE.Clock();
+
+      // --- NEW: REUSABLE PARTICLE ASSETS ---
+      // Geometries
+      const fireGeoLarge = new THREE.IcosahedronGeometry(12, 1);
+      const fireGeoSmall = new THREE.IcosahedronGeometry(3, 0);
+      const fireGeoFlare = new THREE.IcosahedronGeometry(5, 0);
+
+      // Materials
+      const matSmokeDark = new THREE.MeshBasicMaterial({
+        color: 0x222222,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const matFireOrange = new THREE.MeshBasicMaterial({
+        color: 0xff4400,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const matSmokeLight = new THREE.MeshBasicMaterial({
+        color: 0xcccccc,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const matFlareBright = new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        transparent: true,
+        opacity: 0.9,
+      });
+
+      let lockTimer = 0; // How long we've held the enemy in our sights
+      const LOCK_TIME_REQUIRED = 90; // 90 frames (1.5 seconds) to achieve hard lock
+      let lockedEnemyId = null; // The ID of the ship we are locking onto
+      let hasMissileLock = false;
+
+      window.myPilotId = null;
+      window.isDead = false;
+
+      // Laser geometry (long cylinder pointing forward)
+      const laserGeometry = new THREE.CylinderGeometry(0.5, 0.5, 50, 30);
+      laserGeometry.rotateX(Math.PI / 2);
+      const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xc3352b });
+      const LASER_SPEED = 150;
+      const LASER_MAX_DISTANCE = 20000;
+      const LASER_TRACE_LENGTH = 900;
+      const LASER_TRACE_LIFETIME_MS = 220;
+      const LASER_TRACE_OPACITY = 0.75;
+      const LASER_WING_HALF_SPAN = 3.5;
+      const LASER_WING_VERTICAL_OFFSET = -0.2;
+
+      function spawnLaserTrace(spawnPos, forward) {
+        const traceMat = new THREE.MeshBasicMaterial({
+          color: 0xff7744,
+          transparent: true,
+          opacity: LASER_TRACE_OPACITY,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const trace = new THREE.Mesh(laserGeometry, traceMat);
+        trace.position
+          .copy(spawnPos)
+          .addScaledVector(forward, LASER_TRACE_LENGTH * 0.5);
+        trace.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 0, -1),
+          forward,
+        );
+        trace.scale.set(2.2, 2.2, LASER_TRACE_LENGTH / 50);
+        trace.userData = {
+          expiresAt: Date.now() + LASER_TRACE_LIFETIME_MS,
+          baseOpacity: LASER_TRACE_OPACITY,
+        };
+        earthAnchor.add(trace);
+        laserTraces.push(trace);
+      }
+
+      function spawnLaserProjectile(spawnPos, forward, withTrace = false) {
+        const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+        laser.position.copy(spawnPos);
+        laser.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 0, -1),
+          forward,
+        );
+        laser.userData = { distanceTraveled: 0 };
+        earthAnchor.add(laser);
+        lasers.push(laser);
+        if (withTrace) {
+          spawnLaserTrace(spawnPos, forward);
+        }
+      }
+
+      function spawnLaserPairFromPose(
+        origin,
+        forward,
+        upHint,
+        withTrace = false,
+      ) {
+        const safeForward =
+          forward && forward.lengthSq() > 1e-8
+            ? forward.clone().normalize()
+            : new THREE.Vector3(0, 0, -1);
+        const safeUp =
+          upHint && upHint.lengthSq() > 1e-8
+            ? upHint.clone().normalize()
+            : new THREE.Vector3(0, 1, 0);
+        const right = new THREE.Vector3().crossVectors(safeForward, safeUp);
+        if (right.lengthSq() < 1e-8) {
+          right.crossVectors(safeForward, new THREE.Vector3(0, 0, 1));
+          if (right.lengthSq() < 1e-8) {
+            right.set(1, 0, 0);
+          }
+        }
+        right.normalize();
+        const trueUp = new THREE.Vector3()
+          .crossVectors(right, safeForward)
+          .normalize();
+
+        const leftWing = origin
+          .clone()
+          .addScaledVector(right, -LASER_WING_HALF_SPAN)
+          .addScaledVector(trueUp, LASER_WING_VERTICAL_OFFSET);
+        const rightWing = origin
+          .clone()
+          .addScaledVector(right, LASER_WING_HALF_SPAN)
+          .addScaledVector(trueUp, LASER_WING_VERTICAL_OFFSET);
+
+        spawnLaserProjectile(leftWing, safeForward, withTrace);
+        spawnLaserProjectile(rightWing, safeForward, withTrace);
+      }
+
+      function spawnLaserPairFromShooter(shooter, withTrace = false) {
+        if (!shooter || !shooter.visible) return;
+
+        const leftWing = new THREE.Vector3(
+          -LASER_WING_HALF_SPAN,
+          LASER_WING_VERTICAL_OFFSET,
+          2,
+        );
+        const rightWing = new THREE.Vector3(
+          LASER_WING_HALF_SPAN,
+          LASER_WING_VERTICAL_OFFSET,
+          2,
+        );
+        shooter.localToWorld(leftWing);
+        shooter.localToWorld(rightWing);
+        earthAnchor.worldToLocal(leftWing);
+        earthAnchor.worldToLocal(rightWing);
+
+        const forward = new THREE.Vector3(0, 0, -1)
+          .applyQuaternion(shooter.quaternion)
+          .normalize();
+
+        spawnLaserProjectile(leftWing, forward, withTrace);
+        spawnLaserProjectile(rightWing, forward, withTrace);
+      }
+
+      /**
+       * Spacebar: Fire weapons
+       * Fires twin lasers from wing positions
+       */
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && isCalibrated && !isPaused && !window.isDead) {
+          e.preventDefault();
+
+          const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+          const laser2 = new THREE.Mesh(laserGeometry, laserMaterial);
+
+          // Define physical wingtip locations (unscaled ship coordinates)
+          // X=horizontal, Y=vertical, Z=depth
+          /* const leftWing = new THREE.Vector3(-30, -10, 2);
+          const rightWing = new THREE.Vector3(30, -10, 2); */
+          const leftWing = new THREE.Vector3(-3.5, -0.2, 2);
+          const rightWing = new THREE.Vector3(3.5, -0.2, 2);
+
+          // Convert local ship coordinates to world space
+          playerShip.localToWorld(leftWing);
+          playerShip.localToWorld(rightWing);
+
+          // Add lasers to playerRig (inherit forward direction)
+          playerRig.add(laser);
+          playerRig.add(laser2);
+
+          // Convert world coordinates back to playerRig local space
+          playerRig.worldToLocal(leftWing);
+          playerRig.worldToLocal(rightWing);
+
+          // Position lasers at wingtips
+          laser.position.copy(leftWing);
+          laser2.position.copy(rightWing);
+
+          // Push forward slightly to clear propeller
+          laser.position.z -= 5;
+          laser2.position.z -= 5;
+
+          laser.userData = { distanceTraveled: 0 };
+          laser2.userData = { distanceTraveled: 0 };
+
+          // Attach to earth to freeze trajectory (physics trick)
+          earthAnchor.attach(laser);
+          earthAnchor.attach(laser2);
+
+          lasers.push(laser);
+          lasers.push(laser2);
+
+          // Notify server of weapon fire
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "fireShot" }));
+          }
+          playLaserSound();
+        }
+      });
+
+      // ==========================================
+      // MAIN GAME LOOP
+      // ==========================================
+
+      let frameCount = 0;
+
+      // ==========================================
+      // F-35 HELMET MOUNTED DISPLAY (HUD)
+      // ==========================================
+
+      const hudCanvas = document.getElementById("hud-canvas");
+      const hudCtx = hudCanvas.getContext("2d");
+
+      function resizeHUD() {
+        hudCanvas.width = window.innerWidth;
+        hudCanvas.height = window.innerHeight;
+      }
+      window.addEventListener("resize", resizeHUD);
+      resizeHUD();
+
+      /**
+       * Renders F-35 style helmet mounted display
+       * @param {number} speed - Current aircraft speed
+       * @param {number} altitude - Height above terrain
+       * @param {number} rigPitch - Player pitch angle
+       * @param {number} shipRoll - Visual aircraft roll
+       * @param {number} aimX - Screen X position of aim point
+       * @param {number} aimY - Screen Y position of aim point
+       * @param {number} aimZ - Z depth of aim point
+       * @param {boolean} isLockedOn - Whether aim assist is active
+       * @param {number} lockProgress - Lock-on progress (0-1)
+       */
+      function renderHelmetHUD(
+        speed,
+        altitude,
+        rigPitch,
+        shipRoll,
+        aimX,
+        aimY,
+        aimZ,
+        isLockedOn,
+        lockProgress,
+        isBeingTracked,
+        flareCooldown,
+        targetScreenX,
+        targetScreenY,
+      ) {
+        hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+
+        const w = hudCanvas.width;
+        const h = hudCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // Dynamic HUD color (changes when locked on)
+        const primaryColor = isLockedOn ? "#ff0055" : "#00ffcc";
+        const strokeColor = isLockedOn
+          ? "rgba(255, 0, 85, 0.8)"
+          : "rgba(0, 255, 204, 0.8)";
+
+        // HUD styling
+        hudCtx.strokeStyle = strokeColor;
+        hudCtx.fillStyle = strokeColor;
+        hudCtx.shadowColor = primaryColor;
+        hudCtx.shadowBlur = 8;
+        hudCtx.lineWidth = 2;
+        hudCtx.textBaseline = "middle";
+
+        // Dynamic aiming reticle (tracks where aircraft nose points)
+        if (aimZ < 1) {
+          hudCtx.beginPath();
+          hudCtx.arc(aimX, aimY, 35, 0, Math.PI * 2);
+
+          // Draw targeting crosshairs
+          hudCtx.moveTo(aimX - 50, aimY);
+          hudCtx.lineTo(aimX - 20, aimY); // Left
+          hudCtx.moveTo(aimX + 20, aimY);
+          hudCtx.lineTo(aimX + 50, aimY); // Right
+          hudCtx.moveTo(aimX, aimY - 50);
+          hudCtx.lineTo(aimX, aimY - 20); // Top
+          hudCtx.stroke();
+
+          // Center laser pip (red)
+          hudCtx.shadowColor = "#ff0055";
+          hudCtx.fillStyle = "#ff0055";
+          hudCtx.beginPath();
+          hudCtx.arc(aimX, aimY, 3, 0, Math.PI * 2);
+          hudCtx.fill();
+          hudCtx.shadowColor = "#00ffcc";
+          hudCtx.fillStyle = "rgba(0, 255, 204, 0.8)";
+        }
+
+        // --- MISSILE LOCK-ON UI ---
+        if (isLockedOn) {
+          const boxSize = 40 - lockProgress * 15; // Box shrinks as it locks
+          const boxColor = lockProgress >= 1.0 ? "#ff0055" : "#ffcc00";
+
+          hudCtx.strokeStyle = boxColor;
+          hudCtx.shadowColor = boxColor;
+          hudCtx.lineWidth = 2;
+
+          // Draw the targeting box around the ENEMY's screen coordinates!
+          hudCtx.strokeRect(
+            targetScreenX - boxSize / 2,
+            targetScreenY - boxSize / 2,
+            boxSize,
+            boxSize,
+          );
+
+          if (lockProgress >= 1.0) {
+            hudCtx.font = 'bold 14px "Courier New"';
+            hudCtx.fillStyle = "#ff0055";
+            hudCtx.fillText("LOCK", targetScreenX, targetScreenY + 35);
+          }
+        }
+
+        if (isBeingTracked && Date.now() % 500 < 250) {
+          // Blinks twice a second
+          hudCtx.font = 'bold 36px "Courier New"';
+          hudCtx.fillStyle = "#ff0055";
+          hudCtx.textAlign = "center";
+          hudCtx.fillText("WARNING: MISSILE LOCK", cx, cy + 120);
+        }
+
+        // --- FLARE COOLDOWN UI ---
+        hudCtx.font = 'bold 16px "Courier New"';
+        hudCtx.fillStyle = flareCooldown <= 0 ? "#00ffcc" : "#555555";
+        hudCtx.textAlign = "left";
+        hudCtx.fillText(
+          `FLARES: ${flareCooldown <= 0 ? "READY" : "RELOADING"}`,
+          20,
+          h - 60,
+        );
+
+        // Artificial horizon with pitch ladder
+        hudCtx.save();
+        hudCtx.translate(cx, cy);
+        hudCtx.rotate(-shipRoll); // Roll horizon opposite to ship bank
+
+        // Move horizon based on pitch
+        const pitchOffset = rigPitch * (h / Math.PI);
+        hudCtx.translate(0, pitchOffset);
+
+        hudCtx.beginPath();
+        hudCtx.setLineDash([20, 15]);
+        hudCtx.moveTo(-200, 0);
+        hudCtx.lineTo(200, 0);
+        hudCtx.stroke();
+        hudCtx.setLineDash([]);
+
+        hudCtx.font = 'bold 16px "Courier New"';
+        hudCtx.textAlign = "center";
+        hudCtx.fillText("HORIZON", 0, -15);
+        hudCtx.restore();
+
+        // Speed tape (left side of screen)
+        hudCtx.textAlign = "right";
+        hudCtx.beginPath();
+        hudCtx.moveTo(100, cy - 150);
+        hudCtx.lineTo(100, cy + 150);
+        hudCtx.moveTo(100, cy);
+        hudCtx.lineTo(120, cy);
+        hudCtx.stroke();
+
+        hudCtx.font = 'bold 16px "Courier New"';
+        hudCtx.fillText(`MACH`, 90, cy - 160);
+        hudCtx.font = 'bold 28px "Courier New"';
+        hudCtx.fillText(Math.round(speed * 100), 85, cy);
+
+        // Altitude tape (right side of screen)
+        hudCtx.textAlign = "left";
+        hudCtx.beginPath();
+        hudCtx.moveTo(w - 100, cy - 150);
+        hudCtx.lineTo(w - 100, cy + 150);
+        hudCtx.moveTo(w - 100, cy);
+        hudCtx.lineTo(w - 120, cy);
+        hudCtx.stroke();
+
+        hudCtx.font = 'bold 16px "Courier New"';
+        hudCtx.fillText(`ALT`, w - 90, cy - 160);
+        hudCtx.font = 'bold 28px "Courier New"';
+        hudCtx.fillText(Math.max(0, Math.round(altitude)), w - 85, cy);
+
+        // ==========================================
+        // TACTICAL RADAR (MINIMAP)
+        // ==========================================
+        const radarRadius = 110;
+        const radarCx = w - radarRadius - 30; // Top Right corner
+        const radarCy = radarRadius + 30;
+        const radarMaxRange = 30000;
+        const radarScale = radarRadius / radarMaxRange;
+
+        hudCtx.save();
+
+        // 1. Draw Radar Background
+        hudCtx.beginPath();
+        hudCtx.arc(radarCx, radarCy, radarRadius, 0, Math.PI * 2);
+        hudCtx.fillStyle = "rgba(0, 30, 20, 0.5)";
+        hudCtx.fill();
+        hudCtx.strokeStyle = "rgba(0, 255, 204, 0.6)";
+        hudCtx.lineWidth = 2;
+        hudCtx.stroke();
+
+        // 2. Draw Distance Rings & Crosshairs
+        hudCtx.beginPath();
+        hudCtx.arc(radarCx, radarCy, radarRadius * 0.33, 0, Math.PI * 2);
+        hudCtx.arc(radarCx, radarCy, radarRadius * 0.66, 0, Math.PI * 2);
+        hudCtx.stroke();
+
+        hudCtx.beginPath();
+        hudCtx.moveTo(radarCx - radarRadius, radarCy);
+        hudCtx.lineTo(radarCx + radarRadius, radarCy);
+        hudCtx.moveTo(radarCx, radarCy - radarRadius);
+        hudCtx.lineTo(radarCx, radarCy + radarRadius);
+        hudCtx.stroke();
+
+        // 3. Draw Player (Center Triangle)
+        hudCtx.fillStyle = "#00ffcc";
+        hudCtx.beginPath();
+        hudCtx.moveTo(radarCx, radarCy - 8);
+        hudCtx.lineTo(radarCx - 5, radarCy + 5);
+        hudCtx.lineTo(radarCx + 5, radarCy + 5);
+        hudCtx.fill();
+
+        // 4. Calculate Stabilized Radar Axes (Ignores roll/pitch, only uses yaw)
+        const pPos = new THREE.Vector3();
+        playerRig.getWorldPosition(pPos);
+
+        const pUp = pPos.clone().normalize(); // Gravity Up
+        const pForward = new THREE.Vector3(0, 0, -1)
+          .applyQuaternion(playerRig.quaternion)
+          .normalize();
+
+        // Cross products build a flat coordinate system parallel to the planet surface
+        const sRight = new THREE.Vector3()
+          .crossVectors(pForward, pUp)
+          .normalize();
+        const sForward = new THREE.Vector3()
+          .crossVectors(pUp, sRight)
+          .normalize();
+
+        // 5. Draw Enemies
+        for (const id in remotePilots) {
+          const enemy = remotePilots[id];
+          if (!enemy.visible) continue;
+
+          const ePos = new THREE.Vector3();
+          enemy.getWorldPosition(ePos);
+
+          const toEnemy = new THREE.Vector3().subVectors(ePos, pPos);
+          const dist = toEnemy.length();
+
+          if (dist > radarMaxRange) continue;
+
+          // Project 3D vector onto the flat 2D radar plane
+          const rx = toEnemy.dot(sRight);
+          const ry = toEnemy.dot(sForward);
+
+          const screenX = radarCx + rx * radarScale;
+          const screenY = radarCy - ry * radarScale; // Canvas Y is inverted
+
+          // Team colors
+          const isTeammate = enemy.userData.team === window.myTeam;
+          const blipColor = isTeammate ? "#0088ff" : "#ff0055";
+
+          // Draw Blip
+          hudCtx.fillStyle = blipColor;
+          hudCtx.beginPath();
+          hudCtx.arc(screenX, screenY, 4, 0, Math.PI * 2);
+          hudCtx.fill();
+
+          // Altitude Indicator (Above/Below line)
+          const pAlt = pPos.length() - 50000; // GLOBE_RADIUS
+          const eAlt = ePos.length() - 50000;
+          const altDiff = eAlt - pAlt;
+
+          hudCtx.strokeStyle = blipColor;
+          hudCtx.lineWidth = 1.5;
+          hudCtx.beginPath();
+          hudCtx.moveTo(screenX, screenY);
+
+          // Draw a line pointing up if they are higher than you, or down if lower
+          if (altDiff > 400) {
+            hudCtx.lineTo(screenX, screenY - 12);
+          } else if (altDiff < -400) {
+            hudCtx.lineTo(screenX, screenY + 12);
+          }
+          hudCtx.stroke();
+        }
+
+        hudCtx.restore();
+      }
+
+      /**
+       * Main animation loop - runs every frame
+       */
+      function animate() {
+        requestAnimationFrame(animate);
+        frameCount++;
+        const dt = Math.min(frameClock.getDelta(), 0.05);
+        const frameScale = dt * 60;
+
+        let isLockedOn = false;
+        let lockProgress = 0;
+        let targetScreenX = 0;
+        let targetScreenY = 0;
+
+        if (isCalibrated && !isPaused && !window.isDead) {
+          // Smooth speed interpolation to target
+          currentSpeed += (targetSpeed - currentSpeed) * 0.05;
+
+          speedUI.innerText = `SPD: ${Math.round(currentSpeed * 100)}`;
+          document.getElementById("mode-readout").innerText =
+            `MODE: ${controlMode}`;
+
+          let rigYawInput = 0;
+          let rigPitchInput = 0;
+
+          // CONTROL MODE: Face tracking
+          if (controlMode === "FACE") {
+            rigYawInput = turnVelocityYaw;
+            rigPitchInput = turnVelocityPitch;
+
+            // Apply parallax camera movement
+            camera.position.x += (targetCamPos.x - camera.position.x) * 0.1;
+            camera.position.y += (targetCamPos.y - camera.position.y) * 0.1;
+            camera.rotation.set(0, 0, 0);
+            camera.rotation.z +=
+              (-turnVelocityYaw * 10 - camera.rotation.z) * 0.1;
+
+            // CONTROL MODE: Keyboard with freelook
+          } else if (controlMode === "KEYBOARD") {
+            const KEY_TURN_SPEED = 0.02;
+
+            // Keyboard flight controls (WASD)
+            if (keys.w) rigPitchInput = -KEY_TURN_SPEED; // Pitch up
+            if (keys.s) rigPitchInput = KEY_TURN_SPEED; // Pitch down
+            if (keys.a) rigYawInput = KEY_TURN_SPEED; // Yaw left
+            if (keys.d) rigYawInput = -KEY_TURN_SPEED; // Yaw right
+
+            // Face tracking controls head freelook
+            const targetLookYaw = turnVelocityYaw * 20.0;
+            const targetLookPitch = turnVelocityPitch * 20.0;
+
+            camera.rotation.y += (targetLookYaw - camera.rotation.y) * 0.2;
+            camera.rotation.x += (targetLookPitch - camera.rotation.x) * 0.2;
+            camera.rotation.z = 0;
+          }
+
+          // ==========================================
+          // AIM ASSIST & MISSILE LOCK SYSTEM
+          // ==========================================
+
+          let magnetismYaw = 0;
+          let magnetismPitch = 0;
+          let currentTargetId = null;
+          let isAimAssistActive = false;
+
+          // Define the two different cones (FOV)
+          const MISSILE_LOCK_CONE = 0.5; // ~30 degrees wide for radar tracking
+          const AIM_ASSIST_CONE = 0.15; // ~8.5 degrees tight for gun magnetism
+
+          let bestCenterScore = MISSILE_LOCK_CONE;
+
+          for (const id in remotePilots) {
+            const enemy = remotePilots[id];
+            enemy.position.lerp(enemy.userData.targetPos, 0.15);
+
+            // Slerp rotation (Beautiful, zero-gimbal-lock banking!)
+            enemy.quaternion.slerp(enemy.userData.targetQuat, 0.15);
+
+            if (!enemy.visible) continue;
+
+            const enemyLocal = new THREE.Vector3();
+            enemy.getWorldPosition(enemyLocal);
+            playerRig.worldToLocal(enemyLocal);
+
+            // Skip targets behind us
+            if (enemyLocal.z > 0) continue;
+
+            const yawOffCenter = Math.atan2(enemyLocal.x, -enemyLocal.z);
+            const pitchOffCenter = Math.atan2(enemyLocal.y, -enemyLocal.z);
+
+            const totalOffCenter =
+              Math.abs(yawOffCenter) + Math.abs(pitchOffCenter);
+            const distance = enemyLocal.length();
+
+            // 1. Check if they are inside the WIDE missile radar cone
+            if (distance < 25000 && totalOffCenter < bestCenterScore) {
+              bestCenterScore = totalOffCenter;
+              currentTargetId = id;
+
+              // Calculate their exact 2D screen coordinates for the HUD box
+              const enemyWorld = new THREE.Vector3();
+              enemy.getWorldPosition(enemyWorld);
+              enemyWorld.project(camera);
+              targetScreenX = (enemyWorld.x * 0.5 + 0.5) * window.innerWidth;
+              targetScreenY = -(enemyWorld.y * 0.5 - 0.5) * window.innerHeight;
+
+              // 2. Check if they are ALSO inside the TIGHT gun aim assist cone
+              if (totalOffCenter < AIM_ASSIST_CONE) {
+                isAimAssistActive = true;
+                magnetismYaw = yawOffCenter * 0.05;
+                magnetismPitch = pitchOffCenter * 0.05;
+              } else {
+                isAimAssistActive = false;
+                magnetismYaw = 0;
+                magnetismPitch = 0;
+              }
+            }
+          }
+
+          // --- MISSILE LOCK TIMING LOGIC ---
+          if (currentTargetId) {
+            isLockedOn = true;
+
+            if (currentTargetId === lockedEnemyId) {
+              lockTimer = Math.min(lockTimer + 1, LOCK_TIME_REQUIRED);
+            } else {
+              lockedEnemyId = currentTargetId;
+              lockTimer = 0;
+            }
+          } else {
+            isLockedOn = false;
+
+            // FIX #1: Don't instantly forget the enemy! Let the timer decay naturally.
+            // This allows the lock to persist even if they flicker out of the box for a frame or two.
+            lockTimer = Math.max(lockTimer - 2, 0);
+            if (lockTimer === 0) {
+              lockedEnemyId = null; // Only clear their ID when the lock has fully decayed
+            }
+          }
+
+          hasMissileLock = lockTimer >= LOCK_TIME_REQUIRED;
+
+          // FIX #2: Removed the 'const' keyword!
+          // Now we are updating the global lockProgress variable so the HUD can actually see it!
+          lockProgress = lockTimer / LOCK_TIME_REQUIRED;
+
+          // Apply Friction ONLY if Aim Assist is active
+          if (isAimAssistActive) {
+            rigYawInput *= 0.6;
+            rigPitchInput *= 0.6;
+          }
+
+          // Apply Magnetism
+          rigYawInput -= magnetismYaw;
+          rigPitchInput += magnetismPitch;
+
+          playerRig.rotateY(rigYawInput);
+          playerRig.rotateX(rigPitchInput);
+          playerRig.translateZ(-currentSpeed);
+
+          playerRig.userData.currentYawInput = rigYawInput;
+          playerRig.userData.currentPitchInput = rigPitchInput;
+        }
+
+        // ==========================================
+        // DYNAMIC CAMERA FOV (Altitude & Speed Based)
+        // ==========================================
+
+        const distFromCenter = playerRig.position.length();
+        const altitude = distFromCenter - GLOBE_RADIUS;
+
+        // Base FOV varies with altitude (narrow when high, wide when low)
+        let baseFOV = 90;
+        if (altitude > 1000) {
+          const t = Math.min((altitude - 1000) / 24000, 1.0);
+          baseFOV = 90 - t * 50; // Narrows to 40° at high altitude
+        }
+
+        // Speed warp effect (FOV stretches when boosting)
+        const speedDelta = currentSpeed - BASE_SPEED;
+        const fovWarpOffset = speedDelta * 2.5;
+
+        const targetFOV = baseFOV + fovWarpOffset;
+
+        // Animate FOV smoothly
+        camera.fov += (targetFOV - camera.fov) * 0.08;
+        camera.updateProjectionMatrix();
+
+        // Animate propeller rotation
+        if (playerShip.userData.propeller) {
+          playerShip.userData.propeller.rotation.z += currentSpeed * 0.02;
+        }
+
+        // ==========================================
+        // TERRAIN COLLISION DETECTION
+        // ==========================================
+
+        if (worldGrid && !isPaused) {
+          // Convert player position to terrain grid coordinates
+          const normPos = playerRig.position.clone().normalize();
+          const phi = Math.acos(normPos.y);
+          const theta = Math.atan2(normPos.z, normPos.x);
+
+          const rRow = Math.round((phi / Math.PI) * (mapRows - 1));
+          const rCol = Math.round(
+            ((Math.PI - theta) / (2 * Math.PI)) * (mapCols - 1),
+          );
+
+          // Clamp to grid bounds
+          const safeRow = Math.max(0, Math.min(rRow, mapRows - 1));
+          const safeCol = Math.max(0, Math.min(rCol, mapCols - 1));
+
+          // Check terrain height at player position
+          const rawGroundZ = worldGrid[safeRow][safeCol];
+          const groundHeight = rawGroundZ * SCALE_Z - 5; // -5 for landing gear clearance
+
+          // Crash detection and respawn
+          if (altitude < groundHeight) {
+            console.log("💥 CRASHED INTO TERRAIN!");
+            playerRig.position.setLength(GLOBE_RADIUS + 10000); // Respawn in orbit
+            currentSpeed = 0;
+          }
+        }
+
+        // ==========================================
+        // MULTIPLAYER TELEMETRY BROADCAST
+        // ==========================================
+
+        // Send position update to server every 6 frames (~10 times/sec at 60fps)
+        if (
+          isCalibrated &&
+          !isPaused &&
+          !window.isDead &&
+          frameCount % 6 === 0
+        ) {
+          if (ws.readyState === WebSocket.OPEN) {
+            const buffer = new ArrayBuffer(24);
+            const view = new Float32Array(buffer);
+
+            const shipWorldPos = new THREE.Vector3();
+            playerShip.getWorldPosition(shipWorldPos);
+            earthAnchor.worldToLocal(shipWorldPos);
+
+            // Get the true forward vector of the camera rig
+            const forward = new THREE.Vector3(0, 0, -1);
+            forward.applyQuaternion(playerRig.quaternion);
+
+            view[0] = shipWorldPos.x;
+            view[1] = shipWorldPos.y;
+            view[2] = shipWorldPos.z;
+            view[3] = forward.x; // Send vector instead of Euler x
+            view[4] = forward.y; // Send vector instead of Euler y
+            view[5] = forward.z; // Send vector instead of Euler z
+
+            ws.send(buffer);
+          }
+        }
+
+        // ==========================================
+        // MULTIPLAYER: SMOOTH INTERPOLATION
+        // ==========================================
+
+        for (const id in remotePilots) {
+          const enemy = remotePilots[id];
+
+          // 1. Lerp position
+          if (enemy.userData.targetPos) {
+            enemy.position.lerp(enemy.userData.targetPos, 0.15);
+          }
+
+          // 2. Slerp rotation (Beautiful, zero-gimbal-lock banking!)
+          if (enemy.userData.targetQuat) {
+            enemy.quaternion.slerp(enemy.userData.targetQuat, 0.15);
+          }
+
+          // 3. Update floating name label position
+          const vector = new THREE.Vector3();
+          enemy.getWorldPosition(vector);
+          vector.y += 15; // Position above ship
+          vector.project(camera);
+
+          const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+          const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+
+          if (enemy.visible && vector.z < 1) {
+            enemy.userData.label.style.display = "block";
+            enemy.userData.label.style.left = `${x}px`;
+            enemy.userData.label.style.top = `${y}px`;
+          } else {
+            enemy.userData.label.style.display = "none";
+          }
+        }
+
+        // ==========================================
+        // DYNAMIC FLIGHT PHYSICS (Visual Aircraft)
+        // ==========================================
+
+        const activeYaw = playerRig.userData.currentYawInput || 0;
+        const activePitch = playerRig.userData.currentPitchInput || 0;
+
+        // Aircraft roll (bank) based on yaw input
+        const maxBankAngle = Math.PI / 3; // 60 degrees max
+        const targetRoll = activeYaw * 40.0;
+        const clampedRoll = Math.max(
+          -maxBankAngle,
+          Math.min(maxBankAngle, targetRoll),
+        );
+        playerShip.rotation.z += (clampedRoll - playerShip.rotation.z) * 0.1;
+
+        // Aircraft pitch (nose angle) with bank-induced lift
+        const maxPitchAngle = Math.PI / 4; // 45 degrees max
+        const bankInducedPitch = Math.abs(playerShip.rotation.z) * 0.2;
+        const targetPitch = bankInducedPitch + activePitch * 30.0;
+        const clampedPitch = Math.max(
+          -maxPitchAngle,
+          Math.min(maxPitchAngle, targetPitch),
+        );
+        playerShip.rotation.x += (clampedPitch - playerShip.rotation.x) * 0.15;
+
+        // ==========================================
+        // WEAPON PROJECTILE MOVEMENT
+        // ==========================================
+
+        for (let i = lasers.length - 1; i >= 0; i--) {
+          const laser = lasers[i];
+          const stepDistance = LASER_SPEED * frameScale;
+          laser.translateZ(-stepDistance);
+          laser.userData.distanceTraveled += stepDistance;
+
+          if (laser.userData.distanceTraveled > LASER_MAX_DISTANCE) {
+            earthAnchor.remove(laser);
+            lasers.splice(i, 1);
+          }
+        }
+
+        const laserTraceNow = Date.now();
+        for (let i = laserTraces.length - 1; i >= 0; i--) {
+          const trace = laserTraces[i];
+          const remainingMs = trace.userData.expiresAt - laserTraceNow;
+          if (remainingMs <= 0) {
+            earthAnchor.remove(trace);
+            if (trace.material) {
+              trace.material.dispose();
+            }
+            laserTraces.splice(i, 1);
+            continue;
+          }
+
+          const lifeT = remainingMs / LASER_TRACE_LIFETIME_MS;
+          trace.material.opacity = trace.userData.baseOpacity * lifeT;
+        }
+
+        // ==========================================
+        // HOMING MISSILE FLIGHT PHYSICS
+        // ==========================================
+        for (let i = missiles.length - 1; i >= 0; i--) {
+          const missile = missiles[i];
+          const targetId = String(missile.userData.targetId || "");
+          const target =
+            targetId === String(window.myPilotId)
+              ? playerShip
+              : remotePilots[targetId];
+
+          // 1. Accelerate the missile over time (up to a max speed)
+          missile.userData.speed = Math.min(missile.userData.speed + 1.5, 250);
+          const mSpeed = missile.userData.speed;
+
+          // 2. If the target is still alive and visible, steer towards it!
+          if (target && target.visible) {
+            const targetPos = new THREE.Vector3();
+            target.getWorldPosition(targetPos);
+            earthAnchor.worldToLocal(targetPos);
+
+            // Calculate the vector from the missile to the target
+            const toTarget = new THREE.Vector3()
+              .subVectors(targetPos, missile.position)
+              .normalize();
+
+            // Create a rotation that points exactly at the target
+            const targetRotation = new THREE.Quaternion().setFromUnitVectors(
+              new THREE.Vector3(0, 0, -1),
+              toTarget,
+            );
+
+            // SLERP (Spherical Linear Interpolation) smoothly curves the missile towards the target rotation!
+            // Lower number = wider, slower turns. Higher number = aggressive, twitchy tracking.
+
+            // 2. If the target is still alive and visible, steer towards it!
+            if (target && target.visible) {
+              // Check for flares FIRST
+              if (
+                target.userData.flareActiveUntil &&
+                target.userData.flareActiveUntil > Date.now()
+              ) {
+                missile.userData.targetId = null; // Blind the missile
+              } else {
+                // Only do the math if they aren't using flares!
+                const targetPos = new THREE.Vector3();
+                target.getWorldPosition(targetPos);
+                earthAnchor.worldToLocal(targetPos);
+
+                const toTarget = new THREE.Vector3()
+                  .subVectors(targetPos, missile.position)
+                  .normalize();
+
+                const targetRotation =
+                  new THREE.Quaternion().setFromUnitVectors(
+                    new THREE.Vector3(0, 0, -1),
+                    toTarget,
+                  );
+
+                missile.quaternion.slerp(targetRotation, 0.04);
+              }
+            }
+          }
+
+          // 3. Move the missile forward along its current curved trajectory
+          missile.translateZ(-mSpeed);
+          missile.userData.distanceTraveled += mSpeed;
+
+          // 4. Generate Smoke Trail (using our existing fireParticles system!)
+          if (frameCount % 2 === 0) {
+            const p = new THREE.Mesh(fireGeoSmall, matSmokeLight.clone());
+            p.position.copy(missile.position);
+            p.userData.velocity = new THREE.Vector3(
+              (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.5,
+            );
+            earthAnchor.add(p);
+            fireParticles.push(p);
+          }
+
+          // 5. Impact Detection
+          let hitTarget = false;
+          if (target && target.visible) {
+            const targetPos = new THREE.Vector3();
+            target.getWorldPosition(targetPos);
+            earthAnchor.worldToLocal(targetPos);
+
+            // If it gets within 30 units of the target, it's a hit!
+            if (missile.position.distanceTo(targetPos) < 30) {
+              hitTarget = true;
+            }
+          }
+
+          // 6. Cleanup if it hits or runs out of fuel (30,000 units)
+          if (
+            hitTarget ||
+            missile.userData.distanceTraveled > 30000 ||
+            !target ||
+            (!target.visible && missile.userData.distanceTraveled > 5000)
+          ) {
+            playExplosionSound();
+            
+            earthAnchor.remove(missile);
+            missiles.splice(i, 1);
+          }
+        }
+
+        // ==========================================
+        // EXPLOSION ANIMATION
+        // ==========================================
+
+        for (let i = explosions.length - 1; i >= 0; i--) {
+          const exp = explosions[i];
+          exp.scale.addScalar(5.0); // Rapid expansion
+          exp.material.opacity -= 0.02; // Fade out
+
+          if (exp.material.opacity <= 0) {
+            earthAnchor.remove(exp);
+            explosions.splice(i, 1);
+          }
+        }
+
+        // ==========================================
+        // FIRE & SMOKE PARTICLE ENGINE
+        // ==========================================
+
+        for (let i = fireParticles.length - 1; i >= 0; i--) {
+          const p = fireParticles[i];
+          p.position.add(p.userData.velocity);
+
+          // 2. BILLOWING EFFECT: Make the smoke expand as it ages instead of shrinking!
+          p.scale.multiplyScalar(1.02);
+
+          // 3. LONGER TRAIL: Fade out half as fast
+          p.material.opacity -= 0.015;
+
+          if (p.material.opacity <= 0) {
+            earthAnchor.remove(p);
+            fireParticles.splice(i, 1);
+          }
+        }
+
+        // ==========================================
+        // DEBRIS PHYSICS ANIMATION
+        // ==========================================
+
+        const nowMs = Date.now();
+        for (let i = debrisParticles.length - 1; i >= 0; i--) {
+          const debris = debrisParticles[i];
+          const keepForDeathCam =
+            window.isDead &&
+            cameraMode === CAMERA_MODE_DEATH &&
+            debris.userData.isFuselage &&
+            debris.userData.isMe &&
+            deathCamFuselage === debris;
+          if (
+            debris.userData.expiresAt &&
+            nowMs >= debris.userData.expiresAt &&
+            !keepForDeathCam
+          ) {
+            if (
+              debris.userData.isFuselage &&
+              debris.userData.isMe &&
+              deathCamFuselage === debris
+            ) {
+              deathCamFuselage = null;
+              if (window.isDead) {
+                enterSpectatorMode(true);
+              }
+            }
+            earthAnchor.remove(debris);
+            debrisParticles.splice(i, 1);
+            continue;
+          }
+
+          // Move and tumble
+          debris.position.addScaledVector(debris.userData.velocity, frameScale);
+          debris.rotation.x += debris.userData.rotSpeed.x * frameScale;
+          debris.rotation.y += debris.userData.rotSpeed.y * frameScale;
+          debris.rotation.z += debris.userData.rotSpeed.z * frameScale;
+          debris.userData.rotSpeed.multiplyScalar(
+            Math.max(0.85, 1 - DEBRIS_ROT_DAMP * frameScale),
+          );
+
+          // Spherical gravity + speed-proportional drag
+          const upVector = debris.position.clone().normalize();
+          const gravityForce = debris.userData.isFuselage
+            ? DEBRIS_GRAVITY_FUSELAGE
+            : DEBRIS_GRAVITY_FRAGMENT;
+          debris.userData.velocity.sub(
+            upVector.clone().multiplyScalar(gravityForce * frameScale),
+          );
+
+          const speed = debris.userData.velocity.length();
+          const dragCoef = debris.userData.isFuselage
+            ? DEBRIS_DRAG_FUSELAGE
+            : DEBRIS_DRAG_FRAGMENT;
+          const dragFactor = Math.max(0.75, 1 - dragCoef * speed * frameScale);
+          debris.userData.velocity.multiplyScalar(dragFactor);
+
+          // Fuselage pieces can generate a bit of lift while descending.
+          if (debris.userData.isFuselage) {
+            const radialVel = debris.userData.velocity.dot(upVector);
+            if (
+              speed > DEBRIS_FUSELAGE_LIFT_MIN_SPEED &&
+              radialVel < -DEBRIS_FUSELAGE_MIN_DESCENT
+            ) {
+              debris.userData.velocity.addScaledVector(
+                upVector,
+                -radialVel * DEBRIS_FUSELAGE_LIFT * frameScale,
+              );
+            }
+
+            // Never let burning fuselage settle into a hover-like radial stall.
+            const postLiftRadialVel = debris.userData.velocity.dot(upVector);
+            if (postLiftRadialVel > -DEBRIS_FUSELAGE_MIN_DESCENT) {
+              const neededInward =
+                postLiftRadialVel + DEBRIS_FUSELAGE_MIN_DESCENT;
+              debris.userData.velocity.addScaledVector(upVector, -neededInward);
+            }
+          }
+
+          const maxDebrisSpeed = debris.userData.isFuselage
+            ? DEBRIS_MAX_SPEED_FUSELAGE
+            : DEBRIS_MAX_SPEED_FRAGMENT;
+          if (
+            debris.userData.velocity.lengthSq() >
+            maxDebrisSpeed * maxDebrisSpeed
+          ) {
+            debris.userData.velocity.setLength(maxDebrisSpeed);
+          }
+
+          // --- FIREBALL EFFECT ---
+          if (
+            debris.userData.isFuselage &&
+            frameCount % 2 === 0 &&
+            (!debris.userData.burnUntil || nowMs < debris.userData.burnUntil)
+          ) {
+            for (let pCount = 0; pCount < 1; pCount++) {
+              const isSmoke = Math.random() > 0.3; // 70% thick black smoke, 30% fire
+
+              const pMat = isSmoke
+                ? matSmokeDark.clone()
+                : matFireOrange.clone();
+              const p = new THREE.Mesh(fireGeoLarge, pMat);
+
+              p.position.copy(debris.position);
+
+              p.position.x += (Math.random() - 0.5) * 6;
+              p.position.y += (Math.random() - 0.5) * 6;
+              p.position.z += (Math.random() - 0.5) * 6;
+
+              const drift = new THREE.Vector3(
+                (Math.random() - 0.5) * 1.2,
+                (Math.random() - 0.5) * 1.2,
+                (Math.random() - 0.5) * 1.2,
+              );
+              p.userData.velocity = upVector
+                .clone()
+                .multiplyScalar(1.5)
+                .add(drift);
+
+              earthAnchor.add(p);
+              fireParticles.push(p);
+            }
+          }
+
+          // --- IMPACT ---
+          const distFromCenter = debris.position.length();
+          if (distFromCenter < GLOBE_RADIUS) {
+            if (
+              debris.userData.isFuselage &&
+              debris.userData.isMe &&
+              deathCamFuselage === debris
+            ) {
+              deathCamFuselage = null;
+              if (window.isDead) {
+                enterSpectatorMode(true);
+              }
+            }
+
+            // Delete the debris upon impact
+            earthAnchor.remove(debris);
+            debrisParticles.splice(i, 1);
+          }
+        }
+
+        if (window.isDead) {
+          if (cameraMode === CAMERA_MODE_DEATH) {
+            updateDeathCamera(frameScale);
+          } else {
+            updateSpectatorCamera(frameScale);
+          }
+        }
+
+        // ==========================================
+        // RADAR WARNING RECEIVER (RWR)
+        // ==========================================
+        let isBeingTracked = false;
+
+        if (!window.isDead) {
+          const myWorldPos = new THREE.Vector3();
+          playerRig.getWorldPosition(myWorldPos);
+
+          for (const id in remotePilots) {
+            const enemy = remotePilots[id];
+            if (!enemy.visible) continue;
+
+            const enemyWorldPos = new THREE.Vector3();
+            enemy.getWorldPosition(enemyWorldPos);
+
+            // Vector pointing from the enemy to ME
+            const toMe = new THREE.Vector3().subVectors(
+              myWorldPos,
+              enemyWorldPos,
+            );
+            const distance = toMe.length();
+
+            // If they are within missile range (25,000 units)
+            if (distance < 25000) {
+              toMe.normalize();
+
+              // Get the direction the enemy is facing
+              const enemyForward = new THREE.Vector3(0, 0, -1);
+              enemyForward.applyQuaternion(
+                enemy.getWorldQuaternion(new THREE.Quaternion()),
+              );
+
+              // Dot product calculates alignment. > 0.98 means they are looking almost exactly at us!
+              if (enemyForward.dot(toMe) > 0.98) {
+                isBeingTracked = true;
+                break;
+              }
+            }
+          }
+        }
+
+        flareCooldown = Math.max(0, flareCooldown - 1);
+
+        // ==========================================
+        // FLARE ANIMATION
+        // ==========================================
+        for (let i = activeFlares.length - 1; i >= 0; i--) {
+          const f = activeFlares[i];
+
+          f.position.add(f.userData.velocity);
+
+          // Spherical gravity pulls flares down naturally
+          const upVector = f.position.clone().normalize();
+          f.userData.velocity.sub(upVector.multiplyScalar(0.2));
+          f.userData.velocity.multiplyScalar(0.98); // Air resistance
+
+          f.userData.life--;
+          f.material.opacity = f.userData.life / 120; // Fade out as they die
+
+          // Flares emit intense smoke and fire trails!
+          if (frameCount % 2 === 0) {
+            const p = new THREE.Mesh(fireGeoFlare, matFlareBright.clone());
+            p.position.copy(f.position);
+            p.userData.velocity = upVector.clone().multiplyScalar(1);
+            earthAnchor.add(p);
+            fireParticles.push(p); // Reuse our existing fire engine!
+          }
+
+          if (f.userData.life <= 0) {
+            earthAnchor.remove(f);
+            activeFlares.splice(i, 1);
+          }
+        }
+
+        // ==========================================
+        // HUD RENDERING
+        // ==========================================
+
+        updateEngineSound(currentSpeed, window.isDead);
+        manageLockOnSound(isLockedOn, lockProgress);
+
+        if (isCalibrated && !isPaused) {
+          // Calculate aircraft nose aim point
+          const noseTarget = new THREE.Vector3(0, 0, -3000);
+          playerRig.localToWorld(noseTarget);
+          noseTarget.project(camera);
+
+          // Convert to screen coordinates
+          const aimX = (noseTarget.x * 0.5 + 0.5) * window.innerWidth;
+          const aimY = -(noseTarget.y * 0.5 - 0.5) * window.innerHeight;
+
+          renderHelmetHUD(
+            currentSpeed,
+            altitude,
+            playerRig.rotation.x,
+            playerShip.rotation.z,
+            aimX,
+            aimY,
+            noseTarget.z,
+            isLockedOn,
+            lockProgress,
+            isBeingTracked,
+            flareCooldown,
+            targetScreenX,
+            targetScreenY,
+          );
+        }
+
+        if (window.isDead) {
+          const targetTag = spectatorTargetId
+            ? `TGT ${spectatorTargetId}`
+            : "NO TARGET";
+          if (respawnAvailable) {
+            modeReadoutUI.innerText = `MODE: SPECTATE [${targetTag}] | R TO RESPAWN`;
+          } else if (cameraMode === CAMERA_MODE_DEATH) {
+            modeReadoutUI.innerText = "MODE: DEATH CAM | V OR [ ] TO SPECTATE";
+          } else {
+            modeReadoutUI.innerText = `MODE: SPECTATE [${targetTag}] | RESPAWN PENDING`;
+          }
+          deathActionsUI.style.display = "flex";
+          respawnBtnUI.disabled = !respawnAvailable || respawnRequested;
+          spectateBtnUI.disabled = cameraMode === CAMERA_MODE_SPECTATE;
+        } else {
+          deathActionsUI.style.display = "none";
+          respawnBtnUI.disabled = true;
+          spectateBtnUI.disabled = false;
+        }
+
+        // Final render
+        renderer.render(scene, camera);
+      }
+
+      animate();
+    </script>
+  </body>
+</html>
