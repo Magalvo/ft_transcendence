@@ -6,24 +6,34 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-# Prerequisites
-*.d
-*.env
-*.md
 
-node_modules
-dist
-dist-ssr
-*.local
-
+# Dependencies and build output
 node_modules/
-dist
-dist-ssr
+dist/
+dist-ssr/
+*.tsbuildinfo
+SpacedOut/backend/build/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
 *.local
+.secrets/*
+!.secrets/.gitkeep
+
+# Local databases (the containers keep theirs in Docker volumes)
+*.sqlite
+*.sqlite3
+*.db
+
+# Uploaded avatars
+backend/Auth/public/avatars/*
+!backend/Auth/public/avatars/.gitkeep
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+**/.vscode/*
+!**/.vscode/extensions.json
 .idea
 .DS_Store
 *.suo
@@ -31,36 +41,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-# Linker files
+
+# C/C++ build artifacts (SpacedOut native addon)
+*.d
+*.o
 *.ilk
-.secrets/*
-!.secrets/.gitkeep
-
-# Debugger Files
 *.pdb
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
-# Executables
 *.exe
 *.out
 *.app
-
-# debug information files
 *.dwo
-
-# Node modules
-**/node_modules/
