@@ -72,7 +72,6 @@ export class SpacedOutPage extends AbstractComponent {
             <div id="spacedout-viewport" class="spacedout-viewport">
               <canvas id="spacedout-hud" class="spacedout-hud"></canvas>
               <div id="spacedout-labels" class="spacedout-labels"></div>
-              <video id="spacedout-video" autoplay playsinline muted style="display:none"></video>
 
               <div id="spacedout-overlay" class="spacedout-overlay">
                 <div class="spacedout-overlay-card">
@@ -85,8 +84,18 @@ export class SpacedOutPage extends AbstractComponent {
                 <div class="spacedout-screen-card">
                   <p class="text-xs uppercase tracking-[0.25em] text-cyan-300">Calibration</p>
                   <h2 class="mt-3 text-3xl font-black text-white">SYSTEM CALIBRATION</h2>
+                  <div id="spacedout-camera-preview" class="spacedout-camera-preview hidden">
+                    <video id="spacedout-video" autoplay playsinline muted></video>
+                    <span id="spacedout-face-indicator" class="spacedout-face-indicator">No face</span>
+                  </div>
                   <p class="mt-3 text-sm text-slate-300">1. Sit in your neutral flying posture.</p>
                   <p class="mt-2 text-sm text-slate-300">2. Look directly at the center of the screen.</p>
+                  <div id="spacedout-camera-error" class="spacedout-camera-error hidden" role="alert">
+                    <p id="spacedout-camera-error-text"></p>
+                    <button id="spacedout-camera-retry" type="button" class="mt-3 rounded-md border border-amber-300 bg-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200 hover:bg-amber-300 hover:text-black">
+                      Retry
+                    </button>
+                  </div>
                   <button id="spacedout-calibrate-btn" type="button" disabled class="mt-6 rounded-md border border-cyan-400 bg-transparent px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200 hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
                     Calibrate
                   </button>
@@ -314,6 +323,21 @@ export class SpacedOutPage extends AbstractComponent {
     const calibrateButton = content.querySelector<HTMLButtonElement>(
       "#spacedout-calibrate-btn",
     );
+    const cameraPreview = content.querySelector<HTMLElement>(
+      "#spacedout-camera-preview",
+    );
+    const faceIndicator = content.querySelector<HTMLElement>(
+      "#spacedout-face-indicator",
+    );
+    const cameraError = content.querySelector<HTMLElement>(
+      "#spacedout-camera-error",
+    );
+    const cameraErrorText = content.querySelector<HTMLElement>(
+      "#spacedout-camera-error-text",
+    );
+    const cameraRetryButton = content.querySelector<HTMLButtonElement>(
+      "#spacedout-camera-retry",
+    );
     const teamScreen = content.querySelector<HTMLElement>(
       "#spacedout-team-screen",
     );
@@ -441,6 +465,11 @@ export class SpacedOutPage extends AbstractComponent {
       !loadingText ||
       !calibrationScreen ||
       !calibrateButton ||
+      !cameraPreview ||
+      !faceIndicator ||
+      !cameraError ||
+      !cameraErrorText ||
+      !cameraRetryButton ||
       !teamScreen ||
       !redTeamButton ||
       !blueTeamButton ||
@@ -507,6 +536,11 @@ export class SpacedOutPage extends AbstractComponent {
         loadingText,
         calibrationScreen,
         calibrateButton,
+        cameraPreview,
+        faceIndicator,
+        cameraError,
+        cameraErrorText,
+        cameraRetryButton,
         teamScreen,
         redTeamButton,
         blueTeamButton,

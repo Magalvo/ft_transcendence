@@ -9,6 +9,22 @@ import type {
 } from "./types";
 import { AudioManager } from "./AudioManager";
 import { VisionController } from "./VisionController";
+import type { VisionErrorKind } from "./visionErrors";
+import {
+  INITIAL_CAMERA_FLOW,
+  isVisionFailed,
+  isVisionReady,
+  reduceCameraFlow,
+  visionErrorKind,
+  type CameraFlowEvent,
+  type CameraFlowState,
+} from "./cameraFlow";
+import {
+  cameraErrorView,
+  cameraLoadingText,
+  shouldDetect,
+  type DetectionPhase,
+} from "./calibrationView";
 import {
   CombatManager,
   DEFAULT_AIM_ASSIST_TUNING,
@@ -85,6 +101,11 @@ interface SpacedOutGameOptions {
   loadingText: HTMLElement;
   calibrationScreen: HTMLElement;
   calibrateButton: HTMLButtonElement;
+  cameraPreview: HTMLElement;
+  faceIndicator: HTMLElement;
+  cameraError: HTMLElement;
+  cameraErrorText: HTMLElement;
+  cameraRetryButton: HTMLButtonElement;
   teamScreen: HTMLElement;
   redTeamButton: HTMLButtonElement;
   blueTeamButton: HTMLButtonElement;
@@ -160,6 +181,7 @@ export class SpacedOutGame {
   private readonly loadingText: HTMLElement;
   private readonly calibrationScreen: HTMLElement;
   private readonly calibrateButton: HTMLButtonElement;
+  private readonly cameraRetryButton: HTMLButtonElement;
   private readonly teamScreen: HTMLElement;
   private readonly redTeamButton: HTMLButtonElement;
   private readonly blueTeamButton: HTMLButtonElement;
@@ -246,8 +268,12 @@ export class SpacedOutGame {
   private aimAssistTuning: AimAssistTuning = { ...DEFAULT_AIM_ASSIST_TUNING };
   private webcamRequired = true;
   private isCalibrated = false;
-  private visionReady = false;
-  private visionFailed = false;
+  private cameraFlow: CameraFlowState = INITIAL_CAMERA_FLOW;
+  // Set by the first Join click; until then the camera is never requested.
+  private cameraWanted = false;
+  // The face tracker has a neutral pose, so keyboard freelook can use it.
+  private faceCalibrated = false;
+  private detectionActive: boolean | null = null;
   private cameraMode: CameraMode = "TERRAIN";
   private controlMode: ControlMode = "FACE";
   private localServerPosition = new THREE.Vector3(0, 0, WORLD_RADIUS + 20000);
@@ -286,6 +312,14 @@ export class SpacedOutGame {
     return this.remotePilotSystem?.pilots ?? EMPTY_REMOTE_PILOTS;
   }
 
+  private get visionReady(): boolean {
+    return isVisionReady(this.cameraFlow);
+  }
+
+  private get visionFailed(): boolean {
+    return isVisionFailed(this.cameraFlow);
+  }
+
   private get worldGrid(): number[][] | null {
     return this.terrainSystem?.grid ?? null;
   }
@@ -303,6 +337,7 @@ export class SpacedOutGame {
     this.loadingText = options.loadingText;
     this.calibrationScreen = options.calibrationScreen;
     this.calibrateButton = options.calibrateButton;
+    this.cameraRetryButton = options.cameraRetryButton;
     this.teamScreen = options.teamScreen;
     this.redTeamButton = options.redTeamButton;
     this.blueTeamButton = options.blueTeamButton;
@@ -360,6 +395,11 @@ export class SpacedOutGame {
       loadingText: this.loadingText,
       calibrationScreen: this.calibrationScreen,
       calibrateButton: this.calibrateButton,
+      cameraPreview: options.cameraPreview,
+      faceIndicator: options.faceIndicator,
+      cameraError: options.cameraError,
+      cameraErrorText: options.cameraErrorText,
+      cameraRetryButton: this.cameraRetryButton,
       teamScreen: this.teamScreen,
       actionButtons: this.actionButtons,
       joinButton: this.joinButton,
@@ -404,7 +444,7 @@ export class SpacedOutGame {
     this.setStatus(`Connecting as ${this.session.user.username}...`);
     this.log("info", "Authenticated SpacedOut bootstrap created.");
     this.socketClient.connect();
-    void this.initializeVision();
+    this.preloadVision();
     this.animationFrameId = window.requestAnimationFrame(this.animate);
   }
 
@@ -419,6 +459,7 @@ export class SpacedOutGame {
     this.cleanupCallbacks.splice(0).forEach((cleanup) => cleanup());
     this.socketClient.disconnect();
     this.vision.stop();
+    this.cameraFlow = reduceCameraFlow(this.cameraFlow, { type: "stopped" });
     this.audio.stop();
     this.remotePilotSystem?.clear();
     this.disposeScene();
@@ -432,39 +473,129 @@ export class SpacedOutGame {
     }
   }
 
-  private async initializeVision(): Promise<void> {
-    this.calibrateButton.disabled = true;
-    try {
-      await this.vision.init(() => {
+  // Returns false when the event didn't apply to the current state.
+  private dispatchCameraFlow(event: CameraFlowEvent): boolean {
+    const next = reduceCameraFlow(this.cameraFlow, event);
+    if (next === this.cameraFlow) {
+      return false;
+    }
+    this.cameraFlow = next;
+    this.updateCalibrationControls();
+    this.syncFlowScreens();
+    return true;
+  }
+
+  // Loads the model on page open. Never prompts for the camera.
+  private preloadVision(): void {
+    this.dispatchCameraFlow({ type: "preloadStarted" });
+    this.loadVisionModel();
+  }
+
+  private loadVisionModel(): void {
+    this.vision.preload().then(
+      () => {
         if (this.isDestroyed) {
           return;
         }
-        this.visionReady = true;
-        this.visionFailed = false;
-        this.updateCalibrationControls();
-        this.log("success", "Face tracking link established.");
-        this.syncFlowScreens();
-      });
-    } catch (error) {
-      if (this.isDestroyed) {
-        return;
-      }
-      this.visionFailed = true;
-      this.updateCalibrationControls();
-      if (this.webcamRequired) {
-        this.setStatus(
-          "Webcam access is required for SpacedOut face tracking.",
-        );
-      } else {
-        this.setStatus("Webcam unavailable. Keyboard testing mode is active.");
-      }
-      this.log(
-        "error",
-        error instanceof Error
-          ? error.message
-          : "Unable to initialize MediaPipe face tracking.",
-      );
+        this.dispatchCameraFlow({ type: "preloadDone" });
+        if (this.cameraWanted) {
+          this.requestCamera();
+        }
+      },
+      (error: unknown) => {
+        if (this.isDestroyed) {
+          return;
+        }
+        const kind = visionErrorKind(error);
+        if (this.dispatchCameraFlow({ type: "preloadFailed", kind })) {
+          this.reportVisionFailure(kind, error);
+        }
+      },
+    );
+  }
+
+  // Called from Join, so spectators never get a permission prompt.
+  private requestCamera(): void {
+    this.cameraWanted = true;
+    if (this.dispatchCameraFlow({ type: "cameraRequested" })) {
+      this.openCamera();
     }
+  }
+
+  private retryCamera(): void {
+    if (!this.dispatchCameraFlow({ type: "retry" })) {
+      return;
+    }
+    if (this.cameraFlow.status === "preloading") {
+      this.loadVisionModel();
+    } else {
+      this.openCamera();
+    }
+  }
+
+  private openCamera(): void {
+    this.vision.startCamera().then(
+      () => {
+        if (this.isDestroyed) {
+          return;
+        }
+        if (this.dispatchCameraFlow({ type: "cameraStarted" })) {
+          this.log("success", "Face tracking link established.");
+        }
+      },
+      (error: unknown) => {
+        if (this.isDestroyed) {
+          return;
+        }
+        const kind = visionErrorKind(error);
+        if (this.dispatchCameraFlow({ type: "cameraFailed", kind })) {
+          this.reportVisionFailure(kind, error);
+        }
+      },
+    );
+  }
+
+  private reportVisionFailure(kind: VisionErrorKind, error: unknown): void {
+    this.setStatus(
+      this.webcamRequired
+        ? cameraErrorView(kind).message
+        : "Webcam unavailable. Keyboard testing mode is active.",
+    );
+    this.log(
+      "error",
+      error instanceof Error
+        ? error.message
+        : "Unable to initialize MediaPipe face tracking.",
+    );
+  }
+
+  // Pauses face detection whenever nothing reads its output.
+  private updateDetection(): void {
+    const active = shouldDetect({
+      phase: this.detectionPhase(),
+      cameraLive: this.visionReady,
+      isPaused: this.isPaused,
+      isDead: this.isDead,
+      controlMode: this.controlMode,
+      faceCalibrated: this.faceCalibrated,
+    });
+    if (active === this.detectionActive) {
+      return;
+    }
+    this.detectionActive = active;
+    this.vision.setActive(active);
+  }
+
+  private detectionPhase(): DetectionPhase {
+    if (this.localTeam !== "SPECTATOR") {
+      return "flying";
+    }
+    if (this.cameraMode === "SPECTATOR") {
+      return "spectating";
+    }
+    return this.wantsToPlay && !this.isCalibrationSatisfied()
+      ? "calibrating"
+      : "lobby";
   }
 
   private createScene(): void {
@@ -790,6 +921,7 @@ export class SpacedOutGame {
     const calibrate = () => {
       this.calibrateVision();
     };
+    const retryCamera = () => this.retryCamera();
     const chooseRed = () => this.joinTeam("RED");
     const chooseBlue = () => this.joinTeam("BLUE");
     const joinFlow = () => {
@@ -816,6 +948,9 @@ export class SpacedOutGame {
         this.controlMode = "FACE";
         this.isCalibrated = false;
         this.log("info", "Webcam requirement enabled.");
+        if (this.cameraWanted) {
+          this.requestCamera();
+        }
       } else {
         this.controlMode = "KEYBOARD";
         this.isCalibrated = true;
@@ -840,6 +975,7 @@ export class SpacedOutGame {
     this.gameModeSelect.addEventListener("change", onMatchSettingsInput);
     this.botsEnabledInput.addEventListener("change", onMatchSettingsInput);
     this.calibrateButton.addEventListener("click", calibrate);
+    this.cameraRetryButton.addEventListener("click", retryCamera);
     this.redTeamButton.addEventListener("click", chooseRed);
     this.blueTeamButton.addEventListener("click", chooseBlue);
     this.joinButton.addEventListener("click", joinFlow);
@@ -880,6 +1016,9 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       this.calibrateButton.removeEventListener("click", calibrate),
+    );
+    this.cleanupCallbacks.push(() =>
+      this.cameraRetryButton.removeEventListener("click", retryCamera),
     );
     this.cleanupCallbacks.push(() =>
       this.redTeamButton.removeEventListener("click", chooseRed),
@@ -1402,6 +1541,8 @@ export class SpacedOutGame {
       return;
     }
 
+    // Ask for the camera now, so the prompt shows during the warp.
+    this.requestCamera();
     this.joinSequencePending = true;
     this.updateActionButtons();
 
@@ -1717,6 +1858,7 @@ export class SpacedOutGame {
     }
 
     this.updateCalibrationControls();
+    this.updateDetection();
 
     if (!this.lastFrameTime) {
       this.lastFrameTime = timestamp;
@@ -2291,8 +2433,7 @@ export class SpacedOutGame {
       visionReady: this.webcamRequired ? this.visionReady : true,
       visionFailed: this.isVisionFailureBlocking(),
       isCalibrated: this.isCalibrationSatisfied(),
-      canCalibrate: this.webcamRequired && this.canCalibrateVision(),
-      webcamRequired: this.webcamRequired,
+      cameraLoadingText: cameraLoadingText(this.cameraFlow),
     });
     this.syncMatchSettingsInputs();
     this.updateAimAssistControlsAccess();
@@ -2549,8 +2690,8 @@ export class SpacedOutGame {
 
   private updateCalibrationControls(): void {
     this.flowController.updateCalibrationControls({
-      visionReady: this.visionReady,
-      visionFailed: this.visionFailed,
+      flow: this.cameraFlow,
+      faceDetected: this.vision.faceDetected,
       isDead: this.isDead,
       isPaused: this.isPaused,
       isCalibrated: this.isCalibrationSatisfied(),
@@ -2597,6 +2738,7 @@ export class SpacedOutGame {
     const firstCalibration = !this.isCalibrated;
     this.audio.init();
     this.isCalibrated = true;
+    this.faceCalibrated = true;
     this.log(
       "success",
       firstCalibration

@@ -4,12 +4,22 @@ import type {
   TeamName,
 } from "./SpacedOutGameShared";
 import type { MatchSettings } from "./types";
+import {
+  calibrationView,
+  calibrationViewKey,
+  type CalibrationInput,
+} from "./calibrationView";
 
 interface FlowControllerOptions {
   loadingOverlay: HTMLElement;
   loadingText: HTMLElement;
   calibrationScreen: HTMLElement;
   calibrateButton: HTMLButtonElement;
+  cameraPreview: HTMLElement;
+  faceIndicator: HTMLElement;
+  cameraError: HTMLElement;
+  cameraErrorText: HTMLElement;
+  cameraRetryButton: HTMLButtonElement;
   teamScreen: HTMLElement;
   actionButtons: HTMLElement;
   joinButton: HTMLButtonElement;
@@ -27,16 +37,6 @@ interface FlowControllerOptions {
   matchSettingsMode: HTMLElement;
   gameModeSelect: HTMLSelectElement;
   botsEnabledInput: HTMLInputElement;
-}
-
-interface CalibrationControlsState {
-  webcamRequired: boolean;
-  visionReady: boolean;
-  visionFailed: boolean;
-  isDead: boolean;
-  isPaused: boolean;
-  isCalibrated: boolean;
-  canCalibrate: boolean;
 }
 
 interface ActionButtonsState {
@@ -59,7 +59,11 @@ interface ModeReadoutState {
   cameraMode: CameraMode;
 }
 
-interface FlowScreenState extends ActionButtonsState, CalibrationControlsState {
+interface FlowScreenState extends ActionButtonsState {
+  visionReady: boolean;
+  visionFailed: boolean;
+  isCalibrated: boolean;
+  cameraLoadingText: string;
   sessionAccepted: boolean;
   terrainStateKnown: boolean;
   isTerrainHost: boolean;
@@ -72,6 +76,12 @@ export class FlowController {
   private readonly loadingText: HTMLElement;
   private readonly calibrationScreen: HTMLElement;
   private readonly calibrateButton: HTMLButtonElement;
+  private readonly cameraPreview: HTMLElement;
+  private readonly faceIndicator: HTMLElement;
+  private readonly cameraError: HTMLElement;
+  private readonly cameraErrorText: HTMLElement;
+  private readonly cameraRetryButton: HTMLButtonElement;
+  private lastCalibrationViewKey: string | null = null;
   private readonly teamScreen: HTMLElement;
   private readonly actionButtons: HTMLElement;
   private readonly joinButton: HTMLButtonElement;
@@ -95,6 +105,11 @@ export class FlowController {
     this.loadingText = options.loadingText;
     this.calibrationScreen = options.calibrationScreen;
     this.calibrateButton = options.calibrateButton;
+    this.cameraPreview = options.cameraPreview;
+    this.faceIndicator = options.faceIndicator;
+    this.cameraError = options.cameraError;
+    this.cameraErrorText = options.cameraErrorText;
+    this.cameraRetryButton = options.cameraRetryButton;
     this.teamScreen = options.teamScreen;
     this.actionButtons = options.actionButtons;
     this.joinButton = options.joinButton;
@@ -114,43 +129,25 @@ export class FlowController {
     this.botsEnabledInput = options.botsEnabledInput;
   }
 
-  public updateCalibrationControls(state: CalibrationControlsState): void {
-    if (!state.webcamRequired) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Keyboard Mode";
+  // Called every frame; only writes to the DOM when the derived view changes.
+  public updateCalibrationControls(state: CalibrationInput): void {
+    const view = calibrationView(state);
+    const key = calibrationViewKey(view);
+    if (key === this.lastCalibrationViewKey) {
       return;
     }
+    this.lastCalibrationViewKey = key;
 
-    if (state.visionFailed) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Camera Unavailable";
-      return;
-    }
-
-    if (!state.visionReady) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Initializing...";
-      return;
-    }
-
-    if (state.isPaused) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Paused";
-      return;
-    }
-
-    if (state.isDead) {
-      this.calibrateButton.disabled = true;
-      this.calibrateButton.textContent = "Unavailable";
-      return;
-    }
-
-    this.calibrateButton.disabled = !state.canCalibrate;
-    this.calibrateButton.textContent = state.canCalibrate
-      ? state.isCalibrated
-        ? "Recalibrate"
-        : "Calibrate"
-      : "Center Face";
+    this.calibrateButton.disabled = view.buttonDisabled;
+    this.calibrateButton.textContent = view.buttonLabel;
+    this.cameraError.classList.toggle("hidden", view.errorMessage === null);
+    this.cameraErrorText.textContent = view.errorMessage ?? "";
+    this.cameraRetryButton.classList.toggle("hidden", !view.retryVisible);
+    this.cameraPreview.classList.toggle("hidden", !view.previewVisible);
+    this.faceIndicator.classList.toggle("is-detected", view.faceDetected);
+    this.faceIndicator.textContent = view.faceDetected
+      ? "Face detected"
+      : "No face";
   }
 
   public updateActionButtons(state: ActionButtonsState): void {
@@ -288,11 +285,10 @@ export class FlowController {
       return;
     }
 
-    if (state.visionFailed && state.localTeam !== "SPECTATOR") {
-      this.loadingText.textContent =
-        "WEBCAM ACCESS REQUIRED FOR FACE TRACKING.";
-      this.loadingOverlay.classList.remove("hidden");
-      this.calibrationScreen.classList.add("hidden");
+    if (state.visionFailed) {
+      // The calibration screen explains the failure and offers Retry.
+      this.loadingOverlay.classList.add("hidden");
+      this.calibrationScreen.classList.remove("hidden");
       this.teamScreen.classList.add("hidden");
       return;
     }
@@ -301,7 +297,7 @@ export class FlowController {
     if (!state.isCalibrated) {
       this.loadingText.textContent = state.visionReady
         ? "VISUAL LINK READY. CALIBRATE TO DEPLOY."
-        : "INITIALIZING FACE TRACKER...";
+        : state.cameraLoadingText;
       this.loadingOverlay.classList.toggle("hidden", state.visionReady);
       this.calibrationScreen.classList.toggle("hidden", !state.visionReady);
       this.teamScreen.classList.add("hidden");
