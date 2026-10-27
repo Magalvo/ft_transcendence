@@ -1,6 +1,6 @@
 # WS1 — Server telemetry validation
 
-**Status:** Not started
+**Status:** In progress (spacedout/ws1-server-telemetry-validation)
 **Wave:** 1. **Depends on:** nothing. **Audit item:** 6.
 
 ## Context
@@ -28,7 +28,7 @@ crashes use a purpose-named message instead of a dev command.
 - New `SpacedOut/backend/test/`.
 - `SpacedOut/backend/package.json`: the `test` script.
 - `.github/workflows/ci.yml`: a new job.
-- `frontend/src/games/spacedout/SpacedOutGame.ts` and `SpacedOutSocketClient.ts`: only the R5 message handler and the R6 crash message.
+- `frontend/src/games/spacedout/SpacedOutGame.ts` and `SpacedOutSocketClient.ts`: only the R5 message handler and the R7 crash message. (The spec said "R6"; R6 is the server-side baseline reset, the crash message is R7. `SpacedOutSocketClient.ts` needed no change: it already forwards every JSON message.)
 
 **Out of scope:** server-side flight simulation, anti-cheat for weapons, and control mode (WS5).
 
@@ -58,11 +58,14 @@ crashes use a purpose-named message instead of a dev command.
   - Accepted samples reset the counter.
   - The client applies a `positionCorrection` by setting its local position, forward vector and orientation to the received pose.
 - **WS1-R6:** Every place the server positions a player resets that player's baseline to the new pose and `nowMs`. That covers joining a team (spawn), respawning, and returning to the lobby.
+  - Returning to the lobby doesn't move the ship, so the baseline is reset at its current pose. The pilot is dead until the next `joinTeam`, which resets it again at the spawn.
 - **WS1-R7:** Replace the `suicide` message with `terrainCollision`.
   - It applies lethal damage only if the player is alive, and is ignored if the player died less than `RESPAWN_DELAY_MS` ago.
+  - A pure helper `shouldApplyTerrainCollision(player, nowMs, respawnDelayMs)` makes this decision. `destroyShip` records `player.lastDeathAt` for it, because `deadUntil` is reset to `0` on `joinTeam` and can't tell how long ago the ship died.
   - Remove the `suicide` handler.
   - The client sends `terrainCollision` instead of `suicide`.
-- **WS1-R8:** Add a `npm test` script (`node --test test/`) to `SpacedOut/backend/package.json`.
+- **WS1-R8:** Add a `npm test` script (`node --test "test/**/*.test.js"`) to `SpacedOut/backend/package.json`.
+  - The spec first said `node --test test/`. Since Node 21, `node --test` treats a directory argument as a file to run and fails with `Cannot find module …/test` (seen on Node 24), so the script passes a glob, which `node --test` expands itself.
   - Add a CI job "SpacedOut server" that runs it with Node 22, without `npm ci`, because the pure modules have no dependencies.
 
 ## Acceptance criteria
@@ -72,7 +75,7 @@ crashes use a purpose-named message instead of a dev command.
 - Given a gap of 10 s since the baseline, the allowed distance is no larger than the allowance for 2 s.
 - Given 3 rejected samples in a row, the client receives one `positionCorrection` and its ship snaps back.
 - After respawning, the first sample at the respawn position is accepted.
-- No `suicide` string remains in the frontend or the server.
+- No `suicide` string remains in `frontend/` or `SpacedOut/backend/`. The legacy stand-alone prototype in `SpacedOut/frontend/index.html` still sends it, but it isn't part of the ft_transcendence stack or of WS1's files.
 
 ## Test plan (write first)
 
@@ -85,6 +88,7 @@ File `SpacedOut/backend/test/telemetry-guard.test.js`:
 - rejects a teleport within one interval (`too-fast`)
 - clamps elapsed time: a 10 s gap allows no more than a 2 s gap
 - `shouldSendCorrection`: false below 3 rejects; true at 3; false again inside the cooldown; true after it
+- `shouldApplyTerrainCollision`: only for a live ship; ignored within `RESPAWN_DELAY_MS` of the last death
 
 Manual checks to add to MANUAL-TEST.md (WS1):
 - flying normally never triggers a correction, including at full throttle with server lag;

@@ -24,6 +24,23 @@ date and tester when it's checked.
 
 ## WS1
 
+Keep DevTools → Network → WS open on the SpacedOut socket, filtered on `positionCorrection`, for these checks.
+
+- [ ] **No false corrections.** Join a team and fly for a few minutes, mostly at full throttle (mouse wheel up), with sharp turns and dives. No `positionCorrection` frame arrives and the ship never jumps. Repeat with DevTools → Network throttling set to *Slow 4G*: still no correction.
+- [ ] **Snap back.** While flying, paste this in the console. It shifts the next 5 telemetry packets 5000+ units sideways:
+  ```js
+  let n = 0; const send = WebSocket.prototype.send;
+  WebSocket.prototype.send = function (d) {
+    if (d instanceof ArrayBuffer && d.byteLength === 24 && n < 5) {
+      const f = new Float32Array(d.slice(0)); f[0] += 5000 * ++n; return send.call(this, f.buffer);
+    }
+    return send.call(this, d);
+  };
+  ```
+  Exactly one `positionCorrection` arrives and the ship snaps back a short distance. A second client sees no teleport. Reload the page afterwards to remove the patch.
+- [ ] **Terrain crash.** Dive into a mountain. The ship explodes once, one `shipDestroyed` arrives, and the respawn countdown starts. No `suicide` message appears in the WS frames; the client sends `terrainCollision`.
+- [ ] **Respawn.** After the countdown, respawn. The ship appears at the spawn point and flies normally with no `positionCorrection`. Do the same after *Return to lobby* → pick a team again.
+
 ## WS2
 
 Checked with a stand-alone harness in Vite dev (2026-10-27, Claude): wasm and model came from `/mediapipe/`, there were no CSP violations under the production policy, WebGL disabled gave `delegate === "CPU"`, and a denied camera gave `permission-denied`. The checks below still need the full stack and a real webcam.
