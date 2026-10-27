@@ -22,6 +22,7 @@ interface HudRenderState {
   lockProgress: number;
   isBeingTracked: boolean;
   flareCooldown: number;
+  faceLost: boolean;
   targetScreenX: number;
   targetScreenY: number;
   localServerPosition: THREE.Vector3;
@@ -106,6 +107,21 @@ export class HudRenderer {
       context.fillStyle = "#ff0055";
       context.textAlign = "center";
       context.fillText("WARNING: MISSILE LOCK", centerX, centerY + 120);
+    }
+
+    if (state.faceLost) {
+      context.fillStyle = "#ffcc00";
+      context.shadowColor = "#ffcc00";
+      context.textAlign = "center";
+      context.font = 'bold 28px "Courier New"';
+      context.fillText("FACE SIGNAL LOST", centerX, centerY - 120);
+      context.font = 'bold 16px "Courier New"';
+      context.fillText(
+        "RE-CENTER IN THE CAMERA OR PRESS M FOR KEYBOARD",
+        centerX,
+        centerY - 90,
+      );
+      context.shadowColor = "#00ffcc";
     }
 
     context.font = 'bold 16px "Courier New"';
