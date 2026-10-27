@@ -1260,6 +1260,12 @@ export class SpacedOutGame {
         }
         break;
       }
+      case "positionCorrection":
+        // The server rejected our recent telemetry: snap back to its last accepted pose.
+        if (!this.isDead && this.localTeam !== "SPECTATOR") {
+          this.applyLocalServerPose(payload);
+        }
+        break;
       case "hpUpdate": {
         const pilot = this.remotePilots.get(String(payload.id ?? ""));
         if (pilot && Number.isFinite(Number(payload.hp))) {
@@ -2072,7 +2078,7 @@ export class SpacedOutGame {
 
         // Boom.
         if (altitude < actualSurfaceHeight) {
-          this.socketClient.sendJson({ type: "suicide" });
+          this.socketClient.sendJson({ type: "terrainCollision" });
           this.isDead = true;
         }
       }

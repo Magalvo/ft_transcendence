@@ -69,3 +69,19 @@ jobs:
         run: npm test
       - name: Typecheck and build
         run: npm run build
+
+  spacedout-server:
+    name: SpacedOut server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SpacedOut/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No npm ci: the tested modules are pure and have no dependencies.
+      # Installing would build uWebSockets.js and the native combat addon.
+      - name: Test
+        run: npm test

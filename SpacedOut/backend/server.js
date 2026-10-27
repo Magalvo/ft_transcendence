@@ -2,6 +2,11 @@ const uWS = require("uWebSockets.js");
 const combatEngine = require("bindings")("combat");
 const crypto = require("crypto");
 const fs = require("fs");
+const {
+  validateTelemetry,
+  shouldSendCorrection,
+  shouldApplyTerrainCollision,
+} = require("./telemetryGuard");
 
 const port = Number(process.env.PORT) || 3030;
 let nextPilotId = 1;
@@ -146,6 +151,10 @@ function createPlayerState() {
     deadUntil: 0,
     awaitingRespawn: false,
     respawnTimer: null,
+    lastDeathAt: 0,
+    telemetryBaseline: null,
+    telemetryRejects: 0,
+    lastCorrectionAt: null,
     appUserId: null,
     username: null,
     email: null,
@@ -468,6 +477,14 @@ function clearRespawnTimer(player) {
   }
 }
 
+// Call wherever the server places a human, so the next telemetry sample is
+// measured from the new pose instead of the old one.
+function resetTelemetryBaseline(player, now) {
+  player.telemetryBaseline = { x: player.x, y: player.y, z: player.z, timeMs: now };
+  player.telemetryRejects = 0;
+  player.lastCorrectionAt = null;
+}
+
 function areTeammates(a, b) {
   if (!a || !b) return false;
   if (a.team === "SPECTATOR" || b.team === "SPECTATOR") return false;
@@ -535,6 +552,7 @@ function destroyShip(id, now = Date.now()) {
   if (!target || !isAlive(target, now)) return false;
 
   target.hp = 0;
+  target.lastDeathAt = now;
   app.publish("radar", JSON.stringify({ type: "shipDestroyed", id }));
   scheduleRespawn(id, RESPAWN_DELAY_MS);
   return true;
@@ -624,18 +642,46 @@ function handleBinaryMessage(ws, message) {
     const player = players[ws.numericId];
     if (!player || !isAlive(player)) return;
 
-    for (let i = 0; i < TELEMETRY_FLOATS; i++) {
-      if (!Number.isFinite(inFloats[i])) return;
+    const now = Date.now();
+    const sample = {
+      x: inFloats[0],
+      y: inFloats[1],
+      z: inFloats[2],
+      dx: inFloats[3],
+      dy: inFloats[4],
+      dz: inFloats[5],
+    };
+    const verdict = validateTelemetry(player.telemetryBaseline, sample, now);
+    if (!verdict.ok) {
+      player.telemetryRejects++;
+      if (shouldSendCorrection(player, now)) {
+        player.lastCorrectionAt = now;
+        // player.x..dz still hold the last accepted pose.
+        ws.send(
+          JSON.stringify({
+            type: "positionCorrection",
+            x: player.x,
+            y: player.y,
+            z: player.z,
+            dx: player.dx,
+            dy: player.dy,
+            dz: player.dz,
+          }),
+        );
+      }
+      return;
     }
 
-    player.x = inFloats[0];
-    player.y = inFloats[1];
-    player.z = inFloats[2];
-    player.dx = inFloats[3];
-    player.dy = inFloats[4];
-    player.dz = inFloats[5];
+    player.telemetryRejects = 0;
+    player.telemetryBaseline = { x: sample.x, y: sample.y, z: sample.z, timeMs: now };
+    player.x = sample.x;
+    player.y = sample.y;
+    player.z = sample.z;
+    player.dx = sample.dx;
+    player.dy = sample.dy;
+    player.dz = sample.dz;
 
-    pushHistorySample(player, Date.now());
+    pushHistorySample(player, now);
 
     player.telemetryOutView.setUint32(0, ws.numericId, true);
     player.telemetryOutFloats.set(inFloats);
@@ -980,6 +1026,7 @@ const app = uWS
           player.historyHead = 0;
           player.historyCount = 0;
           pushHistorySample(player, now);
+          resetTelemetryBaseline(player, now);
 
           app.publish(
             "radar",
@@ -1013,6 +1060,7 @@ const app = uWS
           player.flareActiveUntil = 0;
           player.deadUntil = Number.POSITIVE_INFINITY;
           player.awaitingRespawn = true;
+          resetTelemetryBaseline(player, Date.now());
 
           app.publish(
             "radar",
@@ -1074,9 +1122,11 @@ const app = uWS
           player.dy = spawnData.dir.dy;
           player.dz = spawnData.dir.dz;
 
+          const now = Date.now();
           player.historyHead = 0;
           player.historyCount = 0;
-          pushHistorySample(player, Date.now());
+          pushHistorySample(player, now);
+          resetTelemetryBaseline(player, now);
 
           // Tell everyone the player spawned in as their chosen team
           app.publish(
@@ -1099,9 +1149,12 @@ const app = uWS
             }),
           );
         }
-        // --- DEV MODE SUICIDE ---
-        if (payload.type === "suicide") {
-          applyDamage(ws.numericId, 9999);
+        // --- TERRAIN CRASH (client-detected) ---
+        if (payload.type === "terrainCollision") {
+          const player = players[ws.numericId];
+          const now = Date.now();
+          if (!shouldApplyTerrainCollision(player, now, RESPAWN_DELAY_MS)) return;
+          destroyShip(ws.numericId, now);
         }
       }
     },
