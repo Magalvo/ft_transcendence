@@ -88,4 +88,17 @@ Wait a second for the next telemetry or ping frame so `so` is set. Checked with 
 
 ## WS6
 
+Open SpacedOut in two browsers: A is the match host (the first to connect), B is a guest. Log in on both. The webcam radio is gone: the WS4 check *Optional → Required* now means switching the **Control Rule** from *Any* to *Face required*, and the WS5 checks can use the select instead of the console.
+
+- [ ] **Rule select is host-only.** Before the terrain is locked, A can change **Control Rule** in Match Rules. On B the panel stays locked and the **Control Rule** bar above the viewport shows A's choice within a second. After A locks the terrain, the select is disabled on A too.
+- [ ] **M under Face required.** With the rule *Face required*, both pilots join and calibrate. In flight, B presses M: the mode stays `FACE`, the event log shows "Keyboard mode is off: …", and no `controlMode` frame is sent (DevTools → Network → WS).
+- [ ] **M under Any.** Return to the lobby until the terrain unlocks. A sets *Any* and locks again. In flight, B presses M: the HUD shows `MODE: KEYBOARD`, the roster badge for B turns to *Keyboard* on both A and B, and pressing M again turns it back to *Face* on both.
+- [ ] **Rule change resets keyboard pilots.** With B in keyboard mode under *Any*, everyone returns to the lobby. A sets *Face required*: B's badge returns to *Face* on both clients, and after Join B flies with face tracking (or sees the calibration screen if B never calibrated).
+- [ ] **Fly with keyboard (no camera).** With the rule *Any*, block the camera on B and click **Join**. The calibration screen shows the camera error, **Retry** and **Fly with keyboard**. Click **Fly with keyboard**: the faction screen appears, B flies with WASD, and the roster shows B as *Keyboard*. With *Face required*, the button isn't there.
+- [ ] **Sensitivity.** In **Face Controls**, set Sensitivity to 2.00x while flying in face mode: a clearly smaller head turn gives full yaw than at 1.00x. Reload the page: the slider still reads 2.00x and the steering still feels the same.
+- [ ] **Deadzone.** Set Deadzone to its maximum (11.5°): small head turns no longer steer. Set it to its minimum (1.1°): the ship reacts to tiny movements.
+- [ ] **Invert.** Tick *Invert yaw*: turning your head right steers left. Tick *Invert pitch*: looking up pitches down. Changes apply without recalibrating.
+- [ ] **Reset.** Click **Reset to defaults**: 1.00x, 4.6°, both inverts off, and the steering feels like before. Reload: the defaults stay.
+- [ ] **Blocked storage.** Block site data for the page (Chrome: site settings → Cookies and site data → block) and reload. The page loads, the panel shows the defaults and changes still apply for the session.
+
 ## WS7

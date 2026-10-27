@@ -1,6 +1,7 @@
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { createWithDelegateFallback, type Delegate } from "./delegateFallback";
 import { pickFrameScheduler, type FrameScheduler } from "./frameScheduler";
+import type { ControlSettings } from "./controlSettings";
 import { HeadPoseTracker } from "./headPose";
 import { mediapipeAssetUrls } from "./visionAssets";
 import { VisionError, classifyCameraError, type VisionErrorKind } from "./visionErrors";
@@ -103,6 +104,10 @@ export class VisionController {
   // Returns false when there is no face or too few frames yet to average.
   public calibrate(): boolean {
     return this.tracker.calibrate();
+  }
+
+  public setControlSettings(settings: ControlSettings): void {
+    this.tracker.setSettings(settings);
   }
 
   public faceLostForMs(nowMs: number): number {
