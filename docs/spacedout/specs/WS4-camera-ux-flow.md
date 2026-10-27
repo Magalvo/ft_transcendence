@@ -1,6 +1,6 @@
 # WS4 — Camera UX and flow
 
-**Status:** In progress (spacedout/ws4-camera-ux-flow)
+**Status:** Done (#15)
 **Wave:** 2. **Depends on:** WS2 (frozen `VisionController` / `VisionError` API). **Audit items:** 7, 8 (UX), 10, 12 (DOM writes), 15.
 
 ## Context
