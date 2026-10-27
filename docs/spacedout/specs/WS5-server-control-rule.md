@@ -1,6 +1,6 @@
 # WS5 — Server control rule
 
-**Status:** In progress (spacedout/ws5-server-control-rule)
+**Status:** Done (#20)
 **Wave:** 2. **Depends on:** WS1 (`server.js` test scaffolding and ownership). **Audit item:** 3 (server side).
 
 ## Context
