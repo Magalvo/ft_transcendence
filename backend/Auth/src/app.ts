@@ -7,6 +7,8 @@ import "reflect-metadata";
 
 import healthRoutes from "./routes/health.js";
 import authRoutes from "./routes/auth.js";
+import userRoutes from "./routes/users.js";
+import friendRoutes from "./routes/friends.js";
 import gameRoutes from "./routes/games.js";
 import chatRoutes from "./routes/chat.js";
 import tournamentRoutes from "./routes/tournament.js";
@@ -85,6 +87,8 @@ export function buildApp(options: { logger?: boolean } = {}) {
     }
 
     authScope.register(authRoutes, { prefix: "/api" });
+    authScope.register(userRoutes, { prefix: "/api" });
+    authScope.register(friendRoutes, { prefix: "/api" });
   });
 
   return app;
