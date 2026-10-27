@@ -34,10 +34,10 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    # External hosts: Babylon default environment and sample textures,
-    # MediaPipe (wasm + model) for the SpacedOut vision controls, and
-    # generated/Google avatars.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ui-avatars.com https://*.googleusercontent.com https://assets.babylonjs.com https://playground.babylonjs.com https://www.babylonjs-playground.com; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com https://assets.babylonjs.com https://playground.babylonjs.com https://www.babylonjs-playground.com; media-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    # External hosts: Babylon default environment and sample textures, and
+    # generated/Google avatars. MediaPipe (wasm + model) is served from
+    # /mediapipe/ on this origin; its wasm needs 'wasm-unsafe-eval'.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ui-avatars.com https://*.googleusercontent.com https://assets.babylonjs.com https://playground.babylonjs.com https://www.babylonjs-playground.com; connect-src 'self' https://assets.babylonjs.com https://playground.babylonjs.com https://www.babylonjs-playground.com; media-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
 
     location /api/ {
         proxy_pass http://gateway:3333;

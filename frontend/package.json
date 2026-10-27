@@ -4,8 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "npm run copy-wasm && node scripts/fetch-face-model.mjs --optional",
     "dev": "vite",
+    "prebuild": "npm run copy-wasm",
     "build": "tsc && vite build",
+    "copy-wasm": "node scripts/copy-mediapipe-wasm.mjs",
+    "fetch-model": "node scripts/fetch-face-model.mjs",
     "test": "node --test --experimental-strip-types --experimental-test-isolation=none test/**/*.test.ts",
     "preview": "vite preview"
   },
