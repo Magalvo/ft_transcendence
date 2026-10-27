@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { after, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { io as connect, type Socket as ClientSocket } from "socket.io-client";
@@ -14,11 +14,6 @@ app.io = io;
 const url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
 
 const clients: ClientSocket[] = [];
-test.after(async () => {
-  for (const client of clients) client.disconnect();
-  await new Promise<void>((resolve) => io.close(() => resolve()));
-  await app.close();
-});
 
 function client(token?: string): ClientSocket {
   const socket = connect(url, {
@@ -47,93 +42,130 @@ async function connected(token: string): Promise<ClientSocket> {
   return socket;
 }
 
-async function lobbyList(socket: ClientSocket): Promise<any[]> {
-  const list = next<any[]>(socket, "availableLobbies");
-  socket.emit("requestAvailableLobbies");
-  return list;
+// The server also broadcasts "availableLobbies" to every socket whenever any
+// lobby changes, so a single event may be a stale snapshot from earlier
+// activity. Keep asking until the list satisfies the expectation.
+function lobbyListWhere(
+  socket: ClientSocket,
+  predicate: (lobbies: any[]) => boolean,
+  timeoutMs = 3000,
+): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const onList = (lobbies: any[]) => {
+      if (!predicate(lobbies)) return;
+      cleanup();
+      resolve(lobbies);
+    };
+    const poll = setInterval(() => socket.emit("requestAvailableLobbies"), 100);
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("timed out waiting for the expected lobby list"));
+    }, timeoutMs);
+    const cleanup = () => {
+      clearInterval(poll);
+      clearTimeout(timer);
+      socket.off("availableLobbies", onList);
+    };
+    socket.on("availableLobbies", onList);
+    socket.emit("requestAvailableLobbies");
+  });
 }
 
-test("sockets without a valid token are rejected", async () => {
-  const anonymous = client();
-  const rejected = await next(anonymous, "authRejected");
-  assert.equal(rejected.reason, "missing_or_invalid_token");
+const hasLobby = (lobbyId: string) => (lobbies: any[]) => lobbies.some((l) => l.id === lobbyId);
 
-  const forged = client("not-a-jwt");
-  assert.equal((await next(forged, "authRejected")).reason, "missing_or_invalid_token");
-});
+// A suite (not file-level hooks) so the teardown runs as soon as these tests
+// finish, before test/setup.ts closes the shared database pool.
+describe("socket handlers", () => {
+  after(async () => {
+    for (const client of clients) client.disconnect();
+    // Let the server's disconnect handlers finish their DB writes before the
+    // shared pool is closed by test/setup.ts.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise<void>((resolve) => io.close(() => resolve()));
+    await app.close();
+  });
 
-test("an authenticated socket cannot switch identity", async () => {
-  const user = await registerUser(app, "sockid");
-  const socket = await connected(user.token);
-  const rejected = next(socket, "authRejected");
-  socket.emit("userAuth", { userId: "someone-else" });
-  assert.equal((await rejected).reason, "identity_mismatch");
-});
+  test("sockets without a valid token are rejected", async () => {
+    const anonymous = client();
+    const rejected = await next(anonymous, "authRejected");
+    assert.equal(rejected.reason, "missing_or_invalid_token");
 
-test("lobbies can be created, listed and joined", async () => {
-  const owner = await registerUser(app, "lobbyown");
-  const guest = await registerUser(app, "lobbyguest");
-  const ownerSocket = await connected(owner.token);
-  const guestSocket = await connected(guest.token);
+    const forged = client("not-a-jwt");
+    assert.equal((await next(forged, "authRejected")).reason, "missing_or_invalid_token");
+  });
 
-  const created = next(ownerSocket, "lobbyCreated");
-  const joinedOwn = next(ownerSocket, "joinLobbySuccess");
-  ownerSocket.emit("createLobby", { mode: "1v1", isPrivate: false });
-  const { lobbyId } = await created;
-  assert.match(lobbyId, /^[A-Za-z0-9_-]{12}$/, "random base64url lobby id");
-  assert.equal((await joinedOwn).lobbyId, lobbyId);
+  test("an authenticated socket cannot switch identity", async () => {
+    const user = await registerUser(app, "sockid");
+    const socket = await connected(user.token);
+    const rejected = next(socket, "authRejected");
+    socket.emit("userAuth", { userId: "someone-else" });
+    assert.equal((await rejected).reason, "identity_mismatch");
+  });
 
-  const listed = (await lobbyList(guestSocket)).find((l) => l.id === lobbyId);
-  assert.ok(listed, "guest sees the new lobby");
-  assert.equal(listed.mode, "1v1");
-  assert.equal(listed.leader.id, owner.id);
+  test("lobbies can be created, listed and joined", async () => {
+    const owner = await registerUser(app, "lobbyown");
+    const guest = await registerUser(app, "lobbyguest");
+    const ownerSocket = await connected(owner.token);
+    const guestSocket = await connected(guest.token);
 
-  const joined = next(guestSocket, "joinLobbySuccess");
-  guestSocket.emit("joinLobbyById", { lobbyId });
-  assert.equal((await joined).lobbyId, lobbyId);
-});
+    const created = next(ownerSocket, "lobbyCreated");
+    const joinedOwn = next(ownerSocket, "joinLobbySuccess");
+    ownerSocket.emit("createLobby", { mode: "1v1", isPrivate: false });
+    const { lobbyId } = await created;
+    assert.match(lobbyId, /^[A-Za-z0-9_-]{12}$/, "random base64url lobby id");
+    assert.equal((await joinedOwn).lobbyId, lobbyId);
 
-test("private lobbies need a code and unknown lobbies cannot be joined", async () => {
-  const user = await registerUser(app, "lobbypriv");
-  const socket = await connected(user.token);
+    const lobbies = await lobbyListWhere(guestSocket, hasLobby(lobbyId));
+    const listed = lobbies.find((l) => l.id === lobbyId);
+    assert.equal(listed.mode, "1v1");
+    assert.equal(listed.leader.id, owner.id);
 
-  const noCode = next(socket, "joinLobbyError");
-  socket.emit("createLobby", { mode: "1v1", isPrivate: true });
-  assert.match((await noCode).message, /requires a valid code/);
+    const joined = next(guestSocket, "joinLobbySuccess");
+    guestSocket.emit("joinLobbyById", { lobbyId });
+    assert.equal((await joined).lobbyId, lobbyId);
+  });
 
-  const unknown = next(socket, "joinLobbyError");
-  socket.emit("joinLobbyById", { lobbyId: "does-not-exist" });
-  assert.equal((await unknown).message, "Lobby not found");
-});
+  test("private lobbies need a code and unknown lobbies cannot be joined", async () => {
+    const user = await registerUser(app, "lobbypriv");
+    const socket = await connected(user.token);
 
-test("a lobby disappears from the list when its only member disconnects", async () => {
-  const owner = await registerUser(app, "lobbygone");
-  const watcher = await registerUser(app, "lobbywatch");
-  const ownerSocket = await connected(owner.token);
-  const watcherSocket = await connected(watcher.token);
+    const noCode = next(socket, "joinLobbyError");
+    socket.emit("createLobby", { mode: "1v1", isPrivate: true });
+    assert.match((await noCode).message, /requires a valid code/);
 
-  const created = next(ownerSocket, "lobbyCreated");
-  ownerSocket.emit("createLobby", { mode: "2v2", isPrivate: false });
-  const { lobbyId } = await created;
-  assert.ok((await lobbyList(watcherSocket)).some((l) => l.id === lobbyId));
+    const unknown = next(socket, "joinLobbyError");
+    socket.emit("joinLobbyById", { lobbyId: "does-not-exist" });
+    assert.equal((await unknown).message, "Lobby not found");
+  });
 
-  const changed = next(watcherSocket, "lobbyListChanged");
-  ownerSocket.disconnect();
-  await changed;
-  assert.ok(!(await lobbyList(watcherSocket)).some((l) => l.id === lobbyId));
-});
+  test("a lobby disappears from the list when its only member disconnects", async () => {
+    const owner = await registerUser(app, "lobbygone");
+    const watcher = await registerUser(app, "lobbywatch");
+    const ownerSocket = await connected(owner.token);
+    const watcherSocket = await connected(watcher.token);
 
-test("tournament events answer with client-safe errors", async () => {
-  const user = await registerUser(app, "sockcup");
-  const socket = await connected(user.token);
+    const created = next(ownerSocket, "lobbyCreated");
+    ownerSocket.emit("createLobby", { mode: "2v2", isPrivate: false });
+    const { lobbyId } = await created;
+    await lobbyListWhere(watcherSocket, hasLobby(lobbyId));
 
-  const missing = next(socket, "error");
-  socket.emit("requestTournamentMatch", {});
-  assert.equal((await missing).message, "Missing tournament match context");
+    ownerSocket.disconnect();
+    const after = await lobbyListWhere(watcherSocket, (lobbies) => !hasLobby(lobbyId)(lobbies));
+    assert.ok(!hasLobby(lobbyId)(after));
+  });
 
-  // Expected failures from the invite service reach the client verbatim
-  // (participation is checked first, so unknown tournaments reveal nothing).
-  const outsider = next(socket, "error");
-  socket.emit("requestTournamentMatch", { tournamentId: "nope", matchId: "nope" });
-  assert.equal((await outsider).message, "Only tournament participants can send invites");
+  test("tournament events answer with client-safe errors", async () => {
+    const user = await registerUser(app, "sockcup");
+    const socket = await connected(user.token);
+
+    const missing = next(socket, "error");
+    socket.emit("requestTournamentMatch", {});
+    assert.equal((await missing).message, "Missing tournament match context");
+
+    // Expected failures from the invite service reach the client verbatim
+    // (participation is checked first, so unknown tournaments reveal nothing).
+    const outsider = next(socket, "error");
+    socket.emit("requestTournamentMatch", { tournamentId: "nope", matchId: "nope" });
+    assert.equal((await outsider).message, "Only tournament participants can send invites");
+  });
 });
