@@ -63,6 +63,12 @@ async function assertNotMuted(groupId: number, userId: string): Promise<void> {
   await db("chat_group_mutes").where({ id_group: groupId, user_id: userId }).del();
 }
 
+// Moderation actions never apply to the channel owner, whoever performs them.
+async function assertNotOwner(groupId: number, targetId: string, action: string): Promise<void> {
+  const group = await getGroup(groupId);
+  if (group?.owner_id === targetId) throw new HttpError(`Cannot ${action} channel owner`);
+}
+
 export async function isBlocked(viewerId: string, senderId: string): Promise<boolean> {
   const row = await db("blocked_users").where({ blocker_id: viewerId, blocked_id: senderId }).first();
   return !!row;
@@ -308,6 +314,7 @@ export async function banMember(groupId: number, actorId: string, targetId: stri
   const role = await ensureGroupRole(groupId, actorId);
   if (role === "member") throw new HttpError("Only owner/admin can ban");
   if (actorId === targetId) throw new HttpError("Cannot ban yourself");
+  await assertNotOwner(groupId, targetId, "ban");
 
   await db("chat_group_bans")
     .insert({ id_group: groupId, user_id: targetId, banned_by: actorId, created_at: Date.now() })
@@ -329,8 +336,7 @@ export async function kickMember(groupId: number, actorId: string, targetId: str
   if (role === "member") throw new HttpError("Only owner/admin can kick");
   if (actorId === targetId) throw new HttpError("Cannot kick yourself");
 
-  const group = await getGroup(groupId);
-  if (group?.owner_id === targetId) throw new HttpError("Cannot kick channel owner");
+  await assertNotOwner(groupId, targetId, "kick");
   await db("chat_group_members").where({ id_group: groupId, user_id: targetId }).del();
   await db("chat_group_admins").where({ id_group: groupId, user_id: targetId }).del();
 }
@@ -339,6 +345,7 @@ export async function muteMember(groupId: number, actorId: string, targetId: str
   const role = await ensureGroupRole(groupId, actorId);
   if (role === "member") throw new HttpError("Only owner/admin can mute");
   if (seconds <= 0) throw new HttpError("Mute duration must be positive");
+  await assertNotOwner(groupId, targetId, "mute");
   if (!(await isGroupMember(groupId, targetId))) throw new HttpError("Target user is not in channel");
 
   const now = Date.now();
