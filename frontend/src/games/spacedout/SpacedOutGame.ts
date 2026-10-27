@@ -43,6 +43,8 @@ const THROTTLE_WHEEL_STEP = Math.round(
   (THROTTLE_ACCELERATION + AIRBRAKE_DECELERATION) / 12,
 );
 const LASER_REPEAT_INTERVAL_MS = 250;
+// Short tracking dropouts are normal; only warn once the face stays lost.
+const FACE_LOST_WARNING_MS = 300;
 const MISSILE_FIRE_KEY = "q";
 const GAMEPLAY_KEYS = new Set([
   " ",
@@ -2096,6 +2098,7 @@ export class SpacedOutGame {
       lockProgress: this.combatState.lockProgress,
       isBeingTracked: this.combatState.isBeingTracked,
       flareCooldown: this.combatState.flareCooldown,
+      faceLost: this.isFaceSignalLost(),
       targetScreenX: this.combatState.targetScreenX,
       targetScreenY: this.combatState.targetScreenY,
       localServerPosition: this.localServerPosition,
@@ -2586,9 +2589,13 @@ export class SpacedOutGame {
       return;
     }
 
+    if (!this.vision.calibrate()) {
+      this.log("warning", "Hold still for a moment, then calibrate again.");
+      return;
+    }
+
     const firstCalibration = !this.isCalibrated;
     this.audio.init();
-    this.vision.calibrate();
     this.isCalibrated = true;
     this.log(
       "success",
@@ -2598,6 +2605,16 @@ export class SpacedOutGame {
     );
     this.updateCalibrationControls();
     this.syncFlowScreens();
+  }
+
+  private isFaceSignalLost(): boolean {
+    return (
+      this.controlMode === "FACE" &&
+      this.webcamRequired &&
+      this.visionReady &&
+      !this.visionFailed &&
+      this.vision.faceLostForMs(performance.now()) > FACE_LOST_WARNING_MS
+    );
   }
 
   private isCalibrationSatisfied(): boolean {

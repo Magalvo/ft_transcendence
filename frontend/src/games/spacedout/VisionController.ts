@@ -86,8 +86,13 @@ export class VisionController {
     }
   }
 
-  public calibrate(): void {
-    this.tracker.calibrate();
+  // Returns false when there is no face or too few frames yet to average.
+  public calibrate(): boolean {
+    return this.tracker.calibrate();
+  }
+
+  public faceLostForMs(nowMs: number): number {
+    return this.tracker.faceLostForMs(nowMs);
   }
 
   public stop(): void {
@@ -110,8 +115,9 @@ export class VisionController {
 
     if (this.videoElement.currentTime !== this.lastVideoTime && this.faceLandmarker) {
       this.lastVideoTime = this.videoElement.currentTime;
-      const results = this.faceLandmarker.detectForVideo(this.videoElement, performance.now());
-      this.tracker.update(results.faceLandmarks?.[0]);
+      const now = performance.now();
+      const results = this.faceLandmarker.detectForVideo(this.videoElement, now);
+      this.tracker.update(results.faceLandmarks?.[0], now);
     }
 
     this.requestAnimationFrameId = requestAnimationFrame(this.predictWebcam);
