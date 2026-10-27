@@ -16,6 +16,7 @@ import {
   type Landmark,
   type RawHeadPose,
 } from '../src/games/spacedout/headPose.ts';
+import { DEFAULT_CONTROL_SETTINGS } from '../src/games/spacedout/controlSettings.ts';
 
 const FRAME_MS = 1000 / 30;
 
@@ -345,4 +346,140 @@ test('HeadPoseTracker reports how long the face has been lost', () => {
 
   camera.frame(makeFace());
   assert.equal(camera.tracker.faceLostForMs(camera.timeMs + 1000), 0, 'face back');
+});
+
+// --- WS3: control settings ---
+
+const NEUTRAL: RawHeadPose = { noseX: 0.5, noseY: 0.5, yaw: 0, pitch: 0 };
+
+// The steering math as it was before settings existed, with the constants
+// spelled out, so the default settings can be proven to change nothing.
+function originalFlightInputs(pose: RawHeadPose, calibration: RawHeadPose) {
+  const curve = (angle: number, fullAngle: number): number => {
+    const magnitude = Math.abs(angle);
+    if (magnitude <= 0.08) {
+      return 0;
+    }
+    const progress = Math.min(1, (magnitude - 0.08) / (fullAngle - 0.08));
+    return Math.sign(angle) * progress * progress;
+  };
+  const adjustedYaw = pose.yaw - calibration.yaw;
+  const adjustedPitch = pose.pitch - calibration.pitch;
+  return {
+    yawInput: -curve(adjustedYaw, 0.34),
+    pitchInput: curve(adjustedPitch, adjustedPitch < 0 ? 0.27 : 0.34),
+    camPosX: -(pose.noseX - calibration.noseX) * 16,
+    camPosY: (pose.noseY - calibration.noseY) * 16,
+  };
+}
+
+test('computeFlightInputs with default settings matches the original tuning exactly', () => {
+  const calibration: RawHeadPose = { noseX: 0.47, noseY: 0.53, yaw: 0.05, pitch: -0.03 };
+  for (let yaw = -0.6; yaw <= 0.6; yaw += 0.01) {
+    for (let pitch = -0.6; pitch <= 0.6; pitch += 0.03) {
+      const pose: RawHeadPose = { noseX: 0.5 + yaw / 10, noseY: 0.5 - pitch / 10, yaw, pitch };
+      const expected = originalFlightInputs(pose, calibration);
+      assert.deepEqual(computeFlightInputs(pose, calibration), expected, `yaw ${yaw}, pitch ${pitch}`);
+      assert.deepEqual(
+        computeFlightInputs(pose, calibration, DEFAULT_CONTROL_SETTINGS),
+        expected,
+        `explicit defaults, yaw ${yaw}, pitch ${pitch}`,
+      );
+    }
+  }
+});
+
+test('sensitivity 2 reaches full deflection with half the turn past the deadzone', () => {
+  const settings = { ...DEFAULT_CONTROL_SETTINGS, sensitivity: 2 };
+  const deadzone = DEFAULT_CONTROL_SETTINGS.deadzone;
+  const yawHalf = deadzone + (STEERING_FULL_ANGLE - deadzone) / 2;
+  const downHalf = deadzone + (PITCH_DOWN_FULL_ANGLE - deadzone) / 2;
+
+  assertClose(computeFlightInputs({ ...NEUTRAL, yaw: yawHalf }, NEUTRAL, settings).yawInput, -1, 'yaw');
+  assertClose(computeFlightInputs({ ...NEUTRAL, pitch: yawHalf }, NEUTRAL, settings).pitchInput, 1, 'pitch up');
+  assertClose(computeFlightInputs({ ...NEUTRAL, pitch: -downHalf }, NEUTRAL, settings).pitchInput, -1, 'pitch down');
+  assert.ok(
+    computeFlightInputs({ ...NEUTRAL, yaw: yawHalf }, NEUTRAL).yawInput > -1,
+    'sensitivity 1 is not saturated at that angle',
+  );
+
+  // Halfway through the shortened range gives the same quarter input.
+  const quarter = deadzone + (STEERING_FULL_ANGLE - deadzone) / 4;
+  assertClose(computeFlightInputs({ ...NEUTRAL, yaw: quarter }, NEUTRAL, settings).yawInput, -0.25, 'curve shape');
+});
+
+test('sensitivity 0.5 needs twice the turn past the deadzone', () => {
+  const settings = { ...DEFAULT_CONTROL_SETTINGS, sensitivity: 0.5 };
+  const deadzone = DEFAULT_CONTROL_SETTINGS.deadzone;
+  const yawDouble = deadzone + (STEERING_FULL_ANGLE - deadzone) * 2;
+  assertClose(computeFlightInputs({ ...NEUTRAL, yaw: STEERING_FULL_ANGLE }, NEUTRAL, settings).yawInput, -0.25, 'yaw');
+  assertClose(computeFlightInputs({ ...NEUTRAL, yaw: yawDouble }, NEUTRAL, settings).yawInput, -1, 'yaw at 2×');
+});
+
+test('a deadzone of 0.15 ignores a 0.12 rad turn and keeps the range past it', () => {
+  const settings = { ...DEFAULT_CONTROL_SETTINGS, deadzone: 0.15 };
+  const turned = computeFlightInputs({ ...NEUTRAL, yaw: 0.12, pitch: -0.12 }, NEUTRAL, settings);
+  assertClose(turned.yawInput, 0, 'yaw');
+  assertClose(turned.pitchInput, 0, 'pitch');
+  assert.notEqual(computeFlightInputs({ ...NEUTRAL, yaw: 0.12 }, NEUTRAL).yawInput, 0, 'default deadzone steers');
+
+  const full = 0.15 + (STEERING_FULL_ANGLE - STEERING_DEADZONE);
+  assertClose(computeFlightInputs({ ...NEUTRAL, yaw: full }, NEUTRAL, settings).yawInput, -1, 'full yaw');
+});
+
+test('invertYaw and invertPitch flip the steering signs but not parallax', () => {
+  const pose: RawHeadPose = { noseX: 0.6, noseY: 0.4, yaw: 0.2, pitch: 0.2 };
+  const normal = computeFlightInputs(pose, NEUTRAL);
+  const invertedYaw = computeFlightInputs(pose, NEUTRAL, { ...DEFAULT_CONTROL_SETTINGS, invertYaw: true });
+  const invertedPitch = computeFlightInputs(pose, NEUTRAL, { ...DEFAULT_CONTROL_SETTINGS, invertPitch: true });
+
+  assert.ok(normal.yawInput < 0 && normal.pitchInput > 0);
+  assert.equal(invertedYaw.yawInput, -normal.yawInput);
+  assert.equal(invertedYaw.pitchInput, normal.pitchInput);
+  assert.equal(invertedPitch.pitchInput, -normal.pitchInput, 'looking up gives a negative pitch input');
+  assert.equal(invertedPitch.yawInput, normal.yawInput);
+  for (const inputs of [invertedYaw, invertedPitch]) {
+    assert.equal(inputs.camPosX, normal.camPosX);
+    assert.equal(inputs.camPosY, normal.camPosY);
+  }
+});
+
+test('invertPitch keeps the faster saturation looking down', () => {
+  const settings = { ...DEFAULT_CONTROL_SETTINGS, invertPitch: true };
+  const down = computeFlightInputs({ ...NEUTRAL, pitch: -PITCH_DOWN_FULL_ANGLE }, NEUTRAL, settings);
+  assertClose(down.pitchInput, 1, 'looking down saturates, now positive');
+});
+
+test('HeadPoseTracker.setSettings applies from the next frame and keeps calibration', () => {
+  const camera = new Camera();
+  camera.hold({});
+  assert.equal(camera.tracker.calibrate(), true);
+
+  camera.hold({ yaw: 0.2 });
+  const before = camera.tracker.yawInput;
+  assertClose(before, -applySteeringCurve(0.2), 'default settings', 1e-6);
+
+  camera.tracker.setSettings({ ...DEFAULT_CONTROL_SETTINGS, invertYaw: true });
+  assert.equal(camera.tracker.yawInput, before, 'outputs only change on the next update');
+  assert.equal(camera.tracker.isCalibrated, true, 'calibration is kept');
+
+  camera.frame(makeFace({ yaw: 0.2 }));
+  assertClose(camera.tracker.yawInput, -before, 'inverted on the next frame', 1e-6);
+
+  camera.tracker.setSettings({ ...DEFAULT_CONTROL_SETTINGS, deadzone: 0.2 });
+  camera.frame(makeFace({ yaw: 0.2 }));
+  assertClose(camera.tracker.yawInput, 0, 'larger deadzone ignores the turn', 1e-6);
+
+  camera.tracker.setSettings({ ...DEFAULT_CONTROL_SETTINGS });
+  camera.hold({});
+  assertClose(camera.tracker.yawInput, 0, 'neutral is still neutral after setting changes', 1e-6);
+});
+
+test('HeadPoseTracker.setSettings sanitizes what it is given', () => {
+  const camera = new Camera();
+  camera.hold({});
+  camera.tracker.calibrate();
+  camera.tracker.setSettings({ sensitivity: NaN, deadzone: 5, invertYaw: false, invertPitch: false });
+  camera.hold({ yaw: 0.19 });
+  assertClose(camera.tracker.yawInput, 0, 'deadzone clamped to 0.2', 1e-6);
 });

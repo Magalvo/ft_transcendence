@@ -35,6 +35,10 @@ Checked with a stand-alone harness in Vite dev (2026-10-27, Claude): wasm and mo
 
 ## WS3
 
+WS3 adds only the settings model; nothing in the game reads it until WS6. Checks of the settings themselves (sensitivity, deadzone, invert) are in the WS6 section once its UI exists.
+
+- [ ] **Default feel unchanged.** Calibrate and fly in face mode. Steering feels as before WS3: small turns are ignored, a turn of roughly 20° gives full yaw, and looking down saturates sooner than looking up. (Covered exactly by the R4 regression test; this is a sanity check on the real build.)
+
 ## WS4
 
 Checked with a stand-alone harness in Vite dev (2026-10-27, Claude) that mounted the real `VisionController`, `FlowController` and calibration markup. Preload reached `ready` with no camera request. With the camera blocked, **Join** showed the permission-denied message and **Retry**, and Retry called `startCamera()` again. The calibration DOM saw no writes over 1 s idle. The page has one `<video>`, transformed `scaleX(-1)`. The checks below still need the full stack and a real webcam.
