@@ -1,6 +1,6 @@
 # WS2 — Vision runtime
 
-**Status:** In progress (spacedout/ws2-vision-runtime)
+**Status:** Done (#13)
 **Wave:** 1. **Depends on:** nothing. **Audit items:** 12 (detection loop), 13, 14, and 8 (error kinds).
 
 ## Context
