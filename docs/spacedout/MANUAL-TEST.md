@@ -74,6 +74,18 @@ Checked with a stand-alone harness in Vite dev (2026-10-27, Claude) that mounted
 
 ## WS5
 
+WS5 is server-only: the client doesn't send `controlMode` or show modes until WS6, so these checks use the DevTools console. Open SpacedOut in two browsers (A is the match host, the first to connect), log in on both, and keep DevTools → Network → WS open on the SpacedOut socket in both. In each console, grab the socket first:
+```js
+let so; const _send = WebSocket.prototype.send;
+WebSocket.prototype.send = function (d) { so = this; return _send.call(this, d); };
+```
+Wait a second for the next telemetry or ping frame so `so` is set. Checked with a stand-alone harness that loaded `server.js` with uWebSockets and the native addon stubbed (2026-10-27, Claude): rejection, broadcast, reset on rule change and the rate limit behaved as below. These checks still need the full stack.
+
+- [ ] **Keyboard rejected under FACE_REQUIRED.** With the default rule (the current client always sends `FACE_REQUIRED`), in B's console run `so.send(JSON.stringify({ type: "controlMode", mode: "KEYBOARD" }))`. B receives `{"type":"controlModeRejected","mode":"KEYBOARD","rule":"FACE_REQUIRED"}`. Neither A nor B receives a `pilotControlMode` frame.
+- [ ] **Keyboard broadcast under ANY.** Before picking a team, in A's console run `so.send(JSON.stringify({ type: "updateMatchSettings", settings: { gameMode: "PVP", controlRule: "ANY" } }))`. Both receive `matchSettingsUpdated` with `controlRule: "ANY"`. Send the `controlMode` / `KEYBOARD` message from B again: both A and B receive `{"type":"pilotControlMode","id":<B>,"mode":"KEYBOARD"}`. A third browser that opens SpacedOut now sees `controlMode: "KEYBOARD"` for B in its `worldSnapshot`.
+- [ ] **Rule change resets keyboard pilots.** Continuing from the previous check, in A's console send `updateMatchSettings` with `settings: { gameMode: "PVP" }` (no `controlRule`). Both receive `pilotControlMode` with B's id and `mode: "FACE"`, then `matchSettingsUpdated` with `controlRule: "FACE_REQUIRED"`.
+- [ ] **Rate limit.** In B's console run `for (let i = 0; i < 10; i++) so.send(JSON.stringify({ type: "controlMode", mode: "KEYBOARD" }))` under `FACE_REQUIRED`. B receives exactly 5 `controlModeRejected` frames.
+
 ## WS6
 
 ## WS7

@@ -7,6 +7,16 @@ const {
   shouldSendCorrection,
   shouldApplyTerrainCollision,
 } = require("./telemetryGuard");
+const {
+  INITIAL_CONTROL_MODE,
+  DEFAULT_MATCH_SETTINGS,
+  sanitizeMatchSettings,
+  createControlModeRateState,
+  allowControlModeMessage,
+  resolveControlModeRequest,
+  pilotsToResetOnRuleChange,
+  describePilot,
+} = require("./controlRule");
 
 const port = Number(process.env.PORT) || 3030;
 let nextPilotId = 1;
@@ -72,10 +82,6 @@ const WORLD_RADIUS = 50000;
 const TERRAIN_SCALE_Z = 4;
 const TERRAIN_CLEARANCE_BIAS = -5;
 const BOT_MIN_TERRAIN_CLEARANCE = 120;
-const DEFAULT_MATCH_SETTINGS = {
-  gameMode: "ARCADE",
-  botsEnabled: true,
-};
 
 // Server-authoritative terrain params used by bot terrain collision.
 let TERRAIN_SEED = 44897;
@@ -155,6 +161,8 @@ function createPlayerState() {
     telemetryBaseline: null,
     telemetryRejects: 0,
     lastCorrectionAt: null,
+    controlMode: INITIAL_CONTROL_MODE,
+    controlModeRate: createControlModeRateState(),
     appUserId: null,
     username: null,
     email: null,
@@ -257,7 +265,19 @@ function getMatchSettings() {
   return {
     gameMode: matchSettings.gameMode,
     botsEnabled: matchSettings.botsEnabled,
+    controlRule: matchSettings.controlRule,
   };
+}
+
+// WS5-R4: put pilots the current rule no longer allows back on FACE.
+function enforceControlRule() {
+  for (const id of pilotsToResetOnRuleChange(players, matchSettings.controlRule)) {
+    players[id].controlMode = "FACE";
+    app.publish(
+      "radar",
+      JSON.stringify({ type: "pilotControlMode", id, mode: "FACE" }),
+    );
+  }
 }
 
 function sanitizeTerrainConfig(raw) {
@@ -334,19 +354,6 @@ function reassignTerrainHostIfNeeded(disconnectedId) {
     "radar",
     JSON.stringify({ type: "terrainHostAssigned", hostId: terrainHostId }),
   );
-}
-
-function sanitizeMatchSettings(raw) {
-  if (!raw || typeof raw !== "object") {
-    return { ...DEFAULT_MATCH_SETTINGS };
-  }
-
-  const gameMode = String(raw.gameMode || "").toUpperCase() === "PVP"
-    ? "PVP"
-    : "ARCADE";
-  const botsEnabled = gameMode === "ARCADE" && !!raw.botsEnabled;
-
-  return { gameMode, botsEnabled };
 }
 
 function clearServerTerrainGrid() {
@@ -524,9 +531,7 @@ function scheduleRespawn(id, delayMs = RESPAWN_DELAY_MS) {
           type: "shipRespawned",
           id,
           hp: p.hp,
-          team: p.team,
-          userId: p.appUserId,
-          username: p.username,
+          ...describePilot(p),
           pos: {
             x: p.x,
             y: p.y,
@@ -760,9 +765,7 @@ const app = uWS
             dz: p.dz,
             hp: p.hp,
             dead: !isAlive(p),
-            team: p.team,
-            userId: p.appUserId,
-            username: p.username,
+            ...describePilot(p),
           },
         }));
 
@@ -841,8 +844,7 @@ const app = uWS
             JSON.stringify({
               type: "pilotIdentity",
               id: ws.numericId,
-              userId: session.userId,
-              username: session.username,
+              ...describePilot(player),
             }),
           );
           return;
@@ -859,6 +861,42 @@ const app = uWS
           return;
         }
 
+        // WS5-R3: the pilot declares its control mode; the match rule decides.
+        if (payload.type === "controlMode") {
+          const player = players[ws.numericId];
+          if (!player || player.isBot) return;
+          if (!allowControlModeMessage(player.controlModeRate, Date.now())) return;
+
+          const rule = matchSettings.controlRule;
+          const outcome = resolveControlModeRequest(
+            rule,
+            player.controlMode,
+            payload.mode,
+          );
+          if (outcome === "rejected") {
+            ws.send(
+              JSON.stringify({
+                type: "controlModeRejected",
+                mode: payload.mode,
+                rule,
+              }),
+            );
+            return;
+          }
+          if (outcome !== "apply") return;
+
+          player.controlMode = payload.mode;
+          app.publish(
+            "radar",
+            JSON.stringify({
+              type: "pilotControlMode",
+              id: ws.numericId,
+              mode: player.controlMode,
+            }),
+          );
+          return;
+        }
+
         if (payload.type === "updateMatchSettings") {
           const player = players[ws.numericId];
           if (!player || !player.appUserId) {
@@ -869,6 +907,7 @@ const app = uWS
           if (ws.numericId !== terrainHostId) return;
 
           matchSettings = sanitizeMatchSettings(payload.settings);
+          enforceControlRule();
           app.publish(
             "radar",
             JSON.stringify({
@@ -902,6 +941,7 @@ const app = uWS
           matchSettings = sanitizeMatchSettings(
             payload.matchSettings ?? matchSettings,
           );
+          enforceControlRule();
           applyTerrainConfig(config);
           terrainLocked = true;
           spawnBotsIfNeeded();
@@ -1034,9 +1074,7 @@ const app = uWS
               type: "shipRespawned",
               id,
               hp: player.hp,
-              team: player.team,
-              userId: player.appUserId,
-              username: player.username,
+              ...describePilot(player),
               pos: {
                 x: player.x,
                 y: player.y,
@@ -1067,8 +1105,7 @@ const app = uWS
             JSON.stringify({
               type: "returnedToLobby",
               id,
-              userId: player.appUserId,
-              username: player.username,
+              ...describePilot(player),
             }),
           );
 
@@ -1135,9 +1172,7 @@ const app = uWS
               type: "shipRespawned",
               id,
               hp: player.hp,
-              team: player.team,
-              userId: player.appUserId,
-              username: player.username,
+              ...describePilot(player),
               pos: {
                 x: player.x,
                 y: player.y,

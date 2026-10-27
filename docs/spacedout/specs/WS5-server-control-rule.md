@@ -1,6 +1,6 @@
 # WS5 — Server control rule
 
-**Status:** Blocked on WS1
+**Status:** In progress (spacedout/ws5-server-control-rule)
 **Wave:** 2. **Depends on:** WS1 (`server.js` test scaffolding and ownership). **Audit item:** 3 (server side).
 
 ## Context
@@ -50,6 +50,17 @@ pilot/roster payloads gain  controlMode: "FACE" | "KEYBOARD"
 - **WS5-R4:** If the host switches the rule to `FACE_REQUIRED`, every pilot on `KEYBOARD` is set back to `FACE` and a `pilotControlMode` is broadcast for each.
   - Settings can only change while the terrain is unlocked, as today, so this never happens mid-match.
 - **WS5-R5:** Every payload that describes a pilot (snapshot, join, roster) includes `controlMode`. A pure `describePilot(player)` builds this, with tests.
+
+## Implementation notes
+
+Added while implementing; the frozen protocol above is unchanged.
+
+- **R1:** `DEFAULT_MATCH_SETTINGS` moved into `controlRule.js` together with `sanitizeMatchSettings`. Only the exact string `"ANY"` is kept. Until WS6 sends `controlRule`, every `updateMatchSettings` and `terrainFinalize` from today's client resets the rule to `FACE_REQUIRED`.
+- **R3:** `resolveControlModeRequest(rule, currentMode, requestedMode)` decides each message: `"invalid"` (not `FACE` / `KEYBOARD`, ignored), `"rejected"` (send `controlModeRejected`), `"unchanged"` (already in that mode, nothing sent) or `"apply"` (change and broadcast `pilotControlMode`).
+  - The rate limit is a fixed one-second window per player (`allowControlModeMessage(state, nowMs)`). It counts every `controlMode` message, rejected ones included, so a client can't flood rejections either. Ignored messages don't extend the window.
+  - No login is needed to declare a mode, so spectators can declare it before joining.
+- **R4:** The reset runs after every settings change: `updateMatchSettings`, and `terrainFinalize`, which applies the host's settings as it locks the terrain. Each `pilotControlMode` reset is broadcast before the `matchSettingsUpdated` / `terrainLocked` that carries the new rule.
+- **R5:** `describePilot(player)` returns `{ team, userId, username, controlMode }` and is spread into `worldSnapshot` entries (`pos`), `shipRespawned` (join, respawn, bot respawn), `returnedToLobby` and `pilotIdentity`. Bots report `FACE`.
 
 ## Acceptance criteria
 
