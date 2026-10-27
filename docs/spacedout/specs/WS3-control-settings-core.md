@@ -1,6 +1,6 @@
 # WS3 — Control settings core
 
-**Status:** In progress (spacedout/ws3-control-settings-core)
+**Status:** Done (#17)
 **Wave:** 1. **Depends on:** nothing. **Audit item:** 18 (logic only; the UI is in WS6).
 
 ## Context

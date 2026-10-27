@@ -1,6 +1,6 @@
 # WS1 — Server telemetry validation
 
-**Status:** In progress (spacedout/ws1-server-telemetry-validation)
+**Status:** Done (#18)
 **Wave:** 1. **Depends on:** nothing. **Audit item:** 6.
 
 ## Context
