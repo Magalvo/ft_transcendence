@@ -74,32 +74,41 @@ export async function createTournament(input: CreateTournamentInput) {
   const { normalizedName, uniquePlayerIds } =
     validateTournamentCreateInput(input);
 
-  try {
-    // 1. Create tournament
-    await db("tournaments").insert({
-      id: tournamentId,
-      name: normalizedName,
-      created_by: input.created_by,
-      status: "active",
-      player_count: uniquePlayerIds.length,
-      created_at: now,
-    });
+  const registered = await db("users").whereIn("id", uniquePlayerIds).count({ count: "*" }).first();
+  if (Number(registered?.count ?? 0) !== uniquePlayerIds.length) {
+    throw new HttpError("All tournament players must be registered users");
+  }
 
-    // 2. Add participants
-    for (const userId of uniquePlayerIds) {
-      await db("tournament_participants").insert({
-        tournament_id: tournamentId,
-        user_id: userId,
-        is_eliminated: false,
+  try {
+    // One transaction, so a failure never leaves a half-created tournament.
+    const matches = await db.transaction(async (trx) => {
+      // 1. Create tournament
+      await trx("tournaments").insert({
+        id: tournamentId,
+        name: normalizedName,
+        created_by: input.created_by,
+        status: "active",
+        player_count: uniquePlayerIds.length,
         created_at: now,
       });
-    }
 
-    // 3. Generate initial bracket (simple single elimination)
-    const matches = generateBracket(tournamentId, uniquePlayerIds, now);
-    for (const match of matches) {
-      await db("tournament_matches").insert(match);
-    }
+      // 2. Add participants
+      for (const userId of uniquePlayerIds) {
+        await trx("tournament_participants").insert({
+          tournament_id: tournamentId,
+          user_id: userId,
+          is_eliminated: false,
+          created_at: now,
+        });
+      }
+
+      // 3. Generate initial bracket (simple single elimination)
+      const bracket = generateBracket(tournamentId, uniquePlayerIds, now);
+      for (const match of bracket) {
+        await trx("tournament_matches").insert(match);
+      }
+      return bracket;
+    });
 
     return { tournamentId, matches };
   } catch (error) {
@@ -138,14 +147,14 @@ function generateBracket(tournamentId: string, playerIds: string[], now: Date) {
     }
   }
 
-  // Finals (Round 2) - placeholder with empty strings for players
+  // Finals (Round 2): players are filled in as the semi-finals finish
   matches.push({
     id: crypto.randomUUID(),
     tournament_id: tournamentId,
     round: 2,
     match_number: 1,
-    player1_id: "",
-    player2_id: "",
+    player1_id: null,
+    player2_id: null,
     winner_id: null,
     player1_score: 0,
     player2_score: 0,
@@ -628,12 +637,12 @@ async function progressTournamentAfterCompletedMatch(
 
   for (const nextMatch of nextRoundMatches) {
     let updated = false;
-    if (!nextMatch.player1_id || nextMatch.player1_id === "") {
+    if (!nextMatch.player1_id) {
       await trx("tournament_matches")
         .where({ id: nextMatch.id })
         .update({ player1_id: winnerId });
       updated = true;
-    } else if (!nextMatch.player2_id || nextMatch.player2_id === "") {
+    } else if (!nextMatch.player2_id) {
       await trx("tournament_matches")
         .where({ id: nextMatch.id })
         .update({ player2_id: winnerId });

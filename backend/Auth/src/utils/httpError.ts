@@ -17,6 +17,13 @@ export function isHttpError(error: unknown): error is HttpError {
   return error instanceof HttpError;
 }
 
+// A write pointing at a row that does not exist (unknown user, group, ...)
+// is the client's mistake, not a server failure.
+export function isForeignKeyViolation(error: unknown): boolean {
+  const err = error as { code?: string; message?: string } | null;
+  return err?.code === "SQLITE_CONSTRAINT" && /FOREIGN KEY/i.test(String(err.message));
+}
+
 // Replies with the error's own message and status when it is an HttpError,
 // otherwise with a generic message so DB/system details never leak.
 export function sendCaughtError(
@@ -28,9 +35,14 @@ export function sendCaughtError(
   if (isHttpError(error)) {
     return sendError(reply, error.message, error.statusCode);
   }
+  if (isForeignKeyViolation(error)) {
+    return sendError(reply, "Referenced record does not exist", 400);
+  }
   return sendError(reply, fallbackMessage, fallbackStatus);
 }
 
 export function clientErrorMessage(error: unknown, fallbackMessage: string): string {
-  return isHttpError(error) ? error.message : fallbackMessage;
+  if (isHttpError(error)) return error.message;
+  if (isForeignKeyViolation(error)) return "Referenced record does not exist";
+  return fallbackMessage;
 }

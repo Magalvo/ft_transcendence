@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { sendSuccess, sendError} from "../utils/respond.js";
 import { User } from '../interfaces/user.js'
-import speakeasy from "speakeasy";
 import db from '../db.js';
+import { consumeTotp } from "../utils/totp.js";
 
 
 
@@ -21,12 +21,7 @@ const faVerify = async (req: FastifyRequest, reply : FastifyReply) => {
       if (!userData || !userData.tempTwoFactorSecret) 
         return sendError(reply, "No 2FA setup in progress", 400);
 
-      const verified = speakeasy.totp.verify({
-        secret: userData.tempTwoFactorSecret,
-        encoding: "base32",
-        token: code,
-        window: 1,
-      });
+      const verified = await consumeTotp(userData.id, userData.tempTwoFactorSecret, code);
 
       if (!verified) 
         return sendError(reply, "Invalid code", 401);

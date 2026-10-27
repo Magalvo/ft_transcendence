@@ -135,3 +135,28 @@ test("logout revokes the refresh token", async () => {
   });
   assert.equal(refresh.statusCode, 401);
 });
+
+test("unknown usernames take as long to reject as wrong passwords", async () => {
+  const user = await registerUser(app, "timing");
+  const time = async (username: string) => {
+    const start = process.hrtime.bigint();
+    const res = await login(username, "wrong-password-123");
+    assert.equal(res.statusCode, 401);
+    return Number(process.hrtime.bigint() - start) / 1e6;
+  };
+  const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
+  const wrong: number[] = [];
+  const unknown: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    wrong.push(await time(user.username));
+    unknown.push(await time(uniqueName("ghost")));
+  }
+
+  // Both paths run one bcrypt comparison; without it the unknown-user path
+  // answers in a fraction of the time and leaks which usernames exist.
+  assert.ok(
+    median(unknown) >= median(wrong) * 0.5,
+    `unknown ${median(unknown).toFixed(1)}ms vs wrong password ${median(wrong).toFixed(1)}ms`,
+  );
+});

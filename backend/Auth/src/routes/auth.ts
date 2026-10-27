@@ -11,7 +11,6 @@ import resetPass from "../services/resetPass.js";
 import faSetup from "../services/faSetup.js";
 import { User } from "../interfaces/user.js";
 import faVerify from "../services/faVerify.js";
-import speakeasy from "speakeasy";
 import { readConfigValue } from "../utils/env.js";
 import authenticate from "../middleware/authenticate.js";
 import { issueSession, revokeSessions } from "../services/session.js";
@@ -27,18 +26,10 @@ import {
   rejectIfLimited,
 } from "../utils/rateLimit.js";
 import { getFrontendBaseUrl } from "../utils/frontendUrl.js";
+import { consumeTotp, resetTotpState } from "../utils/totp.js";
 
 const authIpLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const twoFactorLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 5 });
-
-function verifyTotp(secret: string, code: unknown): boolean {
-  return speakeasy.totp.verify({
-    secret,
-    encoding: "base32",
-    token: String(code ?? "").trim(),
-    window: 1,
-  });
-}
 
 function normalizeGoogleUsername(profile: any): string {
   const fromName = String(profile?.name || "").trim();
@@ -327,7 +318,7 @@ export default async function authRoutes(app: FastifyInstance) {
         return sendError(reply, "2FA session expired, please log in again", 401);
       }
 
-      if (!verifyTotp(user.twoFactorSecret, code)) {
+      if (!(await consumeTotp(userId, user.twoFactorSecret, code))) {
         return sendError(reply, "Invalid 2FA code", 401);
       }
 
@@ -355,13 +346,14 @@ export default async function authRoutes(app: FastifyInstance) {
         if (!user?.twoFactorSecret) {
           return sendError(reply, "2FA is not enabled", 400);
         }
-        if (!verifyTotp(user.twoFactorSecret, code)) {
+        if (!(await consumeTotp(userId, user.twoFactorSecret, code))) {
           return sendError(reply, "Invalid 2FA code", 401);
         }
 
         await db("users")
           .where({ id: userId })
           .update({ twoFactorSecret: null, tempTwoFactorSecret: null });
+        await resetTotpState(userId);
 
         return sendSuccess(reply, { message: "2FA disabled" });
       } catch (err: any) {

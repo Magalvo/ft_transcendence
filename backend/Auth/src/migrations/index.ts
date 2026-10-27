@@ -2,6 +2,8 @@ import type { Knex } from "knex";
 
 import * as baseline from "./20261027000000_baseline.js";
 import * as unescapeChatMessages from "./20261027000001_unescape_chat_messages.js";
+import * as totpLastStep from "./20261027000002_totp_last_step.js";
+import * as nullableBracketPlayers from "./20261027000003_nullable_bracket_players.js";
 
 type Migration = {
   up: (knex: Knex) => Promise<void>;
@@ -18,6 +20,8 @@ type Migration = {
 const migrations: Array<[name: string, migration: Migration]> = [
   ["20261027000000_baseline", baseline],
   ["20261027000001_unescape_chat_messages", unescapeChatMessages],
+  ["20261027000002_totp_last_step", totpLastStep],
+  ["20261027000003_nullable_bracket_players", nullableBracketPlayers],
 ];
 
 // Migrations are listed in code rather than discovered on disk, so the same
