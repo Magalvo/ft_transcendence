@@ -233,11 +233,8 @@ export class HeadPoseTracker {
     );
 
     if (!this.calibration) {
-      // Uncalibrated: expose the raw pose (used by keyboard-mode freelook).
-      this.yawInput = pose.yaw;
-      this.pitchInput = pose.pitch;
-      this.camPosX = pose.noseX;
-      this.camPosY = pose.noseY;
+      // Uncalibrated angles are meaningless as inputs, so every output stays 0
+      // (keyboard freelook included) until the player calibrates.
       return;
     }
 

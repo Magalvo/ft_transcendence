@@ -215,13 +215,15 @@ test('OneEuroFilter ignores repeated timestamps and restarts after reset', () =>
   assert.equal(filter.filter(-2, 2 * FRAME_MS), -2, 'first value after reset passes through');
 });
 
-test('HeadPoseTracker passes the raw pose through before calibration', () => {
+test('HeadPoseTracker outputs stay 0 before calibration', () => {
   const camera = new Camera();
-  camera.hold({ noseX: 0.45, yaw: 0.2 });
+  camera.hold({ noseX: 0.45, noseY: 0.4, yaw: 0.2, pitch: -0.15 });
   assert.equal(camera.tracker.isCalibrated, false);
   assert.equal(camera.tracker.faceDetected, true);
-  assertClose(camera.tracker.yawInput, 0.2, 'raw yaw', 1e-6);
-  assertClose(camera.tracker.camPosX, 0.45, 'raw noseX', 1e-6);
+  assert.equal(camera.tracker.yawInput, 0, 'yaw');
+  assert.equal(camera.tracker.pitchInput, 0, 'pitch');
+  assert.equal(camera.tracker.camPosX, 0, 'camPosX');
+  assert.equal(camera.tracker.camPosY, 0, 'camPosY');
 });
 
 test('HeadPoseTracker refuses to calibrate without a face', () => {

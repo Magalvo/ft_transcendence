@@ -37,6 +37,20 @@ Checked with a stand-alone harness in Vite dev (2026-10-27, Claude): wasm and mo
 
 ## WS4
 
+Checked with a stand-alone harness in Vite dev (2026-10-27, Claude) that mounted the real `VisionController`, `FlowController` and calibration markup. Preload reached `ready` with no camera request. With the camera blocked, **Join** showed the permission-denied message and **Retry**, and Retry called `startCamera()` again. The calibration DOM saw no writes over 1 s idle. The page has one `<video>`, transformed `scaleX(-1)`. The checks below still need the full stack and a real webcam.
+
+- [ ] **Spectators aren't prompted.** Open SpacedOut in a fresh profile (or reset the camera permission) and click **Spectate**. No permission prompt appears. The console logs `[vision] Face landmarker running on the … delegate.`, so the model still preloaded.
+- [ ] **Prompt on Join.** Click **Join**. The permission prompt appears during the warp, not before.
+- [ ] **Denied, then allowed, without a reload.** Deny the camera on Join. The calibration screen explains how to allow it and shows **Retry**. Allow the camera in the site settings, click **Retry**: the preview appears and tracking starts.
+- [ ] **Optional → Required.** With the camera blocked, pick *Optional (Testing)*, Join and fly in keyboard mode. Switch to *Required*. The calibration screen shows the error and **Retry**. Allow the camera and click **Retry**: tracking starts without a reload.
+- [ ] **No camera / camera busy.** Unplug the webcam (or open it in another app) and Join: the matching message and **Retry** show. Plug it back in (or close the other app) and click **Retry**: tracking starts.
+- [ ] **Detection pauses.** Calibrate, then stay on the faction screen. Record 5 s in DevTools → Performance: no `detectForVideo` calls. Do the same while spectating and while paused.
+- [ ] **Detection runs when needed.** Record while calibrating and while flying in face mode: `detectForVideo` runs about once per camera frame. In keyboard mode after calibrating, freelook still follows your head.
+- [ ] **Keyboard freelook before calibration.** In *Optional* mode, Join and fly with the keyboard without calibrating. Turning your head doesn't move the view.
+- [ ] **Mirrored preview.** On the calibration screen, the preview shows your face. Moving your head to your right moves the image to the right, like a mirror.
+- [ ] **Face indicator.** The badge on the preview reads "Face detected" (green) while your face is in frame and "No face" when you leave it.
+- [ ] **Preview hidden in flight.** After calibrating and picking a faction, no preview shows. Face steering keeps working while the `<video>` is hidden, so the detection loop still gets frames.
+
 ## WS5
 
 ## WS6

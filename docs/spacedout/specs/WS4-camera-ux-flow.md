@@ -1,6 +1,6 @@
 # WS4 — Camera UX and flow
 
-**Status:** Blocked on WS2
+**Status:** In progress (spacedout/ws4-camera-ux-flow)
 **Wave:** 2. **Depends on:** WS2 (frozen `VisionController` / `VisionError` API). **Audit items:** 7, 8 (UX), 10, 12 (DOM writes), 15.
 
 ## Context
@@ -34,6 +34,8 @@ themselves while calibrating.
 - **WS4-R2:** Pure state machine `cameraFlow.ts`:
   - states: `idle → preloading → ready → requesting → live`, plus `error(kind)`;
   - events: `preloadStarted`, `preloadDone`, `preloadFailed(kind)`, `cameraRequested`, `cameraStarted`, `cameraFailed(kind)`, `retry`, `stopped`;
+  - `cameraRequested` is valid from `idle`, `preloading` and `ready`, because `startCamera()` preloads by itself and a player may click **Join** before the model has loaded;
+  - `retry` from `error(insecure-context)` is ignored: no retry can fix it (see R4);
   - invalid events leave the state unchanged.
   - The game derives `visionReady` / `visionFailed` from this state instead of booleans.
 - **WS4-R3 (item 10):** Keyboard freelook uses only calibrated inputs; uncalibrated, it's 0.
@@ -43,11 +45,13 @@ themselves while calibrating.
   - `permission-denied` → how to re-enable the camera in the browser, plus a **Retry** button;
   - `no-camera` / `camera-busy` → **Retry**;
   - `insecure-context` → open the site over HTTPS (no retry);
-  - `model-load-failed` → **Retry** (calls `preload()` again).
+  - `model-load-failed` → **Retry** (calls `preload()` again);
+  - `unknown` → a generic message plus **Retry**.
   - The mapping is a pure function in `calibrationView.ts`.
   - Retry works after switching the webcam requirement from Optional to Required.
 - **WS4-R5 (item 12):** `updateCalibrationControls()` touches the DOM only when its derived view state changes. A pure `calibrationViewKey(state)` builds a comparable key, so `animate()` can call it every frame cheaply.
 - **WS4-R6 (item 12):** `vision.setActive(true)` only while calibrating or flying in face mode. It is `false` in the lobby, while spectating, paused, dead, or in keyboard mode with freelook unavailable. A pure `shouldDetect(state)` decides.
+  - Freelook is available once the face has been calibrated at least once (R3 makes it 0 before that).
 - **WS4-R7 (item 15):** The calibration screen shows a small mirrored preview of the video:
   - it is a CSS transform on the existing `<video>`, with no second stream;
   - it has a "face detected" indicator;
@@ -65,7 +69,7 @@ themselves while calibrating.
 - `frontend/test/camera-flow.test.ts`:
   - every valid transition;
   - invalid events are ignored;
-  - retry from each error kind goes to `requesting` (or `preloading` for `model-load-failed`);
+  - retry from each error kind goes to `requesting` (or `preloading` for `model-load-failed`; `insecure-context` stays put);
   - `stopped` from any state goes to `idle`.
 - `frontend/test/calibration-view.test.ts`:
   - message/action per error kind;
