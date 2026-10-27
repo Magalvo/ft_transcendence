@@ -1,6 +1,6 @@
 # WS6 — Client control rule and settings UI
 
-**Status:** Blocked on WS3, WS4, WS5
+**Status:** In progress (spacedout/ws6-client-control-rule-settings-ui)
 **Wave:** 3. **Depends on:** WS3 (`ControlSettings`), WS4 (camera flow), WS5 (control-rule protocol). **Audit items:** 3 (client), 9, 18 (UI).
 
 ## Context
@@ -40,6 +40,23 @@ else in that file.
   - Changes are saved with `saveControlSettings(localStorage)`, guarded with try/catch.
   - A **Reset** button restores `DEFAULT_CONTROL_SETTINGS`.
 - **WS6-R5:** In "optional/testing" setups (rule `ANY`), keyboard-only play works without a camera. The calibration screen offers **Fly with keyboard** instead of blocking.
+
+## Implementation notes
+
+Added while implementing; the frozen interfaces of WS3 and WS5 are used unchanged.
+
+- **Pure modules:** `controlRuleView.ts` (R1–R3, R5) and `controlSettingsView.ts` (R4).
+  - `ControlRule` and `MatchRules` (`MatchSettings` plus `controlRule`) live in `controlRuleView.ts`, so `types.ts` and `SpacedOutGameShared.ts`, which WS6 doesn't own, stay untouched. WS7 can move them.
+  - Besides the helpers in the test plan, they export `normalizeControlRule` / `normalizeControlMode` (mirroring the server: only the exact `"ANY"` / `"KEYBOARD"` count), `controlRuleLabel`, `controlModeToggleMessage` (the log line when the rule blocks M) and `keyboardFallbackVisible(rule)` (R5).
+- **R1, clarified:** the Match Rules panel is blurred for everyone but the host, so a disabled select alone isn't readable. The radio's old spot above the viewport becomes a read-only **Control Rule** bar that every client sees. `ruleSelectState` gets `isHost = sessionAccepted && isTerrainHost`, like the other match rules.
+- **R2, clarified:** `isCalibrated` in `canToggleControlMode` means *past the calibration step*: face calibrated, or already flying with the keyboard. So M from keyboard back to face works before the face was ever calibrated; the calibration screen then shows, as on Join.
+  - The client switches at once and sends `controlMode`; `controlModeRejected` reverts to `FACE`. A held M doesn't repeat (the server allows 5 changes per second).
+  - On a new connection the server starts the pilot in `FACE`, so the client re-declares `KEYBOARD` after `handshake` if needed.
+  - Under `FACE_REQUIRED`, M only logs when the pilot is past calibration and alive; otherwise it is ignored, as before.
+- **R3:** other pilots' modes come from `worldSnapshot`, `shipRespawned`, `pilotIdentity`, `returnedToLobby` and `pilotControlMode`. A pilot with no mode yet shows `FACE`, the server's initial mode.
+- **R4:** the panel is per browser and always editable. Sliders take `min` / `max` / `step` from `CONTROL_SETTINGS_LIMITS`, values snap to the step, and the deadzone shows in degrees. `window.localStorage` itself is read in a try/catch, because accessing it can throw when site data is blocked.
+- **R5:** the old "webcam optional" state is now "declared mode is `KEYBOARD`": no calibration needed and camera errors don't block. `calibrationView.ts` (WS4) keeps its `webcamRequired` input, now fed with `controlMode === "FACE"`; WS7 can rename it.
+- `SpacedOutSocketClient.ts` and `HudRenderer.ts` needed no change: `sendJson` already carries the new messages, and the HUD mode readout already shows `controlMode`.
 
 ## Acceptance criteria
 

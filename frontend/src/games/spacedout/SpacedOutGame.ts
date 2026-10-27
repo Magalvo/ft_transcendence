@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { SpacedOutSocketClient } from "./SpacedOutSocketClient";
 import type {
-  MatchSettings,
   SpacedOutLogEntry,
   SpacedOutSessionResponse,
   SpacedOutSocketPayload,
@@ -25,6 +24,29 @@ import {
   shouldDetect,
   type DetectionPhase,
 } from "./calibrationView";
+import {
+  canToggleControlMode,
+  controlModeBadge,
+  controlModeToggleMessage,
+  keyboardFallbackVisible,
+  normalizeControlMode,
+  normalizeControlRule,
+  type MatchRules,
+} from "./controlRuleView";
+import {
+  loadControlSettings,
+  saveControlSettings,
+  type ControlSettings,
+} from "./controlSettings";
+import {
+  applySliderValue,
+  applyToggle,
+  formatSettingValue,
+  resetControlSettings,
+  sliderAttributes,
+  sliderValue,
+  type SliderField,
+} from "./controlSettingsView";
 import {
   CombatManager,
   DEFAULT_AIM_ASSIST_TUNING,
@@ -88,6 +110,25 @@ const GAMEPLAY_KEYS = new Set([
 
 const EMPTY_REMOTE_PILOTS = new Map<string, RemotePilotState>();
 
+// localStorage itself can throw (blocked site data), not just its methods.
+function safeLocalStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export interface FaceControlsElements {
+  sensitivity: HTMLInputElement;
+  sensitivityValue: HTMLElement;
+  deadzone: HTMLInputElement;
+  deadzoneValue: HTMLElement;
+  invertYaw: HTMLInputElement;
+  invertPitch: HTMLInputElement;
+  reset: HTMLButtonElement;
+}
+
 interface SpacedOutGameOptions {
   mount: HTMLElement;
   hudCanvas: HTMLCanvasElement;
@@ -146,8 +187,11 @@ interface SpacedOutGameOptions {
   aimAssistEngageValue: HTMLElement;
   aimAssistRelease: HTMLInputElement;
   aimAssistReleaseValue: HTMLElement;
-  webcamRequiredInput: HTMLInputElement;
-  webcamOptionalInput: HTMLInputElement;
+  controlRuleSelect: HTMLSelectElement;
+  controlRuleReadout: HTMLElement;
+  controlRuleNote: HTMLElement;
+  keyboardFallbackButton: HTMLButtonElement;
+  faceControls: FaceControlsElements;
   session: SpacedOutSessionResponse;
   onJoinSequenceRequest?: () => Promise<void> | void;
   onLobbyRestoreRequest?: () => void;
@@ -222,8 +266,10 @@ export class SpacedOutGame {
   private readonly aimAssistEngageValue: HTMLElement;
   private readonly aimAssistRelease: HTMLInputElement;
   private readonly aimAssistReleaseValue: HTMLElement;
-  private readonly webcamRequiredInput: HTMLInputElement;
-  private readonly webcamOptionalInput: HTMLInputElement;
+  private readonly controlRuleSelect: HTMLSelectElement;
+  private readonly keyboardFallbackButton: HTMLButtonElement;
+  private readonly faceControls: FaceControlsElements;
+  private controlSettings: ControlSettings;
   private readonly session: SpacedOutSessionResponse;
   private readonly onJoinSequenceRequest?: () => Promise<void> | void;
   private readonly onLobbyRestoreRequest?: () => void;
@@ -264,9 +310,11 @@ export class SpacedOutGame {
   private terrainLockedByServer = false;
   private isTerrainHost = false;
   private waitingForTerrainFinalize = false;
-  private matchSettings: MatchSettings = { ...DEFAULT_MATCH_SETTINGS };
+  private matchSettings: MatchRules = {
+    ...DEFAULT_MATCH_SETTINGS,
+    controlRule: "FACE_REQUIRED",
+  };
   private aimAssistTuning: AimAssistTuning = { ...DEFAULT_AIM_ASSIST_TUNING };
-  private webcamRequired = true;
   private isCalibrated = false;
   private cameraFlow: CameraFlowState = INITIAL_CAMERA_FLOW;
   // Set by the first Join click; until then the camera is never requested.
@@ -275,7 +323,9 @@ export class SpacedOutGame {
   private faceCalibrated = false;
   private detectionActive: boolean | null = null;
   private cameraMode: CameraMode = "TERRAIN";
+  // Declared to the server (WS5); the rule decides whether KEYBOARD is allowed.
   private controlMode: ControlMode = "FACE";
+  private readonly pilotControlModes = new Map<string, ControlMode>();
   private localServerPosition = new THREE.Vector3(0, 0, WORLD_RADIUS + 20000);
   private localForward = new THREE.Vector3(0, 1, 0);
   private localQuaternion = quaternionFromPose(
@@ -378,10 +428,10 @@ export class SpacedOutGame {
     this.aimAssistEngageValue = options.aimAssistEngageValue;
     this.aimAssistRelease = options.aimAssistRelease;
     this.aimAssistReleaseValue = options.aimAssistReleaseValue;
-    this.webcamRequiredInput = options.webcamRequiredInput;
-    this.webcamOptionalInput = options.webcamOptionalInput;
+    this.controlRuleSelect = options.controlRuleSelect;
+    this.keyboardFallbackButton = options.keyboardFallbackButton;
+    this.faceControls = options.faceControls;
     this.session = options.session;
-    this.webcamRequired = this.webcamRequiredInput.checked;
     this.onJoinSequenceRequest = options.onJoinSequenceRequest;
     this.onLobbyRestoreRequest = options.onLobbyRestoreRequest;
     this.socketClient = new SpacedOutSocketClient(
@@ -390,6 +440,8 @@ export class SpacedOutGame {
     );
     this.vision = new VisionController(this.videoElement);
     this.hudRenderer = new HudRenderer({ hudCanvas: this.hudCanvas });
+    this.controlSettings = loadControlSettings(safeLocalStorage());
+    this.vision.setControlSettings(this.controlSettings);
     this.flowController = new FlowController({
       loadingOverlay: this.loadingOverlay,
       loadingText: this.loadingText,
@@ -426,6 +478,10 @@ export class SpacedOutGame {
       matchSettingsMode: this.matchSettingsMode,
       gameModeSelect: this.gameModeSelect,
       botsEnabledInput: this.botsEnabledInput,
+      controlRuleSelect: this.controlRuleSelect,
+      controlRuleReadout: options.controlRuleReadout,
+      controlRuleNote: options.controlRuleNote,
+      keyboardFallbackButton: this.keyboardFallbackButton,
     });
   }
 
@@ -438,6 +494,7 @@ export class SpacedOutGame {
     this.syncTerrainInputs();
     this.syncMatchSettingsInputs();
     this.syncAimAssistInputs();
+    this.syncFaceControlInputs();
     this.rebuildTerrain();
     this.syncFlowScreens();
     this.setTerrainSelectionCamera(true);
@@ -557,9 +614,9 @@ export class SpacedOutGame {
 
   private reportVisionFailure(kind: VisionErrorKind, error: unknown): void {
     this.setStatus(
-      this.webcamRequired
+      this.controlMode === "FACE"
         ? cameraErrorView(kind).message
-        : "Webcam unavailable. Keyboard testing mode is active.",
+        : "Webcam unavailable. Keyboard mode is active.",
     );
     this.log(
       "error",
@@ -732,21 +789,31 @@ export class SpacedOutGame {
         }
       }
 
-      if (key === "m" && this.isCalibrated && !this.isDead) {
-        event.preventDefault();
-        if (!this.webcamRequired && !this.visionReady) {
-          this.log(
-            "warning",
-            "Face mode is unavailable while webcam requirement is optional and tracker is offline.",
-          );
+      if (key === "m") {
+        const toggle = {
+          rule: this.matchSettings.controlRule,
+          isCalibrated: this.isCalibrationSatisfied(),
+          isDead: this.isDead,
+        };
+        if (canToggleControlMode(toggle)) {
+          event.preventDefault();
+          // Held keys repeat; the server rate-limits mode changes.
+          if (!event.repeat) {
+            this.setLocalControlMode(
+              this.controlMode === "FACE" ? "KEYBOARD" : "FACE",
+              true,
+            );
+          }
           return;
         }
-        this.controlMode = this.controlMode === "FACE" ? "KEYBOARD" : "FACE";
-        if (this.camera) {
-          this.camera.position.set(0, 0, 0);
-          this.camera.rotation.set(0, 0, 0);
+        const reason = controlModeToggleMessage(toggle);
+        if (reason) {
+          event.preventDefault();
+          if (!event.repeat) {
+            this.log("warning", reason);
+          }
+          return;
         }
-        return;
       }
 
       if (key === "p" && !event.repeat) {
@@ -910,6 +977,7 @@ export class SpacedOutGame {
         botsEnabled:
           normalizeGameMode(this.gameModeSelect.value) === "ARCADE" &&
           this.botsEnabledInput.checked,
+        controlRule: normalizeControlRule(this.controlRuleSelect.value),
       };
       this.syncMatchSettingsInputs();
       this.syncFlowScreens();
@@ -942,23 +1010,32 @@ export class SpacedOutGame {
     const onAimAssistInput = () => {
       this.applyAimAssistInputs();
     };
-    const onWebcamRequirementChange = () => {
-      this.webcamRequired = this.webcamRequiredInput.checked;
-      if (this.webcamRequired) {
-        this.controlMode = "FACE";
-        this.isCalibrated = false;
-        this.log("info", "Webcam requirement enabled.");
-        if (this.cameraWanted) {
-          this.requestCamera();
-        }
-      } else {
-        this.controlMode = "KEYBOARD";
-        this.isCalibrated = true;
-        this.log("info", "Webcam requirement disabled for testing mode.");
+    const flyWithKeyboard = () => {
+      if (!keyboardFallbackVisible(this.matchSettings.controlRule)) {
+        return;
       }
-      this.updateCalibrationControls();
-      this.syncFlowScreens();
+      this.setLocalControlMode("KEYBOARD", true);
+      this.log(
+        "info",
+        "Flying with the keyboard. Press M to switch to face tracking.",
+      );
     };
+    const fc = this.faceControls;
+    const onFaceSlider = (field: SliderField, input: HTMLInputElement) => () =>
+      this.updateControlSettings(
+        applySliderValue(this.controlSettings, field, input.value),
+      );
+    const onSensitivityInput = onFaceSlider("sensitivity", fc.sensitivity);
+    const onDeadzoneInput = onFaceSlider("deadzone", fc.deadzone);
+    const onInvertInput = () =>
+      this.updateControlSettings(
+        applyToggle(
+          applyToggle(this.controlSettings, "invertYaw", fc.invertYaw.checked),
+          "invertPitch",
+          fc.invertPitch.checked,
+        ),
+      );
+    const onFaceReset = () => this.updateControlSettings(resetControlSettings());
 
     const inputs = [
       this.terrainSeed,
@@ -974,6 +1051,13 @@ export class SpacedOutGame {
     this.terrainFinalize.addEventListener("click", finalize);
     this.gameModeSelect.addEventListener("change", onMatchSettingsInput);
     this.botsEnabledInput.addEventListener("change", onMatchSettingsInput);
+    this.controlRuleSelect.addEventListener("change", onMatchSettingsInput);
+    this.keyboardFallbackButton.addEventListener("click", flyWithKeyboard);
+    fc.sensitivity.addEventListener("input", onSensitivityInput);
+    fc.deadzone.addEventListener("input", onDeadzoneInput);
+    fc.invertYaw.addEventListener("change", onInvertInput);
+    fc.invertPitch.addEventListener("change", onInvertInput);
+    fc.reset.addEventListener("click", onFaceReset);
     this.calibrateButton.addEventListener("click", calibrate);
     this.cameraRetryButton.addEventListener("click", retryCamera);
     this.redTeamButton.addEventListener("click", chooseRed);
@@ -985,14 +1069,6 @@ export class SpacedOutGame {
     this.aimAssistMaxPull.addEventListener("input", onAimAssistInput);
     this.aimAssistEngage.addEventListener("input", onAimAssistInput);
     this.aimAssistRelease.addEventListener("input", onAimAssistInput);
-    this.webcamRequiredInput.addEventListener(
-      "change",
-      onWebcamRequirementChange,
-    );
-    this.webcamOptionalInput.addEventListener(
-      "change",
-      onWebcamRequirementChange,
-    );
 
     inputs.forEach((input) =>
       this.cleanupCallbacks.push(() =>
@@ -1014,6 +1090,15 @@ export class SpacedOutGame {
     this.cleanupCallbacks.push(() =>
       this.botsEnabledInput.removeEventListener("change", onMatchSettingsInput),
     );
+    this.cleanupCallbacks.push(() => {
+      this.controlRuleSelect.removeEventListener("change", onMatchSettingsInput);
+      this.keyboardFallbackButton.removeEventListener("click", flyWithKeyboard);
+      fc.sensitivity.removeEventListener("input", onSensitivityInput);
+      fc.deadzone.removeEventListener("input", onDeadzoneInput);
+      fc.invertYaw.removeEventListener("change", onInvertInput);
+      fc.invertPitch.removeEventListener("change", onInvertInput);
+      fc.reset.removeEventListener("click", onFaceReset);
+    });
     this.cleanupCallbacks.push(() =>
       this.calibrateButton.removeEventListener("click", calibrate),
     );
@@ -1046,18 +1131,6 @@ export class SpacedOutGame {
     );
     this.cleanupCallbacks.push(() =>
       this.aimAssistRelease.removeEventListener("input", onAimAssistInput),
-    );
-    this.cleanupCallbacks.push(() =>
-      this.webcamRequiredInput.removeEventListener(
-        "change",
-        onWebcamRequirementChange,
-      ),
-    );
-    this.cleanupCallbacks.push(() =>
-      this.webcamOptionalInput.removeEventListener(
-        "change",
-        onWebcamRequirementChange,
-      ),
     );
   }
 
@@ -1112,6 +1185,10 @@ export class SpacedOutGame {
         this.isTerrainHost = !!payload.isTerrainHost;
         this.terrainLockedByServer = !!payload.terrainLocked;
         this.applyMatchSettings(payload.matchSettings);
+        // A new connection starts in FACE on the server; re-declare keyboard.
+        if (this.controlMode === "KEYBOARD") {
+          this.socketClient.sendJson({ type: "controlMode", mode: "KEYBOARD" });
+        }
         const config = payload.terrainConfig as TerrainConfig | undefined;
         if (config) {
           this.terrainConfig = {
@@ -1162,6 +1239,27 @@ export class SpacedOutGame {
         this.syncFlowScreens();
         this.log("info", "Match settings updated.");
         break;
+      case "controlModeRejected":
+        this.setLocalControlMode("FACE", false);
+        this.log(
+          "warning",
+          `The server rejected ${String(payload.mode ?? "that")} mode under the ${String(payload.rule ?? "current")} rule. Back to face tracking.`,
+        );
+        break;
+      case "pilotControlMode": {
+        const pilotId = String(payload.id ?? "");
+        const mode = normalizeControlMode(payload.mode);
+        if (pilotId === this.myPilotId) {
+          // A reset after a rule change, or the echo of our own change.
+          if (mode !== this.controlMode) {
+            this.setLocalControlMode(mode, false);
+            this.log("info", `Control mode set to ${mode} by the server.`);
+          }
+        } else {
+          this.rememberPilotControlMode(pilotId, mode);
+        }
+        break;
+      }
       case "terrainLocked": {
         this.applyMatchSettings(payload.matchSettings);
         const config = payload.config as TerrainConfig | undefined;
@@ -1234,11 +1332,19 @@ export class SpacedOutGame {
           payload.data.forEach((entry) => {
             const pilot = entry as { id: string; pos: Record<string, unknown> };
             this.applyPilotSnapshot(String(pilot.id), pilot.pos);
+            this.rememberPilotControlMode(
+              String(pilot.id),
+              pilot.pos?.controlMode,
+            );
           });
         }
         break;
       case "pilotIdentity":
         this.setRemotePilotIdentity(String(payload.id ?? ""), payload);
+        this.rememberPilotControlMode(
+          String(payload.id ?? ""),
+          payload.controlMode,
+        );
         break;
       case "shipRespawned": {
         const pilotId = String(payload.id ?? "");
@@ -1257,6 +1363,7 @@ export class SpacedOutGame {
             hp: payload.hp,
             username: payload.username,
           });
+          this.rememberPilotControlMode(pilotId, payload.controlMode);
         }
         break;
       }
@@ -1378,6 +1485,10 @@ export class SpacedOutGame {
         break;
       case "returnedToLobby": {
         this.handleReturnToLobby(String(payload.id ?? ""));
+        this.rememberPilotControlMode(
+          String(payload.id ?? ""),
+          payload.controlMode,
+        );
         break;
       }
       case "shipDestroyed": {
@@ -1435,7 +1546,58 @@ export class SpacedOutGame {
     this.remotePilotSystem?.setIdentity(id, payload.username);
   }
 
+  // Other pilots' declared modes, for the roster badges. Missing fields
+  // (older payloads) leave the last known mode.
+  private rememberPilotControlMode(id: string, value: unknown): void {
+    if (!id || id === this.myPilotId || value === undefined) {
+      return;
+    }
+    this.pilotControlModes.set(id, normalizeControlMode(value));
+  }
+
+  // `announce` declares the change to the server; replies from the server
+  // (rejection, reset) apply without echoing back.
+  private setLocalControlMode(mode: ControlMode, announce: boolean): void {
+    if (announce) {
+      this.socketClient.sendJson({ type: "controlMode", mode });
+    }
+    if (mode === this.controlMode) {
+      return;
+    }
+    this.controlMode = mode;
+    if (this.camera) {
+      this.camera.position.set(0, 0, 0);
+      this.camera.rotation.set(0, 0, 0);
+    }
+    this.updateCalibrationControls();
+    this.syncFlowScreens();
+  }
+
+  private syncFaceControlInputs(): void {
+    const fc = this.faceControls;
+    const fields: Array<[SliderField, HTMLInputElement, HTMLElement]> = [
+      ["sensitivity", fc.sensitivity, fc.sensitivityValue],
+      ["deadzone", fc.deadzone, fc.deadzoneValue],
+    ];
+    for (const [field, input, label] of fields) {
+      Object.assign(input, sliderAttributes(field));
+      input.value = sliderValue(this.controlSettings, field);
+      label.textContent = formatSettingValue(field, this.controlSettings[field]);
+    }
+    fc.invertYaw.checked = this.controlSettings.invertYaw;
+    fc.invertPitch.checked = this.controlSettings.invertPitch;
+  }
+
+  // WS6-R4: applies live and persists per browser.
+  private updateControlSettings(settings: ControlSettings): void {
+    this.controlSettings = settings;
+    this.vision.setControlSettings(settings);
+    saveControlSettings(safeLocalStorage(), settings);
+    this.syncFaceControlInputs();
+  }
+
   private removeRemotePilot(id: string): void {
+    this.pilotControlModes.delete(id);
     this.remotePilotSystem?.remove(id);
     if (this.spectatorTargetId === id) {
       this.spectatorTargetId = null;
@@ -2335,6 +2497,7 @@ export class SpacedOutGame {
         team: this.localTeam,
         state: localState,
         isLocal: true,
+        controlMode: this.controlMode,
       },
       ...[...this.remotePilots.values()]
         .map((pilot) => ({
@@ -2348,6 +2511,7 @@ export class SpacedOutGame {
                 ? "Active"
                 : "Destroyed",
           isLocal: false,
+          controlMode: this.pilotControlModes.get(pilot.id) ?? "FACE",
         }))
         .sort((left, right) => left.username.localeCompare(right.username)),
     ];
@@ -2358,15 +2522,19 @@ export class SpacedOutGame {
         pilots.length > 0
           ? pilots
               .map(
-                (pilot) => `
+                (pilot) => {
+                  const badge = controlModeBadge(pilot.controlMode);
+                  return `
                   <article class="spacedout-player-card" data-team="${pilot.team}">
                     <div>
                       <div class="spacedout-player-name">${this.escapeHtml(pilot.username)}${pilot.isLocal ? ' <span class="spacedout-player-you">YOU</span>' : ""}</div>
                       <div class="spacedout-player-meta">${pilot.team} • ${pilot.state}</div>
+                      <span class="spacedout-player-mode" data-mode="${badge.mode}" title="${badge.label} controls"><span aria-hidden="true">${badge.icon}</span> ${badge.label}</span>
                     </div>
                     <div class="spacedout-player-id">#${this.escapeHtml(String(pilot.id))}</div>
                   </article>
-                `,
+                `;
+                },
               )
               .join("")
           : `<div class="spacedout-roster-empty">No Pilots</div>`;
@@ -2436,7 +2604,8 @@ export class SpacedOutGame {
       isTerrainHost: this.isTerrainHost,
       waitingForTerrainFinalize: this.waitingForTerrainFinalize,
       matchSettings: this.matchSettings,
-      visionReady: this.webcamRequired ? this.visionReady : true,
+      controlMode: this.controlMode,
+      visionReady: this.controlMode === "FACE" ? this.visionReady : true,
       visionFailed: this.isVisionFailureBlocking(),
       isCalibrated: this.isCalibrationSatisfied(),
       cameraLoadingText: cameraLoadingText(this.cameraFlow),
@@ -2532,18 +2701,28 @@ export class SpacedOutGame {
   }
 
   private applyMatchSettings(rawSettings: unknown): void {
-    const settings = rawSettings as Partial<MatchSettings> | undefined;
+    const settings = rawSettings as Partial<MatchRules> | undefined;
     const gameMode = normalizeGameMode(settings?.gameMode);
     this.matchSettings = {
       gameMode,
       botsEnabled: gameMode === "ARCADE" && Boolean(settings?.botsEnabled),
+      controlRule: normalizeControlRule(settings?.controlRule),
     };
+    // The server resets keyboard pilots with pilotControlMode first; this
+    // only covers a missed message.
+    if (
+      this.matchSettings.controlRule === "FACE_REQUIRED" &&
+      this.controlMode === "KEYBOARD"
+    ) {
+      this.setLocalControlMode("FACE", false);
+    }
     this.syncMatchSettingsInputs();
   }
 
   private syncMatchSettingsInputs(): void {
     this.gameModeSelect.value = this.matchSettings.gameMode;
     this.botsEnabledInput.checked = this.matchSettings.botsEnabled;
+    this.controlRuleSelect.value = this.matchSettings.controlRule;
     this.botsEnabledInput.disabled =
       this.gameModeSelect.disabled || this.matchSettings.gameMode !== "ARCADE";
   }
@@ -2681,7 +2860,7 @@ export class SpacedOutGame {
   }
 
   private canCalibrateVision(): boolean {
-    if (!this.webcamRequired) {
+    if (this.controlMode !== "FACE") {
       return false;
     }
 
@@ -2702,15 +2881,15 @@ export class SpacedOutGame {
       isPaused: this.isPaused,
       isCalibrated: this.isCalibrationSatisfied(),
       canCalibrate: this.canCalibrateVision(),
-      webcamRequired: this.webcamRequired,
+      webcamRequired: this.controlMode === "FACE",
     });
   }
 
   private calibrateVision(): void {
-    if (!this.webcamRequired) {
+    if (this.controlMode !== "FACE") {
       this.log(
         "info",
-        "Webcam requirement is disabled. Keyboard testing mode does not require calibration.",
+        "Keyboard mode does not need calibration. Press M to switch to face tracking.",
       );
       return;
     }
@@ -2758,7 +2937,6 @@ export class SpacedOutGame {
   private isFaceSignalLost(): boolean {
     return (
       this.controlMode === "FACE" &&
-      this.webcamRequired &&
       this.visionReady &&
       !this.visionFailed &&
       this.vision.faceLostForMs(performance.now()) > FACE_LOST_WARNING_MS
@@ -2766,11 +2944,11 @@ export class SpacedOutGame {
   }
 
   private isCalibrationSatisfied(): boolean {
-    return !this.webcamRequired || this.isCalibrated;
+    return this.controlMode === "KEYBOARD" || this.isCalibrated;
   }
 
   private isVisionFailureBlocking(): boolean {
-    return this.webcamRequired && this.visionFailed;
+    return this.controlMode === "FACE" && this.visionFailed;
   }
 
   private getTerrainHeightAtPosition(position: THREE.Vector3): number {

@@ -55,18 +55,9 @@ export class SpacedOutPage extends AbstractComponent {
               </div>
             </div>
 
-            <div class="spacedout-webcam-toggle mb-4 rounded-2xl border border-cyan-400/15 bg-black/35 px-4 py-3">
-              <p class="text-xs uppercase tracking-[0.2em] text-cyan-300">Webcam Requirement</p>
-              <div class="spacedout-webcam-toggle-options mt-3">
-                <label class="spacedout-webcam-toggle-option" for="spacedout-webcam-required">
-                  <input id="spacedout-webcam-required" name="spacedout-webcam-requirement" type="radio" value="required" checked />
-                  <span>Required</span>
-                </label>
-                <label class="spacedout-webcam-toggle-option" for="spacedout-webcam-optional">
-                  <input id="spacedout-webcam-optional" name="spacedout-webcam-requirement" type="radio" value="optional" />
-                  <span>Optional (Testing)</span>
-                </label>
-              </div>
+            <div class="spacedout-control-rule-bar mb-4 rounded-2xl border border-cyan-400/15 bg-black/35 px-4 py-3">
+              <p class="text-xs uppercase tracking-[0.2em] text-cyan-300">Control Rule</p>
+              <p class="mt-1 text-sm text-slate-200"><strong id="spacedout-control-rule-readout" class="text-white">Face required</strong> <span id="spacedout-control-rule-note" class="text-slate-400">Set by the host in Match Rules.</span></p>
             </div>
 
             <div id="spacedout-viewport" class="spacedout-viewport">
@@ -99,6 +90,9 @@ export class SpacedOutPage extends AbstractComponent {
                   <button id="spacedout-calibrate-btn" type="button" disabled class="mt-6 rounded-md border border-cyan-400 bg-transparent px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200 hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
                     Calibrate
                   </button>
+                  <button id="spacedout-keyboard-btn" type="button" class="spacedout-keyboard-btn hidden mt-3 rounded-md border border-slate-400 bg-transparent px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-200 hover:bg-slate-300 hover:text-black">
+                    Fly with keyboard
+                  </button>
                 </div>
               </div>
 
@@ -119,7 +113,7 @@ export class SpacedOutPage extends AbstractComponent {
 
               <div id="spacedout-controls" class="spacedout-hint hidden">
                 <strong class="text-white">[ FLIGHT OVERRIDE ]</strong>
-                <span>M: Toggle FACE / KEYBOARD</span>
+                <span>M: Toggle FACE / KEYBOARD (control rule Any only)</span>
                 <span>P: Pause / Resume</span>
                 <span>WASD / Arrows: Manual flight backup</span>
                 <span>Space: Lasers | Shift / Q: Missile | F: Flares</span>
@@ -206,6 +200,13 @@ export class SpacedOutPage extends AbstractComponent {
                     <option value="PVP">PvP</option>
                   </select>
                 </label>
+                <label class="text-sm text-slate-300">
+                  Control Rule
+                  <select id="spacedout-control-rule" class="mt-2 w-full rounded-xl border border-sky-400/15 bg-slate-950/50 px-3 py-2 text-sm text-white">
+                    <option value="FACE_REQUIRED">Face required</option>
+                    <option value="ANY">Any (face or keyboard)</option>
+                  </select>
+                </label>
                 <label class="spacedout-match-toggle text-sm text-slate-300">
                   <span class="spacedout-match-toggle-copy">
                     <span class="spacedout-match-toggle-title">Enable Bots</span>
@@ -262,6 +263,44 @@ export class SpacedOutPage extends AbstractComponent {
                   </span>
                   <input id="aim-assist-release" type="range" min="2" max="24" step="1" />
                 </label>
+              </div>
+            </div>
+          </section>
+
+          <section id="spacedout-face-controls-panel" class="spacedout-panel spacedout-panel-shell rounded-[1.25rem] p-5">
+            <div class="spacedout-panel-body">
+              <div class="flex items-center justify-between gap-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">Face Controls</h2>
+                <span class="rounded-full border border-sky-400/15 bg-slate-950/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-300">
+                  Your device
+                </span>
+              </div>
+              <div class="spacedout-aim-assist-grid mt-4">
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Sensitivity</span>
+                    <strong id="face-sensitivity-value">--</strong>
+                  </span>
+                  <input id="face-sensitivity" type="range" />
+                </label>
+                <label class="spacedout-aim-assist-control text-sm text-slate-300">
+                  <span class="spacedout-aim-assist-control-head">
+                    <span>Deadzone</span>
+                    <strong id="face-deadzone-value">--</strong>
+                  </span>
+                  <input id="face-deadzone" type="range" />
+                </label>
+                <label class="spacedout-match-toggle text-sm text-slate-300">
+                  <span class="spacedout-match-toggle-title">Invert yaw (left / right)</span>
+                  <input id="face-invert-yaw" type="checkbox" class="h-5 w-5" />
+                </label>
+                <label class="spacedout-match-toggle text-sm text-slate-300">
+                  <span class="spacedout-match-toggle-title">Invert pitch (up / down)</span>
+                  <input id="face-invert-pitch" type="checkbox" class="h-5 w-5" />
+                </label>
+                <button id="face-controls-reset" type="button" class="justify-self-start rounded-md border border-sky-400/40 bg-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-sky-200 hover:bg-sky-300 hover:text-black">
+                  Reset to defaults
+                </button>
               </div>
             </div>
           </section>
@@ -405,6 +444,39 @@ export class SpacedOutPage extends AbstractComponent {
     const botsEnabledInput = content.querySelector<HTMLInputElement>(
       "#spacedout-bots-enabled",
     );
+    const controlRuleSelect = content.querySelector<HTMLSelectElement>(
+      "#spacedout-control-rule",
+    );
+    const controlRuleReadout = content.querySelector<HTMLElement>(
+      "#spacedout-control-rule-readout",
+    );
+    const controlRuleNote = content.querySelector<HTMLElement>(
+      "#spacedout-control-rule-note",
+    );
+    const keyboardFallbackButton = content.querySelector<HTMLButtonElement>(
+      "#spacedout-keyboard-btn",
+    );
+    const faceSensitivity = content.querySelector<HTMLInputElement>(
+      "#face-sensitivity",
+    );
+    const faceSensitivityValue = content.querySelector<HTMLElement>(
+      "#face-sensitivity-value",
+    );
+    const faceDeadzone = content.querySelector<HTMLInputElement>(
+      "#face-deadzone",
+    );
+    const faceDeadzoneValue = content.querySelector<HTMLElement>(
+      "#face-deadzone-value",
+    );
+    const faceInvertYaw = content.querySelector<HTMLInputElement>(
+      "#face-invert-yaw",
+    );
+    const faceInvertPitch = content.querySelector<HTMLInputElement>(
+      "#face-invert-pitch",
+    );
+    const faceControlsReset = content.querySelector<HTMLButtonElement>(
+      "#face-controls-reset",
+    );
     const aimAssistPanel = content.querySelector<HTMLElement>(
       "#spacedout-aim-assist-panel",
     );
@@ -443,12 +515,6 @@ export class SpacedOutPage extends AbstractComponent {
     );
     const aimAssistReleaseValue = content.querySelector<HTMLElement>(
       "#aim-assist-release-value",
-    );
-    const webcamRequiredInput = content.querySelector<HTMLInputElement>(
-      "#spacedout-webcam-required",
-    );
-    const webcamOptionalInput = content.querySelector<HTMLInputElement>(
-      "#spacedout-webcam-optional",
     );
 
     if (
@@ -510,8 +576,17 @@ export class SpacedOutPage extends AbstractComponent {
       !aimAssistEngageValue ||
       !aimAssistRelease ||
       !aimAssistReleaseValue ||
-      !webcamRequiredInput ||
-      !webcamOptionalInput
+      !controlRuleSelect ||
+      !controlRuleReadout ||
+      !controlRuleNote ||
+      !keyboardFallbackButton ||
+      !faceSensitivity ||
+      !faceSensitivityValue ||
+      !faceDeadzone ||
+      !faceDeadzoneValue ||
+      !faceInvertYaw ||
+      !faceInvertPitch ||
+      !faceControlsReset
     ) {
       throw new Error("SpacedOut page failed to mount required elements.");
     }
@@ -581,8 +656,19 @@ export class SpacedOutPage extends AbstractComponent {
         aimAssistEngageValue,
         aimAssistRelease,
         aimAssistReleaseValue,
-        webcamRequiredInput,
-        webcamOptionalInput,
+        controlRuleSelect,
+        controlRuleReadout,
+        controlRuleNote,
+        keyboardFallbackButton,
+        faceControls: {
+          sensitivity: faceSensitivity,
+          sensitivityValue: faceSensitivityValue,
+          deadzone: faceDeadzone,
+          deadzoneValue: faceDeadzoneValue,
+          invertYaw: faceInvertYaw,
+          invertPitch: faceInvertPitch,
+          reset: faceControlsReset,
+        },
         session,
         onJoinSequenceRequest: async () => this.runJoinSequence(),
         onLobbyRestoreRequest: () => this.restoreLobbyView(),

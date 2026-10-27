@@ -3,12 +3,17 @@ import type {
   ControlMode,
   TeamName,
 } from "./SpacedOutGameShared";
-import type { MatchSettings } from "./types";
 import {
   calibrationView,
   calibrationViewKey,
   type CalibrationInput,
 } from "./calibrationView";
+import {
+  controlRuleLabel,
+  keyboardFallbackVisible,
+  ruleSelectState,
+  type MatchRules,
+} from "./controlRuleView";
 
 interface FlowControllerOptions {
   loadingOverlay: HTMLElement;
@@ -37,6 +42,10 @@ interface FlowControllerOptions {
   matchSettingsMode: HTMLElement;
   gameModeSelect: HTMLSelectElement;
   botsEnabledInput: HTMLInputElement;
+  controlRuleSelect: HTMLSelectElement;
+  controlRuleReadout: HTMLElement;
+  controlRuleNote: HTMLElement;
+  keyboardFallbackButton: HTMLButtonElement;
 }
 
 interface ActionButtonsState {
@@ -68,7 +77,8 @@ interface FlowScreenState extends ActionButtonsState {
   terrainStateKnown: boolean;
   isTerrainHost: boolean;
   waitingForTerrainFinalize: boolean;
-  matchSettings: MatchSettings;
+  matchSettings: MatchRules;
+  controlMode: ControlMode;
 }
 
 export class FlowController {
@@ -99,6 +109,10 @@ export class FlowController {
   private readonly matchSettingsMode: HTMLElement;
   private readonly gameModeSelect: HTMLSelectElement;
   private readonly botsEnabledInput: HTMLInputElement;
+  private readonly controlRuleSelect: HTMLSelectElement;
+  private readonly controlRuleReadout: HTMLElement;
+  private readonly controlRuleNote: HTMLElement;
+  private readonly keyboardFallbackButton: HTMLButtonElement;
 
   public constructor(options: FlowControllerOptions) {
     this.loadingOverlay = options.loadingOverlay;
@@ -127,6 +141,10 @@ export class FlowController {
     this.matchSettingsMode = options.matchSettingsMode;
     this.gameModeSelect = options.gameModeSelect;
     this.botsEnabledInput = options.botsEnabledInput;
+    this.controlRuleSelect = options.controlRuleSelect;
+    this.controlRuleReadout = options.controlRuleReadout;
+    this.controlRuleNote = options.controlRuleNote;
+    this.keyboardFallbackButton = options.keyboardFallbackButton;
   }
 
   // Called every frame; only writes to the DOM when the derived view changes.
@@ -260,6 +278,7 @@ export class FlowController {
     this.gameModeSelect.disabled = !canEditMatchSettings;
     this.botsEnabledInput.disabled =
       !canEditMatchSettings || state.matchSettings.gameMode !== "ARCADE";
+    this.syncControlRule(state);
 
     if (!state.sessionAccepted || !state.terrainStateKnown) {
       this.loadingText.textContent =
@@ -313,6 +332,26 @@ export class FlowController {
     this.teamScreen.classList.toggle(
       "hidden",
       state.localTeam !== "SPECTATOR",
+    );
+  }
+
+  // WS6-R1/R5: the rule is visible to everyone, editable only by the host
+  // while the terrain is unlocked, and offers keyboard flight under ANY.
+  private syncControlRule(state: FlowScreenState): void {
+    const rule = state.matchSettings.controlRule;
+    this.controlRuleSelect.disabled =
+      ruleSelectState({
+        isHost: state.sessionAccepted && state.isTerrainHost,
+        terrainLocked: state.terrainLockedByServer,
+      }) === "readonly";
+    this.controlRuleReadout.textContent = controlRuleLabel(rule);
+    this.controlRuleNote.textContent =
+      rule === "ANY"
+        ? "Fly with face or keyboard (M switches). The roster shows each pilot's mode."
+        : "Every pilot flies with face tracking. Set by the host in Match Rules.";
+    this.keyboardFallbackButton.classList.toggle(
+      "hidden",
+      !keyboardFallbackVisible(rule) || state.controlMode !== "FACE",
     );
   }
 
