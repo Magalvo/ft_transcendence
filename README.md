@@ -45,6 +45,18 @@ To completely clean up (including volumes and database resets), run:
 make fclean
 ```
 
+## Database Migrations
+
+The Auth service's SQLite schema is managed with Knex migrations in `backend/Auth/src/migrations/`. Pending migrations run automatically every time the Auth container starts (`node dist/initDb.js`), and each one runs only once (they are recorded in the `knex_migrations` table).
+
+To change the schema:
+
+1. Add `backend/Auth/src/migrations/<YYYYMMDDHHMMSS>_<what>.ts` exporting `up(knex)` (and `down(knex)`).
+2. Append it to the list in `backend/Auth/src/migrations/index.ts`.
+3. Never edit or rename a migration that has already been merged; add a new one instead.
+
+To run them locally without Docker: `cd backend/Auth && npm run init-db`.
+
 ## Project Structure
 
 The project is divided into specialized microservices:
