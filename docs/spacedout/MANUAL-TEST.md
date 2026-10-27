@@ -26,6 +26,13 @@ date and tester when it's checked.
 
 ## WS2
 
+Checked with a stand-alone harness in Vite dev (2026-10-27, Claude): wasm and model came from `/mediapipe/`, there were no CSP violations under the production policy, WebGL disabled gave `delegate === "CPU"`, and a denied camera gave `permission-denied`. The checks below still need the full stack and a real webcam.
+
+- [ ] **CDNs blocked.** In DevTools → Network → *Block request domain*, block `cdn.jsdelivr.net` and `storage.googleapis.com`, then reload SpacedOut. Tracking starts. Network shows `vision_wasm_internal.wasm` and `face_landmarker.task` loaded from `https://localhost:8443/mediapipe/...`.
+- [ ] **No WebGL.** Disable WebGL (Chrome: `--disable-webgl`, or `chrome://settings/system` → turn off graphics acceleration; Firefox: `webgl.disabled = true`). Tracking still starts, a bit slower. The console logs `[vision] Face landmarker running on the CPU delegate.` (`GPU` with WebGL on).
+- [ ] **No CSP errors.** With the console open, load SpacedOut, allow the camera and fly for a moment. No `Content-Security-Policy` violations appear.
+- [ ] **Denied camera.** Block the camera for the site and reload. The game reports the webcam as unavailable and nothing crashes. (WS4 turns the `permission-denied` kind into its own message.)
+
 ## WS3
 
 ## WS4

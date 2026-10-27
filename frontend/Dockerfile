@@ -6,6 +6,9 @@ COPY package*.json ./
 RUN npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
 COPY . .
+# Self-hosted face model, checked against its pinned SHA-256 (the build
+# itself never downloads anything; prebuild copies the MediaPipe wasm).
+RUN node scripts/fetch-face-model.mjs
 RUN npm run build
 
 FROM nginx:1.27-alpine

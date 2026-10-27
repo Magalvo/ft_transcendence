@@ -1,6 +1,6 @@
 # WS2 — Vision runtime
 
-**Status:** Not started
+**Status:** In progress (spacedout/ws2-vision-runtime)
 **Wave:** 1. **Depends on:** nothing. **Audit items:** 12 (detection loop), 13, 14, and 8 (error kinds).
 
 ## Context
@@ -23,10 +23,10 @@ this API.
 
 **Owns (wave 1):**
 - `frontend/src/games/spacedout/VisionController.ts`
-- New `visionErrors.ts`, `visionAssets.ts` and `delegateFallback.ts` in the same folder
+- New `visionErrors.ts`, `visionAssets.ts`, `delegateFallback.ts` and `frameScheduler.ts` (holds R7's `pickFrameScheduler`) in the same folder
 - `frontend/vite.config.ts`, `frontend/nginx.conf.template` (CSP), `frontend/Dockerfile`, new `frontend/scripts/`
 - `frontend/package.json` (scripts only), `frontend/test/mediapipe-version.test.ts`, new test files
-- `.gitignore` entries for generated assets
+- `.gitignore` entries for generated assets (`frontend/.gitignore`)
 
 **Must not edit:** `SpacedOutGame.ts`. It keeps calling `init(onReady)` and `stop()`, which must keep working. WS4 migrates the game to the new API.
 
@@ -75,17 +75,20 @@ init(onReady: () => void): Promise<void>; // kept: preload() + startCamera() + o
   - The pure checksum check is `verifySha256(buffer, expectedHex)`, exported and tested.
   - The script runs in the Dockerfile builder stage before `npm run build`. Local dev runs it on demand, and `predev` runs it if the file is missing.
   - CI's `npm run build` must not need network access for the model: guard with an env flag, or skip when the file exists.
+    *Implemented:* `npm run build` never downloads (its `prebuild` only copies the wasm). The script keeps an existing file whose digest matches and re-downloads otherwise. `predev` passes `--optional`, so offline dev only warns.
+  - `verifySha256` lives in `scripts/fetch-face-model.mjs`; a `.d.mts` next to it types it for `tsc` and the tests.
 - **WS2-R5:** CSP.
   - Remove `https://cdn.jsdelivr.net` from `script-src` and `connect-src`, and `https://storage.googleapis.com` from `connect-src`, after confirming with grep that nothing else uses them.
   - Keep `'wasm-unsafe-eval'`.
   - Update `mediapipe-version.test.ts` to assert that `VisionController.ts` has no CDN URLs and that the copied wasm matches the installed package version.
 - **WS2-R6:** `preload()` / `startCamera()` split, with the existing lifecycle guarantees from #7 kept:
   - a `disposed` check after every await;
+  - `startCamera()` resolves once the video is playing and detection is scheduled; `init()` calls `onReady` then. A failed `video.play()` releases the camera and throws `VisionError("unknown")`;
   - `stop()` closes the landmarker and stops the tracks.
 - **WS2-R7:** Detection loop.
   - Use `video.requestVideoFrameCallback` when it is available, otherwise `requestAnimationFrame`.
   - While `setActive(false)`, don't run `detectForVideo`. The camera stays on, so resuming is instant.
-  - A pure scheduler choice `pickFrameScheduler(video)` is tested with fakes.
+  - A pure scheduler choice `pickFrameScheduler(video)` is tested with fakes. It lives in `frameScheduler.ts` (not `VisionController.ts`, which imports MediaPipe and can't load under `node --test`) and takes an optional second argument for `requestAnimationFrame`/`cancelAnimationFrame`, so tests can pass fakes.
 
 ## Acceptance criteria
 
