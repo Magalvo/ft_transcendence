@@ -2,7 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 
-import { createTestApp, freshIp, registerUser, uniqueName, type TestUser } from "./helpers/app.ts";
+import {
+  createTestApp,
+  freshIp,
+  randomCredential,
+  registerUser,
+  uniqueName,
+  type TestUser,
+} from "./helpers/app.ts";
 import db from "../src/db.ts";
 import { hashToken } from "../src/utils/tokens.ts";
 
@@ -91,7 +98,7 @@ test("in production a failed reset email never logs the reset link", async () =>
 test("a valid reset token changes the password and ends existing sessions", async () => {
   const user = await registerUser(app, "rst");
   const token = await plantResetToken(user);
-  const newPassword = `new-${randomBytes(6).toString("hex")}`;
+  const newPassword = randomCredential();
 
   assert.equal((await reset(token, newPassword)).statusCode, 200);
 

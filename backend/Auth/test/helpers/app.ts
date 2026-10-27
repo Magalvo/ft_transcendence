@@ -34,6 +34,11 @@ export function freshIp(): string {
   return `10.${(ipCounter >> 16) & 255}.${(ipCounter >> 8) & 255}.${ipCounter & 255}`;
 }
 
+// Fresh random credential for throwaway test accounts (never a fixed value).
+export function randomCredential(): string {
+  return randomBytes(12).toString("base64url");
+}
+
 export function uniqueName(prefix: string): string {
   return `${prefix}_${randomBytes(4).toString("hex")}`.slice(0, 20);
 }
@@ -49,7 +54,7 @@ export type TestUser = {
 
 export async function registerUser(app: FastifyInstance, prefix = "user"): Promise<TestUser> {
   const username = uniqueName(prefix);
-  const password = `pw-${randomBytes(6).toString("hex")}`;
+  const password = randomCredential();
   const email = `${username}@example.test`;
 
   const res = await app.inject({
