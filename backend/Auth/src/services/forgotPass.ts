@@ -38,8 +38,13 @@ const forgotPass = async (req: FastifyRequest, reply : FastifyReply) => {
         const recipientEmail = String((user as any).email || normalizedEmail).trim();
         await sendMail(recipientEmail, "Password Reset", `<p>Click here to reset your password:</p><a href="${link}">${link}</a>`);
       } catch (mailErr) {
-        // Dev-friendly fallback when SMTP isn't configured or temporarily fails.
-        console.warn("[forgotPass] Could not send reset email; generated link:", link);
+        // The link is a live credential: only echo it outside production, as a
+        // fallback for local setups without SMTP.
+        if (process.env.NODE_ENV === "production") {
+          console.warn("[forgotPass] Could not send reset email for user", user.id);
+        } else {
+          console.warn("[forgotPass] Could not send reset email; generated link:", link);
+        }
         console.warn("[forgotPass] Mail error:", mailErr);
       }
 

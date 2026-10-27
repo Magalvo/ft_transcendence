@@ -1,6 +1,9 @@
+import path from "path";
+import { fileURLToPath } from "url";
 import db from "./db.js";
 
-async function main() {
+// Creates or upgrades the schema. Idempotent: safe to run on every start.
+export async function initDb(): Promise<void> {
   try {
     const exists = await db.schema.hasTable("users");
     if (!exists) {
@@ -680,11 +683,16 @@ if (!tournamentMatchInvitesExists) {
   await db.raw("PRAGMA foreign_keys = ON;");
   console.log("Foreign keys enabled!");
 
-  process.exit(0);
   } catch (err) {
     console.error("Error initializing DB:", err);
-    process.exit(1);
+    throw err;
   }
 }
 
-main();
+// Run as a script (npm run init-db / the container CMD), not when imported.
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (invokedPath === fileURLToPath(import.meta.url)) {
+  initDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}

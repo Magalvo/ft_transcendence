@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+import { ensureSchema, uniqueName } from "./helpers/app.ts";
 
 const { default: db } = await import("../src/db.ts");
 const { issueSession, rotateSession, REFRESH_ROTATION_GRACE_MS } = await import(
@@ -7,32 +10,12 @@ const { issueSession, rotateSession, REFRESH_ROTATION_GRACE_MS } = await import(
 );
 const { verifyAccessToken } = await import("../src/utils/tokens.ts");
 
-await db.schema.dropTableIfExists("refresh_tokens");
-await db.schema.dropTableIfExists("users");
-await db.schema.createTable("users", (table) => {
-  table.uuid("id").primary();
-  table.string("username");
-  table.string("email");
-  table.boolean("online");
-  table.string("last_request");
-});
-await db.schema.createTable("refresh_tokens", (table) => {
-  table.increments("id").primary();
-  table.string("username").notNullable();
-  table.uuid("userId").notNullable();
-  table.string("token").notNullable();
-  table.dateTime("expires_at").notNullable();
-  table.dateTime("last_update").notNullable();
-  table.string("previous_token").nullable();
-  table.dateTime("rotated_at").nullable();
-});
-
-const user = { id: "11111111-1111-1111-1111-111111111111", username: "alice", email: "a@ex.com" };
+// Uses the real schema shared with the other test files (never drop tables
+// here: they all run in the same process against the same database).
+await ensureSchema();
+const username = uniqueName("alice");
+const user = { id: randomUUID(), username, email: `${username}@example.test` };
 await db("users").insert({ id: user.id, username: user.username, email: user.email });
-
-test.after(async () => {
-  await db.destroy();
-});
 
 test("rotation issues a new refresh token and a valid access token", async () => {
   const { refreshToken } = await issueSession(user);

@@ -79,7 +79,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
   app.post("/groups", async (request, reply) => {
     try {
       const userId = (request as any).user.id as string;
-      const { name, visibility, password } = request.body as any;
+      const { name, visibility, password } = (request.body ?? {}) as any;
       const group = await createGroup(userId, name, visibility, password);
       reply.code(201);
       return group;
@@ -92,7 +92,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      const { password } = request.body as any;
+      const { password } = (request.body ?? {}) as any;
       const numericGroupId = Number(groupId);
       const joined = await joinGroup(numericGroupId, userId, password);
       emitGroupMembersUpdated(numericGroupId, "join", userId);
@@ -150,7 +150,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      const { targetId, username, target } = request.body as any;
+      const { targetId, username, target } = (request.body ?? {}) as any;
       const targetValue = String(target ?? username ?? targetId ?? "").trim();
       if (!targetValue) return sendError(reply, "Target username is required", 400);
       const numericGroupId = Number(groupId);
@@ -166,7 +166,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      const { messagem } = request.body as any;
+      const { messagem } = (request.body ?? {}) as any;
       const msg = await createGroupMessage(Number(groupId), userId, messagem);
       reply.code(201);
       return msg;
@@ -180,7 +180,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
       const numericGroupId = Number(groupId);
-      const { enabled } = request.body as any;
+      const { enabled } = (request.body ?? {}) as any;
       await setGroupAdmin(numericGroupId, userId, targetId, !!enabled);
       emitGroupMembersUpdated(numericGroupId, "set_admin", userId);
       return { ok: true };
@@ -249,7 +249,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
       const userId = (request as any).user.id as string;
       const { groupId, targetId } = request.params as { groupId: string; targetId: string };
       const numericGroupId = Number(groupId);
-      const { seconds } = request.body as any;
+      const { seconds } = (request.body ?? {}) as any;
       await muteMember(numericGroupId, userId, targetId, Number(seconds));
       emitGroupMembersUpdated(numericGroupId, "mute", userId);
       return { ok: true };
@@ -275,7 +275,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      const { visibility, password } = request.body as any;
+      const { visibility, password } = (request.body ?? {}) as any;
       await setGroupPassword(Number(groupId), userId, visibility, password);
       return { ok: true };
     } catch (e: any) {
@@ -288,7 +288,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { groupId } = request.params as { groupId: string };
-      const { visibility, password } = request.body as any;
+      const { visibility, password } = (request.body ?? {}) as any;
       await setGroupPassword(Number(groupId), userId, visibility, password);
       return { ok: true };
     } catch (e: any) {
@@ -308,7 +308,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
   app.post("/private", async (request, reply) => {
     try {
       const userId = (request as any).user.id as string;
-      const { targetId } = request.body as any;
+      const { targetId } = (request.body ?? {}) as any;
       return await getOrCreatePrivateChat(userId, String(targetId));
     } catch (e: any) {
       return sendCaughtError(reply, e, "Failed to create private chat");
@@ -330,7 +330,7 @@ const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       const userId = (request as any).user.id as string;
       const { chatId } = request.params as { chatId: string };
-      const { messagem } = request.body as any;
+      const { messagem } = (request.body ?? {}) as any;
       const msg = await createPrivateMessage(Number(chatId), userId, messagem);
       reply.code(201);
       return msg;
