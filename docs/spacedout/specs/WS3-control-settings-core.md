@@ -1,6 +1,6 @@
 # WS3 — Control settings core
 
-**Status:** Not started
+**Status:** In progress (spacedout/ws3-control-settings-core)
 **Wave:** 1. **Depends on:** nothing. **Audit item:** 18 (logic only; the UI is in WS6).
 
 ## Context
@@ -36,6 +36,7 @@ export interface ControlSettings {
 }
 export const DEFAULT_CONTROL_SETTINGS: Readonly<ControlSettings>;
 export const CONTROL_SETTINGS_LIMITS: { sensitivity: { min; max; step }; deadzone: { min; max; step } };
+export const CONTROL_SETTINGS_KEY = "spacedout.controlSettings.v1"; // added in WS3 so callers and tests share the key
 export function sanitizeControlSettings(raw: unknown): ControlSettings;
 export function loadControlSettings(storage: Pick<Storage, "getItem"> | null): ControlSettings;
 export function saveControlSettings(storage: Pick<Storage, "setItem"> | null, settings: ControlSettings): void;
@@ -61,6 +62,7 @@ class HeadPoseTracker { setSettings(settings: ControlSettings): void }
   - store JSON;
   - treat a `null` storage, a throwing storage or corrupt JSON as defaults, and never throw.
 - **WS3-R6:** `HeadPoseTracker.setSettings` takes effect from the next `update()`. Calibration is unaffected.
+  It sanitizes its argument (as `saveControlSettings` does), so a caller can't push an out-of-range value into the curve.
 
 ## Acceptance criteria
 
@@ -80,6 +82,8 @@ class HeadPoseTracker { setSettings(settings: ControlSettings): void }
 
 `frontend/test/head-pose.test.ts` (additions):
 - defaults give identical output to the explicit current constants (R4), over a grid of angles;
+  this is a characterization test: it passes against the pre-WS3 code by design, so its "red" step is
+  checking it fails when a constant is changed;
 - sensitivity 2 halves the angle needed for full deflection;
 - deadzone 0.15 ignores a 0.12 rad turn;
 - `invertYaw` and `invertPitch` flip the signs;

@@ -1,6 +1,12 @@
 // Pure head-pose math for the SpacedOut face controls. Kept free of MediaPipe
 // and DOM imports so it can be unit tested under plain Node.
 
+import {
+  DEFAULT_CONTROL_SETTINGS,
+  sanitizeControlSettings,
+  type ControlSettings,
+} from './controlSettings.ts';
+
 export interface Landmark {
   x: number;
   y: number;
@@ -87,18 +93,30 @@ export interface FlightInputs {
   camPosY: number;
 }
 
+// Sensitivity scales the range past the deadzone, so a larger deadzone doesn't
+// eat into the head turn left for steering.
+function scaledFullAngle(baseFullAngle: number, settings: ControlSettings): number {
+  return settings.deadzone + (baseFullAngle - STEERING_DEADZONE) / settings.sensitivity;
+}
+
 export function computeFlightInputs(
   pose: RawHeadPose,
   calibration: RawHeadPose,
+  settings: ControlSettings = DEFAULT_CONTROL_SETTINGS,
 ): FlightInputs {
   const adjustedYaw = pose.yaw - calibration.yaw;
   const adjustedPitch = pose.pitch - calibration.pitch;
-  const pitchFullAngle =
-    adjustedPitch < 0 ? PITCH_DOWN_FULL_ANGLE : STEERING_FULL_ANGLE;
+  const yawFullAngle = scaledFullAngle(STEERING_FULL_ANGLE, settings);
+  const pitchFullAngle = scaledFullAngle(
+    adjustedPitch < 0 ? PITCH_DOWN_FULL_ANGLE : STEERING_FULL_ANGLE,
+    settings,
+  );
+  const yawSign = settings.invertYaw ? 1 : -1;
+  const pitchSign = settings.invertPitch ? -1 : 1;
 
   return {
-    yawInput: -applySteeringCurve(adjustedYaw),
-    pitchInput: applySteeringCurve(adjustedPitch, STEERING_DEADZONE, pitchFullAngle),
+    yawInput: yawSign * applySteeringCurve(adjustedYaw, settings.deadzone, yawFullAngle),
+    pitchInput: pitchSign * applySteeringCurve(adjustedPitch, settings.deadzone, pitchFullAngle),
     camPosX: -(pose.noseX - calibration.noseX) * PARALLAX_GAIN,
     camPosY: (pose.noseY - calibration.noseY) * PARALLAX_GAIN,
   };
@@ -201,6 +219,7 @@ export class HeadPoseTracker {
   private recentPoses: PoseSample[] = [];
   private calibration: RawHeadPose | null = null;
   private lastFaceSeenAtMs: number | null = null;
+  private settings: ControlSettings = sanitizeControlSettings(undefined);
 
   public get isCalibrated(): boolean {
     return this.calibration !== null;
@@ -238,11 +257,16 @@ export class HeadPoseTracker {
       return;
     }
 
-    const inputs = computeFlightInputs(pose, this.calibration);
+    const inputs = computeFlightInputs(pose, this.calibration, this.settings);
     this.yawInput = inputs.yawInput;
     this.pitchInput = inputs.pitchInput;
     this.camPosX = inputs.camPosX;
     this.camPosY = inputs.camPosY;
+  }
+
+  // Takes effect from the next update(); calibration is kept.
+  public setSettings(settings: ControlSettings): void {
+    this.settings = sanitizeControlSettings(settings);
   }
 
   // Milliseconds since a face was last tracked; 0 while one is visible or
